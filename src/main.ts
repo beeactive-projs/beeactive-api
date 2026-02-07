@@ -3,6 +3,23 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  // CRITICAL DEBUG - Check environment variables BEFORE creating app
+  console.log('========================================');
+  console.log('ENVIRONMENT VARIABLES DEBUG');
+  console.log('========================================');
+  console.log('NODE_ENV:', process.env.NODE_ENV);
+  console.log('DB_HOST:', process.env.DB_HOST);
+  console.log('DB_PORT:', process.env.DB_PORT);
+  console.log('DB_USERNAME:', process.env.DB_USERNAME);
+  console.log(
+    'DB_PASSWORD:',
+    process.env.DB_PASSWORD ? '***SET***' : 'NOT SET',
+  );
+  console.log('DB_DATABASE:', process.env.DB_DATABASE);
+  console.log('PORT:', process.env.PORT);
+  console.log('JWT_SECRET:', process.env.JWT_SECRET ? '***SET***' : 'NOT SET');
+  console.log('========================================');
+
   const app = await NestFactory.create(AppModule);
 
   // Enable validation globally
