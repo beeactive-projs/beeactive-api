@@ -28,8 +28,8 @@ export class UserService {
   async create(userData: {
     email: string;
     password: string;
-    firstName: string;
-    lastName: string;
+    first_name: string;
+    last_name: string;
     phone?: string;
   }): Promise<User> {
     // Check if user already exists
@@ -45,8 +45,8 @@ export class UserService {
     const user = await this.userModel.create({
       email: userData.email,
       passwordHash: hashedPassword,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
+      first_name: userData.first_name,
+      last_name: userData.last_name,
       phone: userData.phone,
     });
 

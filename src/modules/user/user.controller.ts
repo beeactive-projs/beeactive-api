@@ -11,8 +11,8 @@ export class UserController {
     return {
       id: req.user.id,
       email: req.user.email,
-      firstName: req.user.first_name,
-      lastName: req.user.last_name,
+      first_name: req.user.first_name,
+      last_name: req.user.last_name,
     };
   }
 }

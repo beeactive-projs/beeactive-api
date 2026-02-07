@@ -6,7 +6,10 @@ import {
   CreatedAt,
   UpdatedAt,
   DeletedAt,
+  BelongsToMany,
 } from 'sequelize-typescript';
+import { Role } from '../../role/entities/role.entity';
+import { UserRole } from '../../role/entities/user-role.entity';
 
 @Table({
   tableName: 'user',
@@ -115,4 +118,8 @@ export class User extends Model {
 
   @DeletedAt
   declare deleted_at: Date;
+
+  // Relationships
+  @BelongsToMany(() => Role, () => UserRole)
+  declare roles: Role[];
 }

@@ -5,17 +5,19 @@ import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RoleService } from '../role/role.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private userService: UserService,
     private jwtService: JwtService,
+    private roleService: RoleService,
   ) {}
 
   async register(registerDto: RegisterDto) {
     const user = await this.userService.create(registerDto);
-
+    await this.roleService.assignRoleToUserByName(user.id, 'PARTICIPANT');
     const payload = { sub: user.id, email: user.email };
     const accessToken = this.jwtService.sign(payload);
 
@@ -24,8 +26,8 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
+        first_name: user.first_name,
+        last_name: user.last_name,
       },
     };
   }
@@ -54,8 +56,8 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
+        first_name: user.first_name,
+        last_name: user.last_name,
       },
     };
   }

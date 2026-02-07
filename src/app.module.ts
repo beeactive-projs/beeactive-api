@@ -7,6 +7,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { getDatabaseConfig } from './config/database.config';
 import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { RoleModule } from './modules/role/role.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AuthModule } from './modules/auth/auth.module';
 
     UserModule,
     AuthModule,
+    RoleModule,
   ],
   controllers: [],
   providers: [],
