@@ -45,18 +45,30 @@ if (fs.existsSync(envPath)) {
 }
 
 // Database config from environment
-// Railway vars (MYSQLHOST) take priority over .env (DB_HOST)
-const isRailway = !!process.env.MYSQLHOST;
-const config = {
-  host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.MYSQLPORT || process.env.DB_PORT || '3306'),
-  user: process.env.MYSQLUSER || process.env.DB_USERNAME || 'root',
-  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || 'root',
-  database: process.env.MYSQLDATABASE || process.env.DB_DATABASE || 'beeactive',
-  multipleStatements: true,
-  // Accept Railway's self-signed SSL certificates
-  ssl: isRailway ? { rejectUnauthorized: false } : undefined,
-};
+// If MYSQL_PUBLIC_URL exists (Railway via `railway run`), parse it for direct access
+// Otherwise fall back to individual env vars
+let config;
+if (process.env.MYSQL_PUBLIC_URL) {
+  const url = new URL(process.env.MYSQL_PUBLIC_URL);
+  config = {
+    host: url.hostname,
+    port: parseInt(url.port || '3306'),
+    user: url.username,
+    password: url.password,
+    database: url.pathname.slice(1), // remove leading /
+    multipleStatements: true,
+    ssl: { rejectUnauthorized: false },
+  };
+} else {
+  config = {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '3306'),
+    user: process.env.DB_USERNAME || 'root',
+    password: process.env.DB_PASSWORD || 'root',
+    database: process.env.DB_DATABASE || 'beeactive',
+    multipleStatements: true,
+  };
+}
 
 // All migration files in order
 const ALL_MIGRATIONS = [
