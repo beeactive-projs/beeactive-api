@@ -17,12 +17,17 @@ export const envValidationSchema = Joi.object({
   // Server Configuration
   PORT: Joi.number().default(3000),
 
-  // Database Configuration (all required!)
-  DB_HOST: Joi.string().required(),
+  // Database Configuration (DB_* for local, MYSQL* for Railway)
+  DB_HOST: Joi.string().optional(),
   DB_PORT: Joi.number().default(3306),
-  DB_USERNAME: Joi.string().required(),
-  DB_PASSWORD: Joi.string().required(),
-  DB_DATABASE: Joi.string().required(),
+  DB_USERNAME: Joi.string().optional(),
+  DB_PASSWORD: Joi.string().optional(),
+  DB_DATABASE: Joi.string().optional(),
+  MYSQLHOST: Joi.string().optional(),
+  MYSQLPORT: Joi.number().optional(),
+  MYSQLUSER: Joi.string().optional(),
+  MYSQLPASSWORD: Joi.string().optional(),
+  MYSQLDATABASE: Joi.string().optional(),
 
   // Redis Configuration (optional — only needed when using Bull queues)
   REDIS_HOST: Joi.string().optional(),

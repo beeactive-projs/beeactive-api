@@ -44,14 +44,16 @@ if (fs.existsSync(envPath)) {
   });
 }
 
-// Database config from environment
+// Database config from environment (DB_* for local, MYSQL* for Railway)
 const config = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '3306'),
-  user: process.env.DB_USERNAME || 'root',
-  password: process.env.DB_PASSWORD || 'root',
-  database: process.env.DB_DATABASE || 'beeactive',
+  host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || process.env.MYSQLPORT || '3306'),
+  user: process.env.DB_USERNAME || process.env.MYSQLUSER || 'root',
+  password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || 'root',
+  database: process.env.DB_DATABASE || process.env.MYSQLDATABASE || 'beeactive',
   multipleStatements: true,
+  // Accept Railway's self-signed SSL certificates
+  ssl: process.env.MYSQLHOST ? { rejectUnauthorized: false } : undefined,
 };
 
 // All migration files in order
