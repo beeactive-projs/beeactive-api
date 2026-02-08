@@ -17,11 +17,11 @@ export const getDatabaseConfig = (
   configService: ConfigService,
 ): SequelizeModuleOptions => ({
   dialect: 'mysql',
-  host: configService.get<string>('DB_HOST') || configService.get<string>('MYSQLHOST'),
-  port: configService.get<number>('DB_PORT') || configService.get<number>('MYSQLPORT'),
-  username: configService.get<string>('DB_USERNAME') || configService.get<string>('MYSQLUSER'),
-  password: configService.get<string>('DB_PASSWORD') || configService.get<string>('MYSQLPASSWORD'),
-  database: configService.get<string>('DB_DATABASE') || configService.get<string>('MYSQLDATABASE'),
+  host: configService.get<string>('MYSQLHOST') || configService.get<string>('DB_HOST'),
+  port: configService.get<number>('MYSQLPORT') || configService.get<number>('DB_PORT'),
+  username: configService.get<string>('MYSQLUSER') || configService.get<string>('DB_USERNAME'),
+  password: configService.get<string>('MYSQLPASSWORD') || configService.get<string>('DB_PASSWORD'),
+  database: configService.get<string>('MYSQLDATABASE') || configService.get<string>('DB_DATABASE'),
 
   // Auto-discover and register all @Table() decorated classes
   autoLoadModels: true,
