@@ -65,12 +65,11 @@ export const getDatabaseConfig = (
       keepAlive: true,
 
       // SSL Configuration
-      // ✅ SECURITY FIX: rejectUnauthorized set to true
-      // This validates SSL certificates to prevent MITM attacks
-      // Railway's internal MySQL connections support SSL
+      // Railway MySQL uses self-signed certificates on internal network
+      // rejectUnauthorized: false is acceptable here because Railway's
+      // internal networking is already isolated and encrypted
       ssl: {
-        require: false, // Railway internal connections don't require SSL
-        rejectUnauthorized: true, // But if SSL is used, validate the certificate!
+        rejectUnauthorized: false,
       },
     }),
   },
