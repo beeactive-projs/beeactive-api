@@ -24,8 +24,8 @@ export const envValidationSchema = Joi.object({
   DB_PASSWORD: Joi.string().required(),
   DB_DATABASE: Joi.string().required(),
 
-  // Redis Configuration (required for Bull queues)
-  REDIS_HOST: Joi.string().required(),
+  // Redis Configuration (optional — only needed when using Bull queues)
+  REDIS_HOST: Joi.string().optional(),
   REDIS_PORT: Joi.number().default(6379),
 
   // JWT Configuration (CRITICAL - no defaults allowed!)

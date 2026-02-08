@@ -59,17 +59,21 @@ import { InvitationModule } from './modules/invitation/invitation.module';
       useFactory: getDatabaseConfig,
     }),
 
-    // Redis/Bull Queue Configuration
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        redis: {
-          host: configService.get('REDIS_HOST'),
-          port: configService.get<number>('REDIS_PORT'),
-        },
-      }),
-    }),
+    // Redis/Bull Queue Configuration (only when REDIS_HOST is set)
+    ...(process.env.REDIS_HOST
+      ? [
+          BullModule.forRootAsync({
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService) => ({
+              redis: {
+                host: configService.get('REDIS_HOST'),
+                port: configService.get<number>('REDIS_PORT'),
+              },
+            }),
+          }),
+        ]
+      : []),
 
     // ✅ SECURITY: Rate limiting (global)
     // Protects ALL endpoints by default
