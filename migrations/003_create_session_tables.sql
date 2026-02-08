@@ -4,8 +4,6 @@
 -- Core business logic: training sessions and invitations
 -- =========================================================
 
-USE beeactive;
-
 -- --------------------------------------------------------
 -- Table: session
 -- Training sessions (classes, workshops, one-on-one)

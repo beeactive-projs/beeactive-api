@@ -5,8 +5,6 @@
 -- Only run this in development or when doing a fresh start
 -- =========================================================
 
-USE beeactive;
-
 -- Drop tables in reverse order of dependencies (child tables first)
 
 SET FOREIGN_KEY_CHECKS = 0;

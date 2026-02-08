@@ -4,8 +4,6 @@
 -- Extended profiles for trainers and participants
 -- =========================================================
 
-USE beeactive;
-
 -- --------------------------------------------------------
 -- Table: organizer_profile
 -- Extended profile for trainers/instructors/organizers

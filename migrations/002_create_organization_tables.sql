@@ -4,8 +4,6 @@
 -- Multi-tenancy support with subscription management
 -- =========================================================
 
-USE beeactive;
-
 -- --------------------------------------------------------
 -- Table: organization
 -- Multi-tenant organizations (gyms, studios, teams)

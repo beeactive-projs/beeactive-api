@@ -4,8 +4,6 @@
 -- Adds missing fields for profiles and consent-based sharing
 -- =========================================================
 
-USE beeactive;
-
 -- --------------------------------------------------------
 -- Update: participant_profile - add gender, height, weight, notes
 -- --------------------------------------------------------

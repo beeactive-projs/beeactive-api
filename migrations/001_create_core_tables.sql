@@ -5,8 +5,6 @@
 -- Includes all security improvements
 -- =========================================================
 
-USE beeactive;
-
 -- --------------------------------------------------------
 -- Table: user
 -- Core user authentication and profile
