@@ -8,12 +8,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { UserModule } from '../user/user.module';
 import { getJwtConfig } from '../../config/jwt.config';
 import { RoleModule } from '../role/role.module';
+import { ProfileModule } from '../profile/profile.module';
 
 @Module({
   imports: [
     UserModule,
     PassportModule,
     RoleModule,
+    ProfileModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

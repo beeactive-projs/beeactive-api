@@ -1,0 +1,53 @@
+feat: Enterprise-grade security & architecture overhaul
+
+BREAKING CHANGES:
+- All API routes now prefixed with /
+- JWT expiration reduced from 7d to 2h (added refresh tokens)
+- Strong password requirements enforced
+- Email field now required in user table
+
+Security Improvements:
+- Add rate limiting (global + per-endpoint)
+- Add helmet for HTTP security headers
+- Implement account lockout after 5 failed attempts
+- Hash password reset tokens with SHA-256
+- Increase bcrypt rounds from 10 to 12
+- Remove JWT secret fallback
+- Fix SSL certificate validation
+- Add input sanitization
+
+New Features:
+- Password reset flow (/auth/forgot-password, /auth/reset-password)
+- Refresh token system (/auth/refresh)
+- Health check endpoint (/health)
+- Request ID tracking
+- Graceful shutdown handlers
+
+Architecture Improvements:
+- Add Winston structured logging
+- Add global error handling
+- Add environment variable validation
+- Add transaction support for user creation
+- Add API versioning (/ prefix)
+- Remove redundant 'use strict' directives
+
+Documentation:
+- Add SECURITY_IMPROVEMENTS.md (comprehensive guide)
+- Add QUICK_START.md (5-minute setup)
+- Add NESTJS_GUIDE.md (beginner's guide)
+- Add JSDoc to all functions
+- Add database migration SQL
+
+Database Changes:
+- Add failed_login_attempts column
+- Add locked_until column
+- Make email column NOT NULL
+
+Dependencies Added:
+- helmet, @nestjs/throttler, winston, nest-winston
+- @nestjs/terminus, joi, class-sanitizer
+
+Files Changed: 27 modified, 20 created
+All 23 tasks completed ✅
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>

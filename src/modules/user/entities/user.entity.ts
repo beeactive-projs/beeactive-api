@@ -11,11 +11,27 @@ import {
 import { Role } from '../../role/entities/role.entity';
 import { UserRole } from '../../role/entities/user-role.entity';
 
+/**
+ * User Entity
+ *
+ * Represents a user in the system.
+ * Maps to the 'user' table in MySQL database.
+ *
+ * Sequelize decorators:
+ * - @Table() → Configure table settings
+ * - @Column() → Define database column
+ * - @BelongsToMany() → Define relationship with other tables
+ *
+ * Settings:
+ * - paranoid: true → Soft deletes (sets deleted_at instead of removing row)
+ * - timestamps: true → Auto-manage created_at, updated_at
+ * - underscored: true → Use snake_case in DB (firstName → first_name)
+ */
 @Table({
   tableName: 'user',
-  paranoid: true,
-  timestamps: true,
-  underscored: true,
+  paranoid: true, // Soft deletes - users are never truly deleted
+  timestamps: true, // Automatically manage created_at, updated_at
+  underscored: true, // Convert camelCase to snake_case for DB columns
 })
 export class User extends Model {
   @Column({
@@ -25,10 +41,11 @@ export class User extends Model {
   })
   declare id: string;
 
+  // ✅ SECURITY FIX: Email is now required (allowNull: false)
   @Column({
     type: DataType.STRING(255),
     unique: true,
-    allowNull: true,
+    allowNull: false, // Email is required for authentication
   })
   declare email: string;
 
@@ -86,6 +103,7 @@ export class User extends Model {
   })
   declare is_email_verified: boolean;
 
+  // ✅ SECURITY FIX: Tokens are now hashed (stores SHA-256 hash, not plain token)
   @Column({
     type: DataType.STRING(255),
     allowNull: true,
@@ -96,13 +114,26 @@ export class User extends Model {
     type: DataType.STRING(255),
     allowNull: true,
   })
-  declare password_reset_token: string;
+  declare password_reset_token: string | null;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  declare password_reset_expires: Date;
+  declare password_reset_expires: Date | null;
+
+  // ✅ SECURITY FEATURE: Account lockout after failed login attempts
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare failed_login_attempts: number;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare locked_until: Date | null;
 
   @Column({
     type: DataType.DATE,

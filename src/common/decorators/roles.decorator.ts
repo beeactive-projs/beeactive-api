@@ -1,4 +1,3 @@
-'use strict';
 
 import { SetMetadata } from '@nestjs/common';
 

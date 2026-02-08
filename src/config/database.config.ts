@@ -1,8 +1,18 @@
-'use strict';
-
 import { ConfigService } from '@nestjs/config';
 import { SequelizeModuleOptions } from '@nestjs/sequelize';
 
+/**
+ * Database Configuration Factory
+ *
+ * Creates Sequelize configuration for MySQL connection.
+ * Called once when the app starts (see app.module.ts).
+ *
+ * Key settings:
+ * - synchronize: false → We manage schema manually (safer for production)
+ * - autoLoadModels: true → Auto-discover @Table() entities
+ * - pool → Connection pooling for better performance
+ * - dialectOptions → MySQL-specific settings (SSL, timezone, etc.)
+ */
 export const getDatabaseConfig = (
   configService: ConfigService,
 ): SequelizeModuleOptions => ({
@@ -54,11 +64,13 @@ export const getDatabaseConfig = (
       // Handle connection drops
       keepAlive: true,
 
-      // SSL is not required for Railway internal connections
-      // But we set it up in case you need it later
+      // SSL Configuration
+      // ✅ SECURITY FIX: rejectUnauthorized set to true
+      // This validates SSL certificates to prevent MITM attacks
+      // Railway's internal MySQL connections support SSL
       ssl: {
-        require: false,
-        rejectUnauthorized: false,
+        require: false, // Railway internal connections don't require SSL
+        rejectUnauthorized: true, // But if SSL is used, validate the certificate!
       },
     }),
   },

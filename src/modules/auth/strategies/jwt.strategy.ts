@@ -4,24 +4,64 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { UserService } from '../../user/user.service';
 
+/**
+ * JWT Strategy
+ *
+ * This is a Passport.js strategy that validates JWT tokens.
+ * Passport is a popular authentication library for Node.js.
+ *
+ * How it works:
+ * 1. Extract JWT from "Authorization: Bearer <token>" header
+ * 2. Verify signature using JWT_SECRET
+ * 3. If valid, call validate() with decoded payload
+ * 4. validate() checks if user still exists in DB
+ * 5. User object is attached to request (req.user)
+ *
+ * Used with @UseGuards(AuthGuard('jwt')) on protected routes
+ */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
     private userService: UserService,
   ) {
+    const secret = configService.get<string>('JWT_SECRET');
+
+    // ✅ SECURITY FIX: No fallback secret!
+    // Fail fast if secret is missing (should be caught by env validation)
+    if (!secret) {
+      throw new Error(
+        'JWT_SECRET is not configured! This is a critical security issue.',
+      );
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'fallback-secret',
+      ignoreExpiration: false, // Reject expired tokens
+      secretOrKey: secret,
     });
   }
 
+  /**
+   * Validate JWT Payload
+   *
+   * Called after JWT signature is verified.
+   * Check if user still exists and is active.
+   *
+   * @param payload - Decoded JWT payload { sub: userId, email: ... }
+   * @returns User object (attached to req.user)
+   * @throws UnauthorizedException if user not found
+   */
   async validate(payload: any) {
     const user = await this.userService.findById(payload.sub);
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException('User not found or has been deleted');
+    }
+
+    // Optional: Check if user is active
+    if (!user.is_active) {
+      throw new UnauthorizedException('User account is deactivated');
     }
 
     return user;
