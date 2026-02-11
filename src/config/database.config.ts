@@ -61,9 +61,6 @@ export const getDatabaseConfig = (
 
     // Production-specific settings
     ...(configService.get<string>('NODE_ENV') === 'production' && {
-      // Handle connection drops
-      keepAlive: true,
-
       // SSL Configuration
       // Railway MySQL uses self-signed certificates on internal network
       // rejectUnauthorized: false is acceptable here because Railway's
