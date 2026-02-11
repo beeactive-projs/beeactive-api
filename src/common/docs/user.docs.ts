@@ -24,6 +24,7 @@ export const UserDocs = {
           phone: '+40123456789',
           is_active: true,
           is_email_verified: false,
+          roles: ['PARTICIPANT', 'ORGANIZER'],
           created_at: '2024-01-15T10:30:00.000Z',
         },
       },

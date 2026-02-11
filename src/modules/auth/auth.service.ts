@@ -80,6 +80,10 @@ export class AuthService {
       // Generate tokens
       const tokens = this.generateTokens(user.id, user.email);
 
+      // Get user roles
+      const roles = await this.roleService.getUserRoles(user?.id);
+      const roleNames = roles.map((role) => role.name);
+
       this.logger.log(`User registered: ${user.email}`, 'AuthService');
 
       return {
@@ -89,6 +93,7 @@ export class AuthService {
           email: user.email,
           first_name: user.first_name,
           last_name: user.last_name,
+          roles: roleNames,
         },
       };
     } catch (error) {
@@ -158,6 +163,10 @@ export class AuthService {
     // Generate tokens
     const tokens = this.generateTokens(user.id, user.email);
 
+    // Get user roles
+    const roles = await this.roleService.getUserRoles(user?.id);
+    const roleNames = roles.map((role) => role.name);
+
     this.logger.log(`User logged in: ${user.email}`, 'AuthService');
 
     return {
@@ -167,6 +176,7 @@ export class AuthService {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
+        roles: roleNames,
       },
     };
   }

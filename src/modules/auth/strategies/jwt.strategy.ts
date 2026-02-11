@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { UserService } from '../../user/user.service';
+import { RoleService } from '../../role/role.service';
 
 /**
  * JWT Strategy
@@ -24,6 +25,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
     private userService: UserService,
+    private roleService: RoleService,
   ) {
     const secret = configService.get<string>('JWT_SECRET');
 
@@ -47,9 +49,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    *
    * Called after JWT signature is verified.
    * Check if user still exists and is active.
+   * Load user's roles for authorization.
    *
    * @param payload - Decoded JWT payload { sub: userId, email: ... }
-   * @returns User object (attached to req.user)
+   * @returns User object with roles (attached to req.user)
    * @throws UnauthorizedException if user not found
    */
   async validate(payload: any) {
@@ -64,6 +67,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User account is deactivated');
     }
 
-    return user;
+    // Load user's global roles (not org-specific)
+    const roles = await this.roleService.getUserRoles(user?.id);
+    const roleNames = roles.map((role) => role.name);
+
+    // Attach roles to user object for guards and controllers
+    return {
+      ...user.get({ plain: true }),
+      roles: roleNames,
+    };
   }
 }

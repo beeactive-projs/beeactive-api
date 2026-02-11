@@ -29,6 +29,7 @@ export class UserController {
   @ApiEndpoint(UserDocs.getProfile)
   getProfile(@Request() req) {
     // Return sanitized user data (exclude sensitive fields)
+    // req.user already includes roles from JwtStrategy
     return {
       id: req.user.id,
       email: req.user.email,
@@ -37,6 +38,7 @@ export class UserController {
       phone: req.user.phone,
       is_active: req.user.is_active,
       is_email_verified: req.user.is_email_verified,
+      roles: req.user.roles,
       created_at: req.user.created_at,
     };
   }
