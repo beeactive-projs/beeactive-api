@@ -15,10 +15,8 @@ import { SessionService } from './session.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto';
-import {
-  ApiEndpoint,
-  ApiStandardResponses,
-} from '../../common/decorators/api-response.decorator';
+import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
+import { SessionDocs } from '../../common/docs/session.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
@@ -48,90 +46,25 @@ export class SessionController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles('ORGANIZER', 'ADMIN', 'SUPER_ADMIN')
-  @ApiEndpoint({
-    summary: 'Create a new session',
-    description:
-      'Create a training session. Requires ORGANIZER role. If organization_id is provided, you must be a member.',
-    auth: true,
-    body: CreateSessionDto,
-    responses: [
-      {
-        status: 201,
-        description: 'Session created successfully',
-        example: {
-          id: '550e8400-e29b-41d4-a716-446655440000',
-          title: 'Morning Yoga Flow',
-          session_type: 'GROUP',
-          visibility: 'MEMBERS',
-          scheduled_at: '2026-02-15T09:00:00.000Z',
-          duration_minutes: 60,
-          status: 'SCHEDULED',
-        },
-      },
-      ApiStandardResponses.BadRequest,
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-    ],
-  })
+  @ApiEndpoint({ ...SessionDocs.create, body: CreateSessionDto })
   async create(@Request() req, @Body() dto: CreateSessionDto) {
     return this.sessionService.create(req.user.id, dto);
   }
 
   @Get()
-  @ApiEndpoint({
-    summary: 'List my visible sessions',
-    description:
-      'Returns all sessions visible to you: your own sessions, org MEMBERS sessions, PUBLIC sessions, and sessions you joined.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Sessions listed',
-      },
-      ApiStandardResponses.Unauthorized,
-    ],
-  })
+  @ApiEndpoint(SessionDocs.getMySessions)
   async getMySessions(@Request() req) {
     return this.sessionService.getMySessions(req.user.id);
   }
 
   @Get(':id')
-  @ApiEndpoint({
-    summary: 'Get session details',
-    description:
-      'Returns full session details including participants. Access controlled by visibility rules.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Session details retrieved',
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  })
+  @ApiEndpoint(SessionDocs.getById)
   async getById(@Param('id') id: string, @Request() req) {
     return this.sessionService.getById(id, req.user.id);
   }
 
   @Patch(':id')
-  @ApiEndpoint({
-    summary: 'Update session',
-    description: 'Update session details. Organizer only.',
-    auth: true,
-    body: UpdateSessionDto,
-    responses: [
-      {
-        status: 200,
-        description: 'Session updated',
-      },
-      ApiStandardResponses.BadRequest,
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  })
+  @ApiEndpoint({ ...SessionDocs.update, body: UpdateSessionDto })
   async update(
     @Param('id') id: string,
     @Request() req,
@@ -141,21 +74,7 @@ export class SessionController {
   }
 
   @Delete(':id')
-  @ApiEndpoint({
-    summary: 'Delete session',
-    description: 'Soft-delete a session. Organizer only.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Session deleted',
-        example: { message: 'Session deleted successfully' },
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  })
+  @ApiEndpoint(SessionDocs.delete)
   async delete(@Param('id') id: string, @Request() req) {
     await this.sessionService.delete(id, req.user.id);
     return { message: 'Session deleted successfully' };
@@ -166,70 +85,20 @@ export class SessionController {
   // =====================================================
 
   @Post(':id/join')
-  @ApiEndpoint({
-    summary: 'Join a session',
-    description:
-      'Register as a participant. Checks visibility rules and capacity.',
-    auth: true,
-    responses: [
-      {
-        status: 201,
-        description: 'Successfully joined session',
-        example: {
-          id: 'participant-uuid',
-          session_id: 'session-uuid',
-          user_id: 'user-uuid',
-          status: 'REGISTERED',
-        },
-      },
-      { status: 400, description: 'Already registered, session full, or own session' },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  })
+  @ApiEndpoint(SessionDocs.joinSession)
   async joinSession(@Param('id') id: string, @Request() req) {
     return this.sessionService.joinSession(id, req.user.id);
   }
 
   @Post(':id/leave')
-  @ApiEndpoint({
-    summary: 'Leave a session',
-    description: 'Cancel your registration for a session.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Successfully left session',
-        example: { message: 'You have left the session' },
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.NotFound,
-    ],
-  })
+  @ApiEndpoint(SessionDocs.leaveSession)
   async leaveSession(@Param('id') id: string, @Request() req) {
     await this.sessionService.leaveSession(id, req.user.id);
     return { message: 'You have left the session' };
   }
 
   @Patch(':id/participants/:userId')
-  @ApiEndpoint({
-    summary: 'Update participant status',
-    description:
-      'Change a participant\'s status (e.g., mark as ATTENDED, NO_SHOW). Organizer only.',
-    auth: true,
-    body: UpdateParticipantStatusDto,
-    responses: [
-      {
-        status: 200,
-        description: 'Participant status updated',
-      },
-      ApiStandardResponses.BadRequest,
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  })
+  @ApiEndpoint({ ...SessionDocs.updateParticipantStatus, body: UpdateParticipantStatusDto })
   async updateParticipantStatus(
     @Param('id') sessionId: string,
     @Param('userId') participantUserId: string,

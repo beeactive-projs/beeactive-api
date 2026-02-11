@@ -77,7 +77,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const errorResponse = {
       statusCode: status,
       message,
-      error: isHttpException ? exception.constructor.name : 'InternalServerError',
+      error: isHttpException
+        ? exception.constructor.name
+        : 'InternalServerError',
       requestId,
       timestamp: new Date().toISOString(),
       path: request.url,

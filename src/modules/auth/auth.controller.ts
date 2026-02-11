@@ -7,10 +7,8 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import {
-  ApiEndpoint,
-  ApiStandardResponses,
-} from '../../common/decorators/api-response.decorator';
+import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
+import { AuthDocs } from '../../common/docs/auth.docs';
 
 /**
  * Authentication Controller
@@ -38,31 +36,7 @@ export class AuthController {
    */
   @Post('register')
   @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 requests per hour
-  @ApiEndpoint({
-    summary: 'Register a new user',
-    description:
-      'Create a new user account with email and password. Automatically assigns PARTICIPANT role.',
-    body: RegisterDto,
-    responses: [
-      {
-        status: 201,
-        description: 'User successfully registered',
-        example: {
-          accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-          refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-          user: {
-            id: '550e8400-e29b-41d4-a716-446655440000',
-            email: 'user@example.com',
-            first_name: 'John',
-            last_name: 'Doe',
-          },
-        },
-      },
-      ApiStandardResponses.BadRequest,
-      { status: 409, description: 'User with this email already exists' },
-      ApiStandardResponses.TooManyRequests,
-    ],
-  })
+  @ApiEndpoint({ ...AuthDocs.register, body: RegisterDto })
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
@@ -76,33 +50,7 @@ export class AuthController {
    */
   @Post('login')
   @Throttle({ default: { limit: 5, ttl: 900000 } }) // 5 requests per 15 minutes
-  @ApiEndpoint({
-    summary: 'Login user',
-    description:
-      'Authenticate with email and password. Account locks after 5 failed attempts.',
-    body: LoginDto,
-    responses: [
-      {
-        status: 200,
-        description: 'User successfully logged in',
-        example: {
-          accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-          refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-          user: {
-            id: '550e8400-e29b-41d4-a716-446655440000',
-            email: 'user@example.com',
-            first_name: 'John',
-            last_name: 'Doe',
-          },
-        },
-      },
-      {
-        status: 401,
-        description: 'Invalid credentials or account locked',
-      },
-      ApiStandardResponses.TooManyRequests,
-    ],
-  })
+  @ApiEndpoint({ ...AuthDocs.login, body: LoginDto })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
@@ -115,23 +63,7 @@ export class AuthController {
    */
   @Post('refresh')
   @Throttle({ default: { limit: 10, ttl: 900000 } }) // 10 requests per 15 minutes
-  @ApiEndpoint({
-    summary: 'Refresh access token',
-    description:
-      'Get a new access token using a valid refresh token. Use this when your access token expires.',
-    body: RefreshTokenDto,
-    responses: [
-      {
-        status: 200,
-        description: 'New access token generated',
-        example: {
-          accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        },
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.TooManyRequests,
-    ],
-  })
+  @ApiEndpoint({ ...AuthDocs.refreshToken, body: RefreshTokenDto })
   async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshAccessToken(refreshTokenDto.refreshToken);
   }
@@ -144,23 +76,7 @@ export class AuthController {
    */
   @Post('forgot-password')
   @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 requests per hour
-  @ApiEndpoint({
-    summary: 'Request password reset',
-    description:
-      'Send a password reset email. Returns success even if email not found (security).',
-    body: ForgotPasswordDto,
-    responses: [
-      {
-        status: 200,
-        description: 'Password reset email sent (if email exists)',
-        example: {
-          message:
-            'If your email is registered, you will receive a password reset link.',
-        },
-      },
-      ApiStandardResponses.TooManyRequests,
-    ],
-  })
+  @ApiEndpoint({ ...AuthDocs.forgotPassword, body: ForgotPasswordDto })
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto);
   }
@@ -173,26 +89,7 @@ export class AuthController {
    */
   @Post('reset-password')
   @Throttle({ default: { limit: 5, ttl: 3600000 } }) // 5 requests per hour
-  @ApiEndpoint({
-    summary: 'Reset password',
-    description:
-      'Reset password using the token received via email. Token expires after 1 hour.',
-    body: ResetPasswordDto,
-    responses: [
-      {
-        status: 200,
-        description: 'Password successfully reset',
-        example: {
-          message: 'Password successfully reset. You can now log in.',
-        },
-      },
-      {
-        status: 400,
-        description: 'Invalid or expired reset token',
-      },
-      ApiStandardResponses.TooManyRequests,
-    ],
-  })
+  @ApiEndpoint({ ...AuthDocs.resetPassword, body: ResetPasswordDto })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
   }

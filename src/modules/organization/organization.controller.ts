@@ -15,10 +15,8 @@ import { OrganizationService } from './organization.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
-import {
-  ApiEndpoint,
-  ApiStandardResponses,
-} from '../../common/decorators/api-response.decorator';
+import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
+import { OrganizationDocs } from '../../common/docs/organization.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
@@ -47,96 +45,25 @@ export class OrganizationController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles('ORGANIZER', 'ADMIN', 'SUPER_ADMIN')
-  @ApiEndpoint({
-    summary: 'Create a new organization',
-    description:
-      'Create a new organization. Requires ORGANIZER role. Creator becomes the owner.',
-    auth: true,
-    body: CreateOrganizationDto,
-    responses: [
-      {
-        status: 201,
-        description: 'Organization created successfully',
-        example: {
-          id: '550e8400-e29b-41d4-a716-446655440000',
-          name: "John's Fitness Studio",
-          slug: 'johns-fitness-studio',
-          description: 'Personal training and group sessions',
-          timezone: 'Europe/Bucharest',
-          is_active: true,
-        },
-      },
-      ApiStandardResponses.BadRequest,
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-    ],
-  })
+  @ApiEndpoint({ ...OrganizationDocs.create, body: CreateOrganizationDto })
   async create(@Request() req, @Body() dto: CreateOrganizationDto) {
     return this.organizationService.create(req.user.id, dto);
   }
 
   @Get()
-  @ApiEndpoint({
-    summary: 'List my organizations',
-    description:
-      'Returns all organizations the authenticated user belongs to.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Organizations listed',
-        example: [
-          {
-            id: '550e8400-e29b-41d4-a716-446655440000',
-            name: "John's Fitness Studio",
-            slug: 'johns-fitness-studio',
-          },
-        ],
-      },
-      ApiStandardResponses.Unauthorized,
-    ],
-  })
+  @ApiEndpoint(OrganizationDocs.getMyOrganizations)
   async getMyOrganizations(@Request() req) {
     return this.organizationService.getMyOrganizations(req.user.id);
   }
 
   @Get(':id')
-  @ApiEndpoint({
-    summary: 'Get organization by ID',
-    description:
-      'Returns organization details. User must be a member.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Organization details retrieved',
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  })
+  @ApiEndpoint(OrganizationDocs.getById)
   async getById(@Param('id') id: string, @Request() req) {
     return this.organizationService.getById(id, req.user.id);
   }
 
   @Patch(':id')
-  @ApiEndpoint({
-    summary: 'Update organization',
-    description: 'Update organization details. Owner only.',
-    auth: true,
-    body: UpdateOrganizationDto,
-    responses: [
-      {
-        status: 200,
-        description: 'Organization updated',
-      },
-      ApiStandardResponses.BadRequest,
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  })
+  @ApiEndpoint({ ...OrganizationDocs.update, body: UpdateOrganizationDto })
   async update(
     @Param('id') id: string,
     @Request() req,
@@ -150,58 +77,15 @@ export class OrganizationController {
   // =====================================================
 
   @Get(':id/members')
-  @ApiEndpoint({
-    summary: 'List organization members',
-    description:
-      'Returns all members. If you are the owner AND a member has shared_health_info=true, their health data is included.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Members listed',
-        example: [
-          {
-            id: 'member-uuid',
-            user_id: 'user-uuid',
-            first_name: 'Jane',
-            last_name: 'Doe',
-            is_owner: false,
-            shared_health_info: true,
-            health_data: {
-              fitness_level: 'INTERMEDIATE',
-              goals: ['weight_loss'],
-            },
-          },
-        ],
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-    ],
-  })
+  @ApiEndpoint(OrganizationDocs.getMembers)
   async getMembers(@Param('id') id: string, @Request() req) {
     return this.organizationService.getMembers(id, req.user.id);
   }
 
   @Patch(':id/members/me')
   @ApiEndpoint({
-    summary: 'Update my membership settings',
-    description:
-      'Update your own membership in this organization (e.g., share/hide health data, set nickname).',
-    auth: true,
+    ...OrganizationDocs.updateMyMembership,
     body: UpdateMemberDto,
-    responses: [
-      {
-        status: 200,
-        description: 'Membership updated',
-        example: {
-          id: 'member-uuid',
-          shared_health_info: true,
-          nickname: 'Johnny',
-        },
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.NotFound,
-    ],
   })
   async updateMyMembership(
     @Param('id') id: string,
@@ -212,22 +96,7 @@ export class OrganizationController {
   }
 
   @Delete(':id/members/:userId')
-  @ApiEndpoint({
-    summary: 'Remove a member',
-    description:
-      'Remove a member from the organization. Owner only. Cannot remove the owner.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Member removed',
-        example: { message: 'Member removed successfully' },
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  })
+  @ApiEndpoint(OrganizationDocs.removeMember)
   async removeMember(
     @Param('id') id: string,
     @Param('userId') memberId: string,

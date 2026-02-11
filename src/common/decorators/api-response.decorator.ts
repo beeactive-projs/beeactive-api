@@ -19,7 +19,7 @@ import {
  * They don't change behavior, just add information for Swagger docs.
  */
 
-interface ApiEndpointOptions {
+export interface ApiEndpointOptions {
   summary: string;
   description?: string;
   auth?: boolean;
@@ -77,33 +77,5 @@ export function ApiEndpoint(options: ApiEndpointOptions) {
   return applyDecorators(...decorators);
 }
 
-/**
- * Standard Error Responses
- * Use these for common error responses to keep docs consistent
- */
-export const ApiStandardResponses = {
-  Unauthorized: {
-    status: 401,
-    description: 'Unauthorized - Invalid or missing authentication token',
-  },
-  Forbidden: {
-    status: 403,
-    description: 'Forbidden - Insufficient permissions',
-  },
-  NotFound: {
-    status: 404,
-    description: 'Resource not found',
-  },
-  BadRequest: {
-    status: 400,
-    description: 'Bad Request - Invalid input data',
-  },
-  TooManyRequests: {
-    status: 429,
-    description: 'Too Many Requests - Rate limit exceeded',
-  },
-  InternalServerError: {
-    status: 500,
-    description: 'Internal Server Error',
-  },
-};
+// Re-export standard responses for convenience
+export { ApiStandardResponses } from '../docs/standard-responses';

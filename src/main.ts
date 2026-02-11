@@ -135,26 +135,38 @@ For issues or questions, contact: support@beeactive.com
 
   // ✅ SECURITY: CORS configuration
   // In development: allow common localhost ports
-  // In production: allow FRONTEND_URL + Railway/Vercel preview domains
+  // In production: allow FRONTEND_URL + Railway/Vercel preview domains + DEV_ORIGINS
+  const productionOrigins = [
+    process.env.FRONTEND_URL,
+    /\.vercel\.app$/,
+    /\.railway\.app$/,
+    /\.netlify\.app$/,
+  ].filter(Boolean);
+
+  const developmentOrigins = [
+    'http://localhost:4200', // Angular default
+    'http://localhost:3000', // React/Next.js default
+    'http://localhost:8100', // Ionic default
+    'http://localhost:5173', // Vite default
+    'http://localhost:8080', // Common dev port
+    'http://127.0.0.1:4200', // Angular on 127.0.0.1
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:8100',
+  ];
+
+  // Allow additional dev origins in production via env var (comma-separated)
+  // Example: DEV_ORIGINS=http://localhost:4200,http://192.168.1.100:4200
+  const additionalDevOrigins = process.env.DEV_ORIGINS
+    ? process.env.DEV_ORIGINS.split(',').map((origin) => origin.trim())
+    : [];
+
+  const allowedOrigins =
+    process.env.NODE_ENV === 'production'
+      ? [...productionOrigins, ...additionalDevOrigins]
+      : developmentOrigins;
+
   app.enableCors({
-    origin:
-      process.env.NODE_ENV === 'production'
-        ? [
-            process.env.FRONTEND_URL,
-            /\.vercel\.app$/,
-            /\.railway\.app$/,
-            /\.netlify\.app$/,
-          ].filter(Boolean)
-        : [
-            'http://localhost:4200', // Angular default
-            'http://localhost:3000', // React/Next.js default
-            'http://localhost:8100', // Ionic default
-            'http://localhost:5173', // Vite default
-            'http://localhost:8080', // Common dev port
-            'http://127.0.0.1:4200', // Angular on 127.0.0.1
-            'http://127.0.0.1:3000',
-            'http://127.0.0.1:8100',
-          ],
+    origin: allowedOrigins,
     credentials: true, // Allow cookies
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
