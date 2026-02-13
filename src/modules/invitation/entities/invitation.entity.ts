@@ -39,7 +39,7 @@ export class Invitation extends Model {
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare inviter_id: string;
+  declare inviterId: string;
 
   @Column({
     type: DataType.STRING(255),
@@ -52,14 +52,14 @@ export class Invitation extends Model {
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare role_id: string;
+  declare roleId: string;
 
   @ForeignKey(() => Organization)
   @Column({
     type: DataType.CHAR(36),
     allowNull: true,
   })
-  declare organization_id: string;
+  declare organizationId: string;
 
   @Column({
     type: DataType.STRING(255),
@@ -78,25 +78,25 @@ export class Invitation extends Model {
     type: DataType.DATE,
     allowNull: false,
   })
-  declare expires_at: Date;
+  declare expiresAt: Date;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  declare accepted_at: Date;
+  declare acceptedAt: Date;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  declare declined_at: Date;
+  declare declinedAt: Date;
 
   @CreatedAt
-  declare created_at: Date;
+  declare createdAt: Date;
 
   // Relationships
-  @BelongsTo(() => User, 'inviter_id')
+  @BelongsTo(() => User, 'inviterId')
   declare inviter: User;
 
   @BelongsTo(() => Role)

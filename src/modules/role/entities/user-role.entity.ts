@@ -34,33 +34,33 @@ export class UserRole extends Model {
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare user_id: string;
+  declare userId: string;
 
   @ForeignKey(() => Role)
   @Column({
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare role_id: string;
+  declare roleId: string;
 
   @Column({
     type: DataType.CHAR(36),
     allowNull: true,
   })
-  declare organization_id: string;
+  declare organizationId: string;
 
   @Column({
     type: DataType.DATE,
     allowNull: false,
     defaultValue: DataType.NOW,
   })
-  declare assigned_at: Date;
+  declare assignedAt: Date;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  declare expires_at: Date;
+  declare expiresAt: Date;
 
   // Relationships
   @BelongsTo(() => User)

@@ -32,7 +32,7 @@ export class UpdateOrganizerProfileDto {
   @IsString()
   @MaxLength(100)
   @IsOptional()
-  display_name?: string;
+  displayName?: string;
 
   @ApiPropertyOptional({
     example: 'Certified personal trainer with 5 years experience',
@@ -65,44 +65,44 @@ export class UpdateOrganizerProfileDto {
   @Min(0)
   @Max(50)
   @IsOptional()
-  years_of_experience?: number;
+  yearsOfExperience?: number;
 
   @ApiPropertyOptional({ example: true })
   @IsBoolean()
   @IsOptional()
-  is_accepting_clients?: boolean;
+  isAcceptingClients?: boolean;
 
   @ApiPropertyOptional({
     example: { instagram: 'coach_john', facebook: 'CoachJohn' },
   })
   @IsObject()
   @IsOptional()
-  social_links?: object;
+  socialLinks?: object;
 
   @ApiPropertyOptional({ example: true })
   @IsBoolean()
   @IsOptional()
-  show_social_links?: boolean;
+  showSocialLinks?: boolean;
 
   @ApiPropertyOptional({ example: true })
   @IsBoolean()
   @IsOptional()
-  show_email?: boolean;
+  showEmail?: boolean;
 
   @ApiPropertyOptional({ example: false })
   @IsBoolean()
   @IsOptional()
-  show_phone?: boolean;
+  showPhone?: boolean;
 
   @ApiPropertyOptional({ example: 'Bucharest' })
   @IsString()
   @MaxLength(100)
   @IsOptional()
-  location_city?: string;
+  locationCity?: string;
 
   @ApiPropertyOptional({ example: 'RO' })
   @IsString()
   @MaxLength(5)
   @IsOptional()
-  location_country?: string;
+  locationCountry?: string;
 }

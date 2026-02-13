@@ -33,26 +33,26 @@ export class OrganizationMember extends Model {
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare organization_id: string;
+  declare organizationId: string;
 
   @ForeignKey(() => User)
   @Column({
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare user_id: string;
+  declare userId: string;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  declare is_owner: boolean;
+  declare isOwner: boolean;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  declare shared_health_info: boolean;
+  declare sharedHealthInfo: boolean;
 
   @Column({
     type: DataType.STRING(100),
@@ -64,13 +64,13 @@ export class OrganizationMember extends Model {
     type: DataType.DATE,
     defaultValue: DataType.NOW,
   })
-  declare joined_at: Date;
+  declare joinedAt: Date;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  declare left_at: Date;
+  declare leftAt: Date;
 
   // Relationships
   @BelongsTo(() => Organization)

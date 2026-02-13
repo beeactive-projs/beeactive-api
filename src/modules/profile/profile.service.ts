@@ -45,7 +45,7 @@ export class ProfileService {
    * Create empty participant profile (called during registration)
    */
   async createParticipantProfile(userId: string): Promise<ParticipantProfile> {
-    return this.participantProfileModel.create({ user_id: userId });
+    return this.participantProfileModel.create({ userId: userId });
   }
 
   /**
@@ -55,7 +55,7 @@ export class ProfileService {
     userId: string,
   ): Promise<ParticipantProfile | null> {
     return this.participantProfileModel.findOne({
-      where: { user_id: userId },
+      where: { userId: userId },
     });
   }
 
@@ -69,7 +69,7 @@ export class ProfileService {
     dto: UpdateParticipantProfileDto,
   ): Promise<ParticipantProfile> {
     const profile = await this.participantProfileModel.findOne({
-      where: { user_id: userId },
+      where: { userId: userId },
     });
 
     if (!profile) {
@@ -96,7 +96,7 @@ export class ProfileService {
   ): Promise<OrganizerProfile> {
     // Check if already has organizer profile
     const existing = await this.organizerProfileModel.findOne({
-      where: { user_id: userId },
+      where: { userId: userId },
     });
 
     if (existing) {
@@ -105,8 +105,8 @@ export class ProfileService {
 
     // Create the profile
     const profile = await this.organizerProfileModel.create({
-      user_id: userId,
-      display_name: dto.display_name || null,
+      userId: userId,
+      displayName: dto.displayName || null,
     });
 
     // Assign ORGANIZER role (global, not org-scoped yet)
@@ -125,7 +125,7 @@ export class ProfileService {
    */
   async getOrganizerProfile(userId: string): Promise<OrganizerProfile | null> {
     return this.organizerProfileModel.findOne({
-      where: { user_id: userId },
+      where: { userId: userId },
     });
   }
 
@@ -137,7 +137,7 @@ export class ProfileService {
     dto: UpdateOrganizerProfileDto,
   ): Promise<OrganizerProfile> {
     const profile = await this.organizerProfileModel.findOne({
-      where: { user_id: userId },
+      where: { userId: userId },
     });
 
     if (!profile) {
@@ -171,42 +171,42 @@ export class ProfileService {
       user: {
         id: user.id,
         email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         phone: user.phone,
-        avatar_id: user.avatar_id,
+        avatarId: user.avatarId,
         language: user.language,
         timezone: user.timezone,
-        is_email_verified: user.is_email_verified,
-        created_at: user.created_at,
+        isEmailVerified: user.isEmailVerified,
+        createdAt: user.createdAt,
       },
       roles: roles.map((r) => r.name),
-      has_organizer_profile: !!organizerProfile,
-      participant_profile: participantProfile
+      hasOrganizerProfile: !!organizerProfile,
+      participantProfile: participantProfile
         ? {
-            date_of_birth: participantProfile.date_of_birth,
+            dateOfBirth: participantProfile.dateOfBirth,
             gender: participantProfile.gender,
-            height_cm: participantProfile.height_cm,
-            weight_kg: participantProfile.weight_kg,
-            fitness_level: participantProfile.fitness_level,
+            heightCm: participantProfile.heightCm,
+            weightKg: participantProfile.weightKg,
+            fitnessLevel: participantProfile.fitnessLevel,
             goals: participantProfile.goals,
-            medical_conditions: participantProfile.medical_conditions,
-            emergency_contact_name: participantProfile.emergency_contact_name,
-            emergency_contact_phone: participantProfile.emergency_contact_phone,
+            medicalConditions: participantProfile.medicalConditions,
+            emergencyContactName: participantProfile.emergencyContactName,
+            emergencyContactPhone: participantProfile.emergencyContactPhone,
             notes: participantProfile.notes,
           }
         : null,
-      organizer_profile: organizerProfile
+      organizerProfile: organizerProfile
         ? {
-            display_name: organizerProfile.display_name,
+            displayName: organizerProfile.displayName,
             bio: organizerProfile.bio,
             specializations: organizerProfile.specializations,
             certifications: organizerProfile.certifications,
-            years_of_experience: organizerProfile.years_of_experience,
-            is_accepting_clients: organizerProfile.is_accepting_clients,
-            social_links: organizerProfile.social_links,
-            location_city: organizerProfile.location_city,
-            location_country: organizerProfile.location_country,
+            yearsOfExperience: organizerProfile.yearsOfExperience,
+            isAcceptingClients: organizerProfile.isAcceptingClients,
+            socialLinks: organizerProfile.socialLinks,
+            locationCity: organizerProfile.locationCity,
+            locationCountry: organizerProfile.locationCountry,
           }
         : null,
     };

@@ -38,14 +38,14 @@ export class SessionParticipant extends Model {
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare session_id: string;
+  declare sessionId: string;
 
   @ForeignKey(() => User)
   @Column({
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare user_id: string;
+  declare userId: string;
 
   @Column({
     type: DataType.ENUM(
@@ -63,10 +63,10 @@ export class SessionParticipant extends Model {
     type: DataType.DATE,
     allowNull: true,
   })
-  declare checked_in_at: Date;
+  declare checkedInAt: Date;
 
   @CreatedAt
-  declare created_at: Date;
+  declare createdAt: Date;
 
   // Relationships
   @BelongsTo(() => Session)

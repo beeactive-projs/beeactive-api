@@ -55,7 +55,7 @@ export class Organization extends Model {
     type: DataType.STRING(500),
     allowNull: true,
   })
-  declare logo_url: string;
+  declare logoUrl: string;
 
   @Column({
     type: DataType.STRING(50),
@@ -73,16 +73,16 @@ export class Organization extends Model {
     type: DataType.BOOLEAN,
     defaultValue: true,
   })
-  declare is_active: boolean;
+  declare isActive: boolean;
 
   @CreatedAt
-  declare created_at: Date;
+  declare createdAt: Date;
 
   @UpdatedAt
-  declare updated_at: Date;
+  declare updatedAt: Date;
 
   @DeletedAt
-  declare deleted_at: Date;
+  declare deletedAt: Date;
 
   // Relationships
   @HasMany(() => OrganizationMember)

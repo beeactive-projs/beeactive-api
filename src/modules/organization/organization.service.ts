@@ -93,9 +93,9 @@ export class OrganizationService {
 
     // Add creator as owner
     await this.memberModel.create({
-      organization_id: organization.id,
-      user_id: userId,
-      is_owner: true,
+      organizationId: organization.id,
+      userId: userId,
+      isOwner: true,
     });
 
     // Assign ORGANIZER role scoped to this organization
@@ -118,7 +118,7 @@ export class OrganizationService {
    */
   async getMyOrganizations(userId: string): Promise<Organization[]> {
     const memberships = await this.memberModel.findAll({
-      where: { user_id: userId, left_at: null },
+      where: { userId: userId, leftAt: null },
       include: [
         {
           model: Organization,
@@ -133,10 +133,7 @@ export class OrganizationService {
   /**
    * Get organization by ID (only if user is a member)
    */
-  async getById(
-    organizationId: string,
-    userId: string,
-  ): Promise<Organization> {
+  async getById(organizationId: string, userId: string): Promise<Organization> {
     const organization = await this.organizationModel.findByPk(organizationId, {
       include: [OrganizationMember],
     });
@@ -147,7 +144,7 @@ export class OrganizationService {
 
     // Check membership
     const isMember = organization.members.some(
-      (m) => m.user_id === userId && !m.left_at,
+      (m) => m.userId === userId && !m.leftAt,
     );
 
     if (!isMember) {
@@ -186,61 +183,61 @@ export class OrganizationService {
    * Get all members of an organization
    *
    * Returns basic info for all members.
-   * Health data is only included if the member has shared_health_info = true.
+   * Health data is only included if the member has sharedHealthInfo = true.
    */
   async getMembers(organizationId: string, userId: string) {
     // Verify the requesting user is a member
     await this.assertMember(organizationId, userId);
 
     const members = await this.memberModel.findAll({
-      where: { organization_id: organizationId, left_at: null },
+      where: { organizationId: organizationId, leftAt: null },
       include: [
         {
           model: User,
           attributes: [
             'id',
             'email',
-            'first_name',
-            'last_name',
+            'firstName',
+            'lastName',
             'phone',
-            'avatar_id',
+            'avatarId',
           ],
         },
       ],
     });
 
     // Check if the requester is the org owner (trainers see more data)
-    const requester = members.find((m) => m.user_id === userId);
-    const isOwner = requester?.is_owner || false;
+    const requester = members.find((m) => m.userId === userId);
+    const isOwner = requester?.isOwner || false;
 
     const result: any[] = [];
 
     for (const member of members) {
       const memberData: any = {
         id: member.id,
-        user_id: member.user_id,
-        first_name: member.user.first_name,
-        last_name: member.user.last_name,
-        avatar_id: member.user.avatar_id,
-        is_owner: member.is_owner,
+        userId: member.userId,
+        firstName: member.user.firstName,
+        lastName: member.user.lastName,
+        avatarId: member.user.avatarId,
+        isOwner: member.isOwner,
         nickname: member.nickname,
-        shared_health_info: member.shared_health_info,
-        joined_at: member.joined_at,
+        sharedHealthInfo: member.sharedHealthInfo,
+        joinedAt: member.joinedAt,
       };
 
       // If requester is owner AND member has shared health info → include it
-      if (isOwner && member.shared_health_info && member.user_id !== userId) {
+      if (isOwner && member.sharedHealthInfo && member.userId !== userId) {
         const profile = await this.participantProfileModel.findOne({
-          where: { user_id: member.user_id },
+          where: { userId: member.userId },
         });
 
         if (profile) {
           memberData.health_data = {
-            fitness_level: profile.fitness_level,
+            fitnessLevel: profile.fitnessLevel,
             goals: profile.goals,
-            medical_conditions: profile.medical_conditions,
-            height_cm: profile.height_cm,
-            weight_kg: profile.weight_kg,
+            medical_conditions: profile.medicalConditions,
+            height_cm: profile.heightCm,
+            weight_kg: profile.weightKg,
             notes: profile.notes,
           };
         }
@@ -253,7 +250,7 @@ export class OrganizationService {
   }
 
   /**
-   * Update own membership settings (shared_health_info, nickname)
+   * Update own membership settings (sharedHealthInfo, nickname)
    */
   async updateMyMembership(
     organizationId: string,
@@ -262,9 +259,9 @@ export class OrganizationService {
   ): Promise<OrganizationMember> {
     const member = await this.memberModel.findOne({
       where: {
-        organization_id: organizationId,
-        user_id: userId,
-        left_at: null,
+        organizationId: organizationId,
+        userId: userId,
+        leftAt: null,
       },
     });
 
@@ -288,9 +285,9 @@ export class OrganizationService {
 
     const member = await this.memberModel.findOne({
       where: {
-        organization_id: organizationId,
-        user_id: memberId,
-        left_at: null,
+        organizationId: organizationId,
+        userId: memberId,
+        leftAt: null,
       },
     });
 
@@ -298,11 +295,11 @@ export class OrganizationService {
       throw new NotFoundException('Member not found');
     }
 
-    if (member.is_owner) {
+    if (member.isOwner) {
       throw new ForbiddenException('Cannot remove the organization owner');
     }
 
-    await member.update({ left_at: new Date() });
+    await member.update({ leftAt: new Date() });
 
     this.logger.log(
       `Member ${memberId} removed from org ${organizationId} by ${userId}`,
@@ -324,18 +321,18 @@ export class OrganizationService {
     // Check if already a member
     const existing = await this.memberModel.findOne({
       where: {
-        organization_id: organizationId,
-        user_id: userId,
-        left_at: null,
+        organizationId: organizationId,
+        userId: userId,
+        leftAt: null,
       },
     });
 
     if (existing) return existing;
 
     return this.memberModel.create({
-      organization_id: organizationId,
-      user_id: userId,
-      is_owner: false,
+      organizationId: organizationId,
+      userId: userId,
+      isOwner: false,
     });
   }
 
@@ -345,9 +342,9 @@ export class OrganizationService {
   ): Promise<OrganizationMember> {
     const member = await this.memberModel.findOne({
       where: {
-        organization_id: organizationId,
-        user_id: userId,
-        left_at: null,
+        organizationId: organizationId,
+        userId: userId,
+        leftAt: null,
       },
     });
 
@@ -364,7 +361,7 @@ export class OrganizationService {
   ): Promise<void> {
     const member = await this.assertMember(organizationId, userId);
 
-    if (!member.is_owner) {
+    if (!member.isOwner) {
       throw new ForbiddenException('Only the organization owner can do this');
     }
   }

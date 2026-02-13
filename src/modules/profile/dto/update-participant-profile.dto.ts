@@ -18,7 +18,7 @@ export class UpdateParticipantProfileDto {
   })
   @IsDateString()
   @IsOptional()
-  date_of_birth?: string;
+  dateOfBirth?: string;
 
   @ApiPropertyOptional({
     example: 'MALE',
@@ -33,14 +33,14 @@ export class UpdateParticipantProfileDto {
   @Min(50)
   @Max(300)
   @IsOptional()
-  height_cm?: number;
+  heightCm?: number;
 
   @ApiPropertyOptional({ example: 75.0, description: 'Weight in kg' })
   @IsNumber()
   @Min(20)
   @Max(500)
   @IsOptional()
-  weight_kg?: number;
+  weightKg?: number;
 
   @ApiPropertyOptional({
     example: 'INTERMEDIATE',
@@ -48,7 +48,7 @@ export class UpdateParticipantProfileDto {
   })
   @IsEnum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED'])
   @IsOptional()
-  fitness_level?: string;
+  fitnessLevel?: string;
 
   @ApiPropertyOptional({
     example: ['weight_loss', 'muscle_gain'],
@@ -66,19 +66,19 @@ export class UpdateParticipantProfileDto {
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
-  medical_conditions?: string[];
+  medicalConditions?: string[];
 
   @ApiPropertyOptional({ example: 'Jane Doe' })
   @IsString()
   @MaxLength(100)
   @IsOptional()
-  emergency_contact_name?: string;
+  emergencyContactName?: string;
 
   @ApiPropertyOptional({ example: '+40123456789' })
   @IsString()
   @MaxLength(20)
   @IsOptional()
-  emergency_contact_phone?: string;
+  emergencyContactPhone?: string;
 
   @ApiPropertyOptional({
     example: 'Prefer morning sessions',

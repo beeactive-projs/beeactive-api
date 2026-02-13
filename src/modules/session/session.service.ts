@@ -49,12 +49,12 @@ export class SessionService {
    */
   async create(userId: string, dto: CreateSessionDto): Promise<Session> {
     // If org-linked, verify user is a member of the organization
-    if (dto.organization_id) {
+    if (dto.organizationId) {
       const isMember = await this.memberModel.findOne({
         where: {
-          organization_id: dto.organization_id,
-          user_id: userId,
-          left_at: null,
+          organizationId: dto.organizationId,
+          userId: userId,
+          leftAt: null,
         },
       });
 
@@ -67,7 +67,7 @@ export class SessionService {
 
     const session = await this.sessionModel.create({
       ...dto,
-      organizer_id: userId,
+      organizerId: userId,
       visibility: dto.visibility || 'MEMBERS',
       status: dto.status || 'SCHEDULED',
       currency: dto.currency || 'RON',
@@ -93,28 +93,28 @@ export class SessionService {
   async getMySessions(userId: string): Promise<Session[]> {
     // Get user's organization IDs
     const memberships = await this.memberModel.findAll({
-      where: { user_id: userId, left_at: null },
-      attributes: ['organization_id'],
+      where: { userId: userId, leftAt: null },
+      attributes: ['organizationId'],
     });
-    const orgIds = memberships.map((m) => m.organization_id);
+    const orgIds = memberships.map((m) => m.organizationId);
 
     // Get sessions the user is registered for
     const registrations = await this.participantModel.findAll({
-      where: { user_id: userId, status: { [Op.ne]: 'CANCELLED' } },
-      attributes: ['session_id'],
+      where: { userId: userId, status: { [Op.ne]: 'CANCELLED' } },
+      attributes: ['sessionId'],
     });
-    const registeredSessionIds = registrations.map((r) => r.session_id);
+    const registeredSessionIds = registrations.map((r) => r.sessionId);
 
     const sessions = await this.sessionModel.findAll({
       where: {
         [Op.or]: [
           // Sessions I organized
-          { organizer_id: userId },
+          { organizerId: userId },
           // Sessions in my organizations with MEMBERS visibility
           ...(orgIds.length > 0
             ? [
                 {
-                  organization_id: { [Op.in]: orgIds },
+                  organizationId: { [Op.in]: orgIds },
                   visibility: { [Op.in]: ['MEMBERS', 'PUBLIC'] },
                 },
               ]
@@ -131,7 +131,7 @@ export class SessionService {
         {
           model: User,
           as: 'organizer',
-          attributes: ['id', 'first_name', 'last_name', 'avatar_id'],
+          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
         },
       ],
       order: [['scheduled_at', 'ASC']],
@@ -149,14 +149,14 @@ export class SessionService {
         {
           model: User,
           as: 'organizer',
-          attributes: ['id', 'first_name', 'last_name', 'avatar_id'],
+          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
         },
         {
           model: SessionParticipant,
           include: [
             {
               model: User,
-              attributes: ['id', 'first_name', 'last_name', 'avatar_id'],
+              attributes: ['id', 'firstName', 'lastName', 'avatarId'],
             },
           ],
         },
@@ -187,8 +187,10 @@ export class SessionService {
       throw new NotFoundException('Session not found');
     }
 
-    if (session.organizer_id !== userId) {
-      throw new ForbiddenException('Only the organizer can update this session');
+    if (session.organizerId !== userId) {
+      throw new ForbiddenException(
+        'Only the organizer can update this session',
+      );
     }
 
     await session.update(dto);
@@ -205,8 +207,10 @@ export class SessionService {
       throw new NotFoundException('Session not found');
     }
 
-    if (session.organizer_id !== userId) {
-      throw new ForbiddenException('Only the organizer can delete this session');
+    if (session.organizerId !== userId) {
+      throw new ForbiddenException(
+        'Only the organizer can delete this session',
+      );
     }
 
     await session.destroy(); // Soft delete (paranoid: true)
@@ -240,39 +244,41 @@ export class SessionService {
     await this.assertCanViewSession(session, userId);
 
     // Cannot join own session
-    if (session.organizer_id === userId) {
+    if (session.organizerId === userId) {
       throw new BadRequestException('You cannot join your own session');
     }
 
     // Check if already registered
     const existing = await this.participantModel.findOne({
-      where: { session_id: sessionId, user_id: userId },
+      where: { sessionId: sessionId, userId: userId },
     });
 
     if (existing && existing.status !== 'CANCELLED') {
-      throw new BadRequestException('You are already registered for this session');
+      throw new BadRequestException(
+        'You are already registered for this session',
+      );
     }
 
     // Check capacity
-    if (session.max_participants) {
+    if (session.maxParticipants) {
       const activeCount = session.participants.filter(
         (p) => !['CANCELLED', 'NO_SHOW'].includes(p.status),
       ).length;
 
-      if (activeCount >= session.max_participants) {
+      if (activeCount >= session.maxParticipants) {
         throw new BadRequestException('Session is full');
       }
     }
 
     // If previously cancelled, reactivate
     if (existing && existing.status === 'CANCELLED') {
-      await existing.update({ status: 'REGISTERED', checked_in_at: null });
+      await existing.update({ status: 'REGISTERED', checkedInAt: null });
       return existing;
     }
 
     return this.participantModel.create({
-      session_id: sessionId,
-      user_id: userId,
+      sessionId: sessionId,
+      userId: userId,
       status: 'REGISTERED',
     });
   }
@@ -283,8 +289,8 @@ export class SessionService {
   async leaveSession(sessionId: string, userId: string): Promise<void> {
     const participant = await this.participantModel.findOne({
       where: {
-        session_id: sessionId,
-        user_id: userId,
+        sessionId: sessionId,
+        userId: userId,
         status: { [Op.ne]: 'CANCELLED' },
       },
     });
@@ -311,14 +317,14 @@ export class SessionService {
       throw new NotFoundException('Session not found');
     }
 
-    if (session.organizer_id !== organizerUserId) {
+    if (session.organizerId !== organizerUserId) {
       throw new ForbiddenException(
         'Only the organizer can update participant status',
       );
     }
 
     const participant = await this.participantModel.findOne({
-      where: { session_id: sessionId, user_id: participantUserId },
+      where: { sessionId: sessionId, userId: participantUserId },
     });
 
     if (!participant) {
@@ -327,9 +333,9 @@ export class SessionService {
 
     const updateData: any = { status: dto.status };
 
-    // Auto-set checked_in_at when marking as ATTENDED
-    if (dto.status === 'ATTENDED' && !participant.checked_in_at) {
-      updateData.checked_in_at = new Date();
+    // Auto-set checkedInAt when marking as ATTENDED
+    if (dto.status === 'ATTENDED' && !participant.checkedInAt) {
+      updateData.checkedInAt = new Date();
     }
 
     await participant.update(updateData);
@@ -348,18 +354,18 @@ export class SessionService {
     userId: string,
   ): Promise<void> {
     // Organizer can always see their own sessions
-    if (session.organizer_id === userId) return;
+    if (session.organizerId === userId) return;
 
     // Public sessions are visible to everyone
     if (session.visibility === 'PUBLIC') return;
 
     // MEMBERS: user must be in the same organization
-    if (session.visibility === 'MEMBERS' && session.organization_id) {
+    if (session.visibility === 'MEMBERS' && session.organizationId) {
       const isMember = await this.memberModel.findOne({
         where: {
-          organization_id: session.organization_id,
-          user_id: userId,
-          left_at: null,
+          organizationId: session.organizationId,
+          userId: userId,
+          leftAt: null,
         },
       });
 
@@ -369,8 +375,8 @@ export class SessionService {
     // PRIVATE: user must be a registered participant
     const isParticipant = await this.participantModel.findOne({
       where: {
-        session_id: session.id,
-        user_id: userId,
+        sessionId: session.id,
+        userId: userId,
         status: { [Op.ne]: 'CANCELLED' },
       },
     });

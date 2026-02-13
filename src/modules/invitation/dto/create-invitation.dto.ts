@@ -22,7 +22,7 @@ export class CreateInvitationDto {
   })
   @IsString()
   @IsNotEmpty()
-  organization_id: string;
+  organizationId: string;
 
   @ApiPropertyOptional({
     example: 'PARTICIPANT',
@@ -30,7 +30,7 @@ export class CreateInvitationDto {
   })
   @IsString()
   @IsOptional()
-  role_name?: string;
+  roleName?: string;
 
   @ApiPropertyOptional({
     example: 'Join my fitness studio!',

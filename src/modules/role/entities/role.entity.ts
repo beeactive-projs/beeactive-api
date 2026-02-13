@@ -44,7 +44,7 @@ export class Role extends Model {
     type: DataType.STRING(100),
     allowNull: false,
   })
-  declare display_name: string;
+  declare displayName: string;
 
   @Column({
     type: DataType.TEXT,
@@ -64,13 +64,13 @@ export class Role extends Model {
     allowNull: false,
     defaultValue: false,
   })
-  declare is_system_role: boolean;
+  declare isSystemRole: boolean;
 
   @CreatedAt
-  declare created_at: Date;
+  declare createdAt: Date;
 
   @UpdatedAt
-  declare updated_at: Date;
+  declare updatedAt: Date;
 
   // Relationships
   @BelongsToMany(() => Permission, () => RolePermission)

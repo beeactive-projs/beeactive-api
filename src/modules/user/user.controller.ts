@@ -33,13 +33,13 @@ export class UserController {
     return {
       id: req.user.id,
       email: req.user.email,
-      first_name: req.user.first_name,
-      last_name: req.user.last_name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
       phone: req.user.phone,
-      is_active: req.user.is_active,
-      is_email_verified: req.user.is_email_verified,
+      isActive: req.user.isActive,
+      isEmailVerified: req.user.isEmailVerified,
       roles: req.user.roles,
-      created_at: req.user.created_at,
+      createdAt: req.user.createdAt,
     };
   }
 }

@@ -56,7 +56,10 @@ export class ProfileController {
   }
 
   @Patch('participant')
-  @ApiEndpoint({ ...ProfileDocs.updateParticipantProfile, body: UpdateParticipantProfileDto })
+  @ApiEndpoint({
+    ...ProfileDocs.updateParticipantProfile,
+    body: UpdateParticipantProfileDto,
+  })
   async updateParticipantProfile(
     @Request() req,
     @Body() dto: UpdateParticipantProfileDto,
@@ -69,7 +72,10 @@ export class ProfileController {
   // =====================================================
 
   @Post('organizer')
-  @ApiEndpoint({ ...ProfileDocs.createOrganizerProfile, body: CreateOrganizerProfileDto })
+  @ApiEndpoint({
+    ...ProfileDocs.createOrganizerProfile,
+    body: CreateOrganizerProfileDto,
+  })
   async createOrganizerProfile(
     @Request() req,
     @Body() dto: CreateOrganizerProfileDto,
@@ -84,7 +90,10 @@ export class ProfileController {
   }
 
   @Patch('organizer')
-  @ApiEndpoint({ ...ProfileDocs.updateOrganizerProfile, body: UpdateOrganizerProfileDto })
+  @ApiEndpoint({
+    ...ProfileDocs.updateOrganizerProfile,
+    body: UpdateOrganizerProfileDto,
+  })
   async updateOrganizerProfile(
     @Request() req,
     @Body() dto: UpdateOrganizerProfileDto,

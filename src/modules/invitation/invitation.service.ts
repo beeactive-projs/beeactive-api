@@ -57,25 +57,25 @@ export class InvitationService {
   ): Promise<{ invitation: Invitation; invitation_link: string }> {
     // Verify inviter is owner of the organization
     const org = await this.organizationService.getById(
-      dto.organization_id,
+      dto.organizationId,
       inviterId,
     );
 
     // Find the role to assign
-    const roleName = dto.role_name || 'PARTICIPANT';
+    const roleName = dto.roleName || 'PARTICIPANT';
     const role = await this.roleService.findByName(roleName);
 
     // Check for existing pending invitation
     const existing = await this.invitationModel.findOne({
       where: {
         email: dto.email,
-        organization_id: dto.organization_id,
-        accepted_at: null,
-        declined_at: null,
+        organizationId: dto.organizationId,
+        acceptedAt: null,
+        declinedAt: null,
       },
     });
 
-    if (existing && existing.expires_at > new Date()) {
+    if (existing && existing.expiresAt > new Date()) {
       throw new BadRequestException(
         'An active invitation already exists for this email',
       );
@@ -89,13 +89,13 @@ export class InvitationService {
     expiresAt.setDate(expiresAt.getDate() + 7);
 
     const invitation = await this.invitationModel.create({
-      inviter_id: inviterId,
+      inviterId: inviterId,
       email: dto.email,
-      role_id: role.id,
-      organization_id: dto.organization_id,
+      roleId: role.id,
+      organizationId: dto.organizationId,
       token,
       message: dto.message,
-      expires_at: expiresAt,
+      expiresAt: expiresAt,
     });
 
     // Build invitation link
@@ -125,7 +125,7 @@ export class InvitationService {
   async accept(
     token: string,
     userId: string,
-  ): Promise<{ message: string; organization_id: string }> {
+  ): Promise<{ message: string; organizationId: string }> {
     const invitation = await this.invitationModel.findOne({
       where: { token },
       include: [Organization, Role],
@@ -135,42 +135,42 @@ export class InvitationService {
       throw new NotFoundException('Invitation not found');
     }
 
-    if (invitation.accepted_at) {
+    if (invitation.acceptedAt) {
       throw new BadRequestException('Invitation has already been accepted');
     }
 
-    if (invitation.declined_at) {
+    if (invitation.declinedAt) {
       throw new BadRequestException('Invitation has been declined');
     }
 
-    if (invitation.expires_at < new Date()) {
+    if (invitation.expiresAt < new Date()) {
       throw new BadRequestException('Invitation has expired');
     }
 
     // Add user to organization
     await this.organizationService.addMember(
-      invitation.organization_id,
+      invitation.organizationId,
       userId,
     );
 
     // Assign role (org-scoped)
     await this.roleService.assignRoleToUser(
       userId,
-      invitation.role_id,
-      invitation.organization_id,
+      invitation.roleId,
+      invitation.organizationId,
     );
 
     // Mark as accepted
-    await invitation.update({ accepted_at: new Date() });
+    await invitation.update({ acceptedAt: new Date() });
 
     this.logger.log(
-      `Invitation accepted: user ${userId} joined org ${invitation.organization_id}`,
+      `Invitation accepted: user ${userId} joined org ${invitation.organizationId}`,
       'InvitationService',
     );
 
     return {
       message: 'Invitation accepted successfully',
-      organization_id: invitation.organization_id,
+      organizationId: invitation.organizationId,
     };
   }
 
@@ -186,13 +186,13 @@ export class InvitationService {
       throw new NotFoundException('Invitation not found');
     }
 
-    if (invitation.accepted_at || invitation.declined_at) {
+    if (invitation.acceptedAt || invitation.declinedAt) {
       throw new BadRequestException(
         'Invitation has already been responded to',
       );
     }
 
-    await invitation.update({ declined_at: new Date() });
+    await invitation.update({ declinedAt: new Date() });
 
     return { message: 'Invitation declined' };
   }
@@ -204,14 +204,14 @@ export class InvitationService {
     return this.invitationModel.findAll({
       where: {
         email: userEmail,
-        accepted_at: null,
-        declined_at: null,
+        acceptedAt: null,
+        declinedAt: null,
       },
       include: [
         {
           model: User,
           as: 'inviter',
-          attributes: ['id', 'first_name', 'last_name', 'avatar_id'],
+          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
         },
         {
           model: Organization,
@@ -237,7 +237,7 @@ export class InvitationService {
     await this.organizationService.getById(organizationId, userId);
 
     return this.invitationModel.findAll({
-      where: { organization_id: organizationId },
+      where: { organizationId: organizationId },
       include: [
         {
           model: Role,

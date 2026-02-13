@@ -21,12 +21,12 @@ export class CreateUserDto {
   @ApiProperty({ example: 'John' })
   @IsString()
   @IsNotEmpty()
-  first_name: string;
+  firstName: string;
 
   @ApiProperty({ example: 'Doe' })
   @IsString()
   @IsNotEmpty()
-  last_name: string;
+  lastName: string;
 
   @ApiPropertyOptional({ example: '+1234567890' })
   @IsOptional()

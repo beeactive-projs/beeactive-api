@@ -35,17 +35,17 @@ export class RolePermission extends Model {
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare role_id: string;
+  declare roleId: string;
 
   @ForeignKey(() => Permission)
   @Column({
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare permission_id: string;
+  declare permissionId: string;
 
   @CreatedAt
-  declare created_at: Date;
+  declare createdAt: Date;
 
   // Relationships
   @BelongsTo(() => Role)

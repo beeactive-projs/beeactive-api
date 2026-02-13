@@ -53,19 +53,19 @@ export class User extends Model {
     type: DataType.STRING(255),
     allowNull: true,
   })
-  declare password_hash: string;
+  declare passwordHash: string;
 
   @Column({
     type: DataType.STRING(100),
     allowNull: false,
   })
-  declare first_name: string;
+  declare firstName: string;
 
   @Column({
     type: DataType.STRING(100),
     allowNull: false,
   })
-  declare last_name: string;
+  declare lastName: string;
 
   @Column({
     type: DataType.STRING(20),
@@ -77,7 +77,7 @@ export class User extends Model {
     type: DataType.TINYINT.UNSIGNED,
     defaultValue: 1,
   })
-  declare avatar_id: number;
+  declare avatarId: number;
 
   @Column({
     type: DataType.STRING(5),
@@ -95,60 +95,60 @@ export class User extends Model {
     type: DataType.BOOLEAN,
     defaultValue: true,
   })
-  declare is_active: boolean;
+  declare isActive: boolean;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  declare is_email_verified: boolean;
+  declare isEmailVerified: boolean;
 
   // ✅ SECURITY FIX: Tokens are now hashed (stores SHA-256 hash, not plain token)
   @Column({
     type: DataType.STRING(255),
     allowNull: true,
   })
-  declare email_verification_token: string;
+  declare emailVerificationToken: string;
 
   @Column({
     type: DataType.STRING(255),
     allowNull: true,
   })
-  declare password_reset_token: string | null;
+  declare passwordResetToken: string | null;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  declare password_reset_expires: Date | null;
+  declare passwordResetExpires: Date | null;
 
   // ✅ SECURITY FEATURE: Account lockout after failed login attempts
   @Column({
     type: DataType.INTEGER,
     defaultValue: 0,
   })
-  declare failed_login_attempts: number;
+  declare failedLoginAttempts: number;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  declare locked_until: Date | null;
+  declare lockedUntil: Date | null;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  declare last_login_at: Date;
+  declare lastLoginAt: Date;
 
   @CreatedAt
-  declare created_at: Date;
+  declare createdAt: Date;
 
   @UpdatedAt
-  declare updated_at: Date;
+  declare updatedAt: Date;
 
   @DeletedAt
-  declare deleted_at: Date;
+  declare deletedAt: Date;
 
   // Relationships
   @BelongsToMany(() => Role, () => UserRole)

@@ -39,7 +39,7 @@ export class RegisterDto {
   })
   @IsString()
   @IsNotEmpty()
-  first_name: string;
+  firstName: string;
 
   @ApiProperty({
     example: 'Doe',
@@ -47,7 +47,7 @@ export class RegisterDto {
   })
   @IsString()
   @IsNotEmpty()
-  last_name: string;
+  lastName: string;
 
   @ApiPropertyOptional({
     example: '+40123456789',

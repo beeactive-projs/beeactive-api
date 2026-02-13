@@ -44,14 +44,14 @@ export class Session extends Model {
     type: DataType.CHAR(36),
     allowNull: true,
   })
-  declare organization_id: string;
+  declare organizationId: string;
 
   @ForeignKey(() => User)
   @Column({
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare organizer_id: string;
+  declare organizerId: string;
 
   @Column({
     type: DataType.STRING(255),
@@ -69,7 +69,7 @@ export class Session extends Model {
     type: DataType.ENUM('ONE_ON_ONE', 'GROUP', 'ONLINE', 'WORKSHOP'),
     allowNull: false,
   })
-  declare session_type: string;
+  declare sessionType: string;
 
   @Column({
     type: DataType.ENUM('PRIVATE', 'MEMBERS', 'PUBLIC'),
@@ -81,13 +81,13 @@ export class Session extends Model {
     type: DataType.DATE,
     allowNull: false,
   })
-  declare scheduled_at: Date;
+  declare scheduledAt: Date;
 
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
   })
-  declare duration_minutes: number;
+  declare durationMinutes: number;
 
   @Column({
     type: DataType.STRING(255),
@@ -99,7 +99,7 @@ export class Session extends Model {
     type: DataType.INTEGER,
     allowNull: true,
   })
-  declare max_participants: number;
+  declare maxParticipants: number;
 
   @Column({
     type: DataType.DECIMAL(10, 2),
@@ -129,31 +129,31 @@ export class Session extends Model {
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  declare is_recurring: boolean;
+  declare isRecurring: boolean;
 
   @Column({
     type: DataType.JSON,
     allowNull: true,
   })
-  declare recurring_rule: object;
+  declare recurringRule: object;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  declare reminder_sent: boolean;
+  declare reminderSent: boolean;
 
   @CreatedAt
-  declare created_at: Date;
+  declare createdAt: Date;
 
   @UpdatedAt
-  declare updated_at: Date;
+  declare updatedAt: Date;
 
   @DeletedAt
-  declare deleted_at: Date;
+  declare deletedAt: Date;
 
   // Relationships
-  @BelongsTo(() => User, 'organizer_id')
+  @BelongsTo(() => User, 'organizerId')
   declare organizer: User;
 
   @BelongsTo(() => Organization)

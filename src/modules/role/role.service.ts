@@ -64,9 +64,9 @@ export class RoleService {
   ): Promise<UserRole> {
     const existing = await this.userRoleModel.findOne({
       where: {
-        user_id: userId,
-        role_id: roleId,
-        organization_id: organizationId || null,
+        userId: userId,
+        roleId: roleId,
+        organizationId: organizationId || null,
       },
     });
 
@@ -75,10 +75,10 @@ export class RoleService {
     }
 
     return this.userRoleModel.create({
-      user_id: userId,
-      role_id: roleId,
-      organization_id: organizationId,
-      expires_at: expiresAt,
+      userId: userId,
+      roleId: roleId,
+      organizationId: organizationId,
+      expiresAt: expiresAt,
     });
   }
 
@@ -99,9 +99,9 @@ export class RoleService {
   ): Promise<boolean> {
     const deleted = await this.userRoleModel.destroy({
       where: {
-        user_id: userId,
-        role_id: roleId,
-        organization_id: organizationId || null,
+        userId: userId,
+        roleId: roleId,
+        organizationId: organizationId || null,
       },
     });
 
@@ -109,10 +109,10 @@ export class RoleService {
   }
 
   async getUserRoles(userId: string, organizationId?: string): Promise<Role[]> {
-    const where: any = { user_id: userId };
+    const where: any = { userId: userId };
 
     if (organizationId !== undefined) {
-      where.organization_id = organizationId;
+      where.organizationId = organizationId;
     }
 
     const userRoles = await this.userRoleModel.findAll({
@@ -159,12 +159,12 @@ export class RoleService {
     const role = await this.findByName(roleName);
 
     const where: any = {
-      user_id: userId,
-      role_id: role.id,
+      userId: userId,
+      roleId: role.id,
     };
 
     if (organizationId !== undefined) {
-      where.organization_id = organizationId;
+      where.organizationId = organizationId;
     }
 
     const userRole = await this.userRoleModel.findOne({ where });
@@ -184,12 +184,12 @@ export class RoleService {
     const roleIds = roles.map((r) => r.id);
 
     const where: any = {
-      user_id: userId,
-      role_id: roleIds,
+      userId: userId,
+      roleId: roleIds,
     };
 
     if (organizationId !== undefined) {
-      where.organization_id = organizationId;
+      where.organizationId = organizationId;
     }
 
     const count = await this.userRoleModel.count({ where });

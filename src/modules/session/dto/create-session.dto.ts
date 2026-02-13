@@ -19,7 +19,7 @@ export class CreateSessionDto {
   })
   @IsString()
   @IsOptional()
-  organization_id?: string;
+  organizationId?: string;
 
   @ApiProperty({ example: 'Morning Yoga Flow' })
   @IsString()
@@ -38,7 +38,7 @@ export class CreateSessionDto {
   })
   @IsEnum(['ONE_ON_ONE', 'GROUP', 'ONLINE', 'WORKSHOP'])
   @IsNotEmpty()
-  session_type: string;
+  sessionType: string;
 
   @ApiPropertyOptional({
     example: 'MEMBERS',
@@ -55,14 +55,14 @@ export class CreateSessionDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  scheduled_at: string;
+  scheduledAt: string;
 
   @ApiProperty({ example: 60, description: 'Duration in minutes' })
   @IsNumber()
   @Min(5)
   @Max(480)
   @IsNotEmpty()
-  duration_minutes: number;
+  durationMinutes: number;
 
   @ApiPropertyOptional({ example: 'Fitness Studio, Bucharest' })
   @IsString()
@@ -78,7 +78,7 @@ export class CreateSessionDto {
   @Min(1)
   @Max(1000)
   @IsOptional()
-  max_participants?: number;
+  maxParticipants?: number;
 
   @ApiPropertyOptional({ example: 50.0, description: 'Session price' })
   @IsNumber()

@@ -39,13 +39,13 @@ export class ParticipantProfile extends Model {
     allowNull: false,
     unique: true,
   })
-  declare user_id: string;
+  declare userId: string;
 
   @Column({
     type: DataType.DATEONLY,
     allowNull: true,
   })
-  declare date_of_birth: string;
+  declare dateOfBirth: string;
 
   @Column({
     type: DataType.ENUM('MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'),
@@ -57,19 +57,19 @@ export class ParticipantProfile extends Model {
     type: DataType.DECIMAL(5, 1),
     allowNull: true,
   })
-  declare height_cm: number;
+  declare heightCm: number;
 
   @Column({
     type: DataType.DECIMAL(5, 1),
     allowNull: true,
   })
-  declare weight_kg: number;
+  declare weightKg: number;
 
   @Column({
     type: DataType.ENUM('BEGINNER', 'INTERMEDIATE', 'ADVANCED'),
     allowNull: true,
   })
-  declare fitness_level: string;
+  declare fitnessLevel: string;
 
   @Column({
     type: DataType.JSON,
@@ -81,19 +81,19 @@ export class ParticipantProfile extends Model {
     type: DataType.JSON,
     allowNull: true,
   })
-  declare medical_conditions: string[];
+  declare medicalConditions: string[];
 
   @Column({
     type: DataType.STRING(100),
     allowNull: true,
   })
-  declare emergency_contact_name: string;
+  declare emergencyContactName: string;
 
   @Column({
     type: DataType.STRING(20),
     allowNull: true,
   })
-  declare emergency_contact_phone: string;
+  declare emergencyContactPhone: string;
 
   @Column({
     type: DataType.TEXT,
@@ -102,10 +102,10 @@ export class ParticipantProfile extends Model {
   declare notes: string;
 
   @CreatedAt
-  declare created_at: Date;
+  declare createdAt: Date;
 
   @UpdatedAt
-  declare updated_at: Date;
+  declare updatedAt: Date;
 
   // Relationships
   @BelongsTo(() => User)

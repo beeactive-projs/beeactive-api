@@ -77,9 +77,9 @@ export class UserService {
     // Create user
     const user = await this.userModel.create({
       email: userData.email,
-      password_hash: hashedPassword,
-      first_name: userData.first_name,
-      last_name: userData.last_name,
+      passwordHash: hashedPassword,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
       phone: userData.phone,
     });
 
@@ -99,7 +99,7 @@ export class UserService {
    * @returns True if password matches
    */
   async validatePassword(user: User, password: string): Promise<boolean> {
-    return bcrypt.compare(password, user.password_hash);
+    return bcrypt.compare(password, user.passwordHash);
   }
 
   /**
@@ -113,8 +113,8 @@ export class UserService {
    * @returns True if account is currently locked
    */
   isAccountLocked(user: User): boolean {
-    if (!user.locked_until) return false;
-    return new Date() < user.locked_until;
+    if (!user.lockedUntil) return false;
+    return new Date() < user.lockedUntil;
   }
 
   /**
@@ -128,13 +128,13 @@ export class UserService {
     const MAX_ATTEMPTS = 5;
     const LOCK_DURATION_MINUTES = 15;
 
-    user.failed_login_attempts += 1;
+    user.failedLoginAttempts += 1;
 
-    if (user.failed_login_attempts >= MAX_ATTEMPTS) {
+    if (user.failedLoginAttempts >= MAX_ATTEMPTS) {
       // Lock the account
       const lockedUntil = new Date();
       lockedUntil.setMinutes(lockedUntil.getMinutes() + LOCK_DURATION_MINUTES);
-      user.locked_until = lockedUntil;
+      user.lockedUntil = lockedUntil;
     }
 
     await user.save();
@@ -148,9 +148,9 @@ export class UserService {
    * @param user - User object
    */
   async resetFailedAttempts(user: User): Promise<void> {
-    user.failed_login_attempts = 0;
-    user.locked_until = null;
-    user.last_login_at = new Date();
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = null;
+    user.lastLoginAt = new Date();
     await user.save();
   }
 
@@ -167,8 +167,8 @@ export class UserService {
     const { token, hashedToken, expiresAt } =
       this.cryptoService.generateTokenWithExpiry(1); // 1 hour validity
 
-    user.password_reset_token = hashedToken;
-    user.password_reset_expires = expiresAt;
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = expiresAt;
     await user.save();
 
     return token; // Return plain token to send via email
@@ -185,13 +185,13 @@ export class UserService {
 
     const user = await this.userModel.findOne({
       where: {
-        password_reset_token: hashedToken,
+        passwordResetToken: hashedToken,
       },
     });
 
     // Check if token is expired
-    if (user && user.password_reset_expires) {
-      if (new Date() > user.password_reset_expires) {
+    if (user && user.passwordResetExpires) {
+      if (new Date() > user.passwordResetExpires) {
         return null; // Token expired
       }
     }
@@ -207,11 +207,11 @@ export class UserService {
    */
   async resetPassword(user: User, newPassword: string): Promise<void> {
     const bcryptRounds = this.configService.get<number>('BCRYPT_ROUNDS') || 12;
-    user.password_hash = await bcrypt.hash(newPassword, bcryptRounds);
+    user.passwordHash = await bcrypt.hash(newPassword, bcryptRounds);
 
     // Clear reset token
-    user.password_reset_token = null;
-    user.password_reset_expires = null;
+    user.passwordResetToken = null;
+    user.passwordResetExpires = null;
 
     await user.save();
   }

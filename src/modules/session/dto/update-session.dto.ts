@@ -28,7 +28,7 @@ export class UpdateSessionDto {
   })
   @IsEnum(['ONE_ON_ONE', 'GROUP', 'ONLINE', 'WORKSHOP'])
   @IsOptional()
-  session_type?: string;
+  sessionType?: string;
 
   @ApiPropertyOptional({
     example: 'MEMBERS',
@@ -41,14 +41,14 @@ export class UpdateSessionDto {
   @ApiPropertyOptional({ example: '2026-02-15T10:00:00.000Z' })
   @IsDateString()
   @IsOptional()
-  scheduled_at?: string;
+  scheduledAt?: string;
 
   @ApiPropertyOptional({ example: 90 })
   @IsNumber()
   @Min(5)
   @Max(480)
   @IsOptional()
-  duration_minutes?: number;
+  durationMinutes?: number;
 
   @ApiPropertyOptional({ example: 'New Location' })
   @IsString()
@@ -61,7 +61,7 @@ export class UpdateSessionDto {
   @Min(1)
   @Max(1000)
   @IsOptional()
-  max_participants?: number;
+  maxParticipants?: number;
 
   @ApiPropertyOptional({ example: 60.0 })
   @IsNumber()

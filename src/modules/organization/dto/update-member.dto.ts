@@ -14,7 +14,7 @@ export class UpdateMemberDto {
   })
   @IsBoolean()
   @IsOptional()
-  shared_health_info?: boolean;
+  sharedHealthInfo?: boolean;
 
   @ApiPropertyOptional({
     example: 'Johnny',

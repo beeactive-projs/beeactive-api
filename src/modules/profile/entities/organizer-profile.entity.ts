@@ -38,13 +38,13 @@ export class OrganizerProfile extends Model {
     allowNull: false,
     unique: true,
   })
-  declare user_id: string;
+  declare userId: string;
 
   @Column({
     type: DataType.STRING(100),
     allowNull: true,
   })
-  declare display_name: string;
+  declare displayName: string;
 
   @Column({
     type: DataType.JSON,
@@ -68,61 +68,61 @@ export class OrganizerProfile extends Model {
     type: DataType.INTEGER,
     allowNull: true,
   })
-  declare years_of_experience: number;
+  declare yearsOfExperience: number;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: true,
   })
-  declare is_accepting_clients: boolean;
+  declare isAcceptingClients: boolean;
 
   @Column({
     type: DataType.JSON,
     allowNull: true,
   })
-  declare social_links: object;
+  declare socialLinks: object;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: true,
   })
-  declare show_social_links: boolean;
+  declare showSocialLinks: boolean;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: true,
   })
-  declare show_email: boolean;
+  declare showEmail: boolean;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  declare show_phone: boolean;
+  declare showPhone: boolean;
 
   @Column({
     type: DataType.STRING(100),
     allowNull: true,
   })
-  declare location_city: string;
+  declare locationCity: string;
 
   @Column({
     type: DataType.STRING(5),
     allowNull: true,
   })
-  declare location_country: string;
+  declare locationCountry: string;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  declare is_public: boolean;
+  declare isPublic: boolean;
 
   @CreatedAt
-  declare created_at: Date;
+  declare createdAt: Date;
 
   @UpdatedAt
-  declare updated_at: Date;
+  declare updatedAt: Date;
 
   // Relationships
   @BelongsTo(() => User)

@@ -91,8 +91,8 @@ export class AuthService {
         user: {
           id: user.id,
           email: user.email,
-          first_name: user.first_name,
-          last_name: user.last_name,
+          firstName: user.firstName,
+          lastName: user.lastName,
           roles: roleNames,
         },
       };
@@ -129,7 +129,7 @@ export class AuthService {
 
     // ✅ SECURITY: Check if account is locked
     if (this.userService.isAccountLocked(user)) {
-      const lockedUntil = user.locked_until!.toLocaleString();
+      const lockedUntil = user.lockedUntil!.toLocaleString();
       this.logger.warn(
         `Login attempt on locked account: ${user.email}`,
         'AuthService',
@@ -150,7 +150,7 @@ export class AuthService {
       await this.userService.incrementFailedAttempts(user);
 
       this.logger.warn(
-        `Failed login attempt for: ${user.email} (${user.failed_login_attempts + 1} attempts)`,
+        `Failed login attempt for: ${user.email} (${user.failedLoginAttempts + 1} attempts)`,
         'AuthService',
       );
 
@@ -174,8 +174,8 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         roles: roleNames,
       },
     };
@@ -227,7 +227,7 @@ export class AuthService {
 
       // Check if user still exists
       const user = await this.userService.findById(payload.sub);
-      if (!user || !user.is_active) {
+      if (!user || !user.isActive) {
         throw new UnauthorizedException('User not found or inactive');
       }
 
@@ -282,12 +282,12 @@ export class AuthService {
       );
 
       // In development, return the link for testing
-      // In production, remove reset_link from the response
+      // In production, remove resetLink from the response
       if (this.configService.get('NODE_ENV') !== 'production') {
         return {
           message:
             'If your email is registered, you will receive a password reset link.',
-          reset_link: resetLink,
+          resetLink,
         };
       }
     }

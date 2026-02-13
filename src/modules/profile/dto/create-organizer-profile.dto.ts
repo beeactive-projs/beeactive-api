@@ -15,5 +15,5 @@ export class CreateOrganizerProfileDto {
   @IsString()
   @MaxLength(100)
   @IsOptional()
-  display_name?: string;
+  displayName?: string;
 }
