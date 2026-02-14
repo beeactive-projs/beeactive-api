@@ -82,6 +82,7 @@ const ALL_MIGRATIONS = [
   '007_create_super_admin.sql',
   '008_update_profiles_and_members.sql',
   '009_add_email_verification_expires.sql',
+  '010_add_organization_discovery_fields.sql',
 ];
 
 async function runMigrations() {

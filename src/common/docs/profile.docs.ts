@@ -7,6 +7,44 @@ import { ApiEndpointOptions } from '../decorators/api-response.decorator';
 import { ApiStandardResponses } from './standard-responses';
 
 export const ProfileDocs = {
+  discoverTrainers: {
+    summary: 'Discover trainers',
+    description:
+      'Browse and search public trainer profiles. No authentication required. ' +
+      'Supports search by name/bio/specialization and filtering by city and country. ' +
+      'Results sorted by years of experience (most experienced first).',
+    auth: false,
+    responses: [
+      {
+        status: 200,
+        description: 'Trainers found',
+        example: {
+          data: [
+            {
+              id: 'profile-uuid',
+              userId: 'user-uuid',
+              firstName: 'John',
+              lastName: 'Doe',
+              displayName: 'Coach John',
+              bio: 'Certified HIIT and strength trainer with 8 years experience',
+              specializations: ['hiit', 'strength', 'weight_loss'],
+              yearsOfExperience: 8,
+              isAcceptingClients: true,
+              city: 'Bucharest',
+              country: 'RO',
+            },
+          ],
+          meta: {
+            page: 1,
+            limit: 20,
+            totalItems: 1,
+            totalPages: 1,
+          },
+        },
+      },
+    ],
+  } as ApiEndpointOptions,
+
   getProfileOverview: {
     summary: 'Get full profile overview',
     description:

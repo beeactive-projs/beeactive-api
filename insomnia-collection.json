@@ -205,9 +205,31 @@
       "modified": 1708300000000,
       "created": 1708300000000,
       "name": "3. Profiles",
-      "description": "Participant & organizer profiles",
+      "description": "Participant & organizer profiles, trainer discovery",
       "environment": {},
       "_type": "request_group"
+    },
+    {
+      "_id": "req_discover_trainers",
+      "parentId": "fld_profiles",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/profile/trainers/discover?page=1&limit=20",
+      "name": "🔍 Discover Trainers (Public)",
+      "description": "Browse public trainer profiles. No auth required. Supports ?search=yoga&city=Bucharest&country=RO",
+      "method": "GET",
+      "_type": "request"
+    },
+    {
+      "_id": "req_discover_trainers_search",
+      "parentId": "fld_profiles",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/profile/trainers/discover?search=yoga&city=Bucharest&page=1&limit=20",
+      "name": "🔍 Discover Trainers - Search (Public)",
+      "description": "Search trainers by name, bio, or specialization and filter by city",
+      "method": "GET",
+      "_type": "request"
     },
     {
       "_id": "req_profile_overview",
@@ -250,7 +272,7 @@
       "_type": "request"
     },
     {
-      "_id": "req_update_participant",
+      "_id": "req_update_participant_profile",
       "parentId": "fld_profiles",
       "modified": 1708300000000,
       "created": 1708300000000,
@@ -306,7 +328,7 @@
       "method": "PATCH",
       "body": {
         "mimeType": "application/json",
-        "text": "{\n  \"bio\": \"Certified personal trainer\",\n  \"specializations\": [\"hiit\", \"yoga\"],\n  \"yearsOfExperience\": 5\n}"
+        "text": "{\n  \"bio\": \"Certified personal trainer\",\n  \"specializations\": [\"hiit\", \"yoga\"],\n  \"yearsOfExperience\": 5,\n  \"isPublic\": true,\n  \"locationCity\": \"Bucharest\",\n  \"locationCountry\": \"RO\",\n  \"isAcceptingClients\": true\n}"
       },
       "headers": [
         {"name": "Content-Type", "value": "application/json"},
@@ -315,12 +337,78 @@
       "_type": "request"
     },
     {
+      "_id": "fld_discovery",
+      "parentId": "wrk_beeactive",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "4. Discovery (Public)",
+      "description": "Browse organizations and trainers - NO AUTH required",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_discover_orgs",
+      "parentId": "fld_discovery",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/discover?page=1&limit=20",
+      "name": "🔍 Discover Organizations (All)",
+      "description": "Browse all public organizations. No auth required.",
+      "method": "GET",
+      "_type": "request"
+    },
+    {
+      "_id": "req_discover_orgs_type",
+      "parentId": "fld_discovery",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/discover?type=YOGA&page=1&limit=20",
+      "name": "🔍 Discover Organizations (by Type)",
+      "description": "Filter by type: FITNESS, YOGA, DANCE, CROSSFIT, MARTIAL_ARTS, SWIMMING, RUNNING, CYCLING, PILATES, SPORTS_TEAM, PERSONAL_TRAINING, OTHER",
+      "method": "GET",
+      "_type": "request"
+    },
+    {
+      "_id": "req_discover_orgs_search",
+      "parentId": "fld_discovery",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/discover?search=fitness&city=Bucharest&country=RO&page=1&limit=20",
+      "name": "🔍 Discover Organizations (Search + Location)",
+      "description": "Free text search + location filter",
+      "method": "GET",
+      "_type": "request"
+    },
+    {
+      "_id": "req_org_public_profile",
+      "parentId": "fld_discovery",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/{{ _.org_id }}/public",
+      "name": "📋 Organization Public Profile",
+      "description": "Get public profile: org details + trainer info + upcoming sessions. No auth required.",
+      "method": "GET",
+      "_type": "request"
+    },
+    {
+      "_id": "req_join_org",
+      "parentId": "fld_discovery",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/{{ _.org_id }}/join",
+      "name": "🤝 Join Organization (Self-Join)",
+      "description": "Join a public organization with OPEN join policy. Auth required.",
+      "method": "POST",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
       "_id": "fld_orgs",
       "parentId": "wrk_beeactive",
       "modified": 1708300000000,
       "created": 1708300000000,
-      "name": "4. Organizations",
-      "description": "Organization management",
+      "name": "5. Organizations",
+      "description": "Organization management (authenticated)",
       "environment": {},
       "_type": "request_group"
     },
@@ -334,7 +422,7 @@
       "method": "POST",
       "body": {
         "mimeType": "application/json",
-        "text": "{\n  \"name\": \"John's Fitness Studio\",\n  \"description\": \"Personal training and group sessions\",\n  \"timezone\": \"Europe/Bucharest\"\n}"
+        "text": "{\n  \"name\": \"John's Fitness Studio\",\n  \"description\": \"Personal training and group HIIT sessions\",\n  \"type\": \"FITNESS\",\n  \"isPublic\": true,\n  \"joinPolicy\": \"OPEN\",\n  \"contactEmail\": \"john@fitnessstudio.com\",\n  \"contactPhone\": \"+40712345678\",\n  \"address\": \"Str. Victoriei 123, Sector 1\",\n  \"city\": \"Bucharest\",\n  \"country\": \"RO\",\n  \"timezone\": \"Europe/Bucharest\"\n}"
       },
       "headers": [
         {"name": "Content-Type", "value": "application/json"},
@@ -359,7 +447,7 @@
       "modified": 1708300000000,
       "created": 1708300000000,
       "url": "{{ _.base_url }}/organizations/{{ _.org_id }}",
-      "name": "Get Organization",
+      "name": "Get Organization (Member)",
       "method": "GET",
       "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
       "_type": "request"
@@ -370,11 +458,11 @@
       "modified": 1708300000000,
       "created": 1708300000000,
       "url": "{{ _.base_url }}/organizations/{{ _.org_id }}",
-      "name": "Update Organization",
+      "name": "Update Organization (Owner)",
       "method": "PATCH",
       "body": {
         "mimeType": "application/json",
-        "text": "{\n  \"name\": \"Updated Fitness Studio\",\n  \"description\": \"Updated description\"\n}"
+        "text": "{\n  \"name\": \"Updated Fitness Studio\",\n  \"description\": \"Updated description\",\n  \"type\": \"CROSSFIT\",\n  \"isPublic\": true,\n  \"joinPolicy\": \"OPEN\",\n  \"city\": \"Cluj-Napoca\"\n}"
       },
       "headers": [
         {"name": "Content-Type", "value": "application/json"},
@@ -388,7 +476,7 @@
       "modified": 1708300000000,
       "created": 1708300000000,
       "url": "{{ _.base_url }}/organizations/{{ _.org_id }}",
-      "name": "Delete Organization",
+      "name": "Delete Organization (Owner)",
       "method": "DELETE",
       "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
       "_type": "request"
@@ -449,7 +537,7 @@
       "parentId": "wrk_beeactive",
       "modified": 1708300000000,
       "created": 1708300000000,
-      "name": "5. Invitations",
+      "name": "6. Invitations",
       "description": "Invitation management",
       "environment": {},
       "_type": "request_group"
@@ -543,7 +631,7 @@
       "parentId": "wrk_beeactive",
       "modified": 1708300000000,
       "created": 1708300000000,
-      "name": "6. Sessions",
+      "name": "7. Sessions",
       "description": "Session management and participation",
       "environment": {},
       "_type": "request_group"
@@ -558,7 +646,7 @@
       "method": "POST",
       "body": {
         "mimeType": "application/json",
-        "text": "{\n  \"organizationId\": \"{{ _.org_id }}\",\n  \"title\": \"Morning Yoga Flow\",\n  \"description\": \"Gentle yoga for all levels\",\n  \"sessionType\": \"GROUP\",\n  \"visibility\": \"MEMBERS\",\n  \"scheduledAt\": \"2026-02-20T09:00:00.000Z\",\n  \"durationMinutes\": 60,\n  \"location\": \"Fitness Studio, Bucharest\",\n  \"maxParticipants\": 20,\n  \"price\": 50,\n  \"currency\": \"RON\"\n}"
+        "text": "{\n  \"organizationId\": \"{{ _.org_id }}\",\n  \"title\": \"Morning Yoga Flow\",\n  \"description\": \"Gentle yoga for all levels\",\n  \"sessionType\": \"GROUP\",\n  \"visibility\": \"PUBLIC\",\n  \"scheduledAt\": \"2026-02-20T09:00:00.000Z\",\n  \"durationMinutes\": 60,\n  \"location\": \"Fitness Studio, Bucharest\",\n  \"maxParticipants\": 20,\n  \"price\": 50,\n  \"currency\": \"RON\"\n}"
       },
       "headers": [
         {"name": "Content-Type", "value": "application/json"},
@@ -691,7 +779,7 @@
       "_type": "request"
     },
     {
-      "_id": "req_update_participant",
+      "_id": "req_update_session_participant",
       "parentId": "fld_sessions",
       "modified": 1708300000000,
       "created": 1708300000000,
@@ -713,7 +801,7 @@
       "parentId": "wrk_beeactive",
       "modified": 1708300000000,
       "created": 1708300000000,
-      "name": "7. Health",
+      "name": "8. Health",
       "description": "Health check",
       "environment": {},
       "_type": "request_group"

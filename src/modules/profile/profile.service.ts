@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Transaction } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { ParticipantProfile } from './entities/participant-profile.entity';
 import { OrganizerProfile } from './entities/organizer-profile.entity';
@@ -14,6 +14,7 @@ import { UpdateParticipantProfileDto } from './dto/update-participant-profile.dt
 import { CreateOrganizerProfileDto } from './dto/create-organizer-profile.dto';
 import { UpdateOrganizerProfileDto } from './dto/update-organizer-profile.dto';
 import { UpdateFullProfileDto } from './dto/update-full-profile.dto';
+import { DiscoverTrainersDto } from './dto/discover-trainers.dto';
 import { RoleService } from '../role/role.service';
 import { UserService } from '../user/user.service';
 import { User } from '../user/entities/user.entity';
@@ -202,6 +203,109 @@ export class ProfileService {
     );
 
     return results;
+  }
+
+  // =====================================================
+  // TRAINER DISCOVERY (public)
+  // =====================================================
+
+  /**
+   * Discover public organizer/trainer profiles
+   *
+   * Returns paginated list of trainers who have set isPublic=true.
+   * Supports search by name/bio/specialization and filtering by city/country.
+   * Sorted by years of experience (most experienced first).
+   */
+  async discoverTrainers(dto: DiscoverTrainersDto) {
+    const page = dto.page || 1;
+    const limit = dto.limit || 20;
+    const offset = (page - 1) * limit;
+
+    const where: any = {
+      isPublic: true,
+    };
+
+    if (dto.city) {
+      where.locationCity = { [Op.like]: `%${dto.city}%` };
+    }
+
+    if (dto.country) {
+      where.locationCountry = dto.country;
+    }
+
+    // Search across displayName, bio
+    if (dto.search) {
+      where[Op.or] = [
+        { displayName: { [Op.like]: `%${dto.search}%` } },
+        { bio: { [Op.like]: `%${dto.search}%` } },
+      ];
+    }
+
+    const { rows: profiles, count: totalItems } =
+      await this.organizerProfileModel.findAndCountAll({
+        where,
+        include: [
+          {
+            model: User,
+            attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+            where: dto.search
+              ? {
+                  [Op.or]: [
+                    { firstName: { [Op.like]: `%${dto.search}%` } },
+                    { lastName: { [Op.like]: `%${dto.search}%` } },
+                  ],
+                }
+              : undefined,
+            required: !dto.search, // If searching, allow profiles without user match
+          },
+        ],
+        attributes: [
+          'id',
+          'userId',
+          'displayName',
+          'bio',
+          'specializations',
+          'yearsOfExperience',
+          'isAcceptingClients',
+          'locationCity',
+          'locationCountry',
+          'socialLinks',
+          'showSocialLinks',
+        ],
+        order: [['yearsOfExperience', 'DESC']],
+        limit,
+        offset,
+      });
+
+    const data = profiles.map((profile) => ({
+      id: profile.id,
+      userId: profile.userId,
+      firstName: profile.user?.firstName,
+      lastName: profile.user?.lastName,
+      avatarId: profile.user?.avatarId,
+      displayName: profile.displayName,
+      bio: profile.bio,
+      specializations: profile.specializations,
+      yearsOfExperience: profile.yearsOfExperience,
+      isAcceptingClients: profile.isAcceptingClients,
+      city: profile.locationCity,
+      country: profile.locationCountry,
+      socialLinks: profile.showSocialLinks ? profile.socialLinks : null,
+    }));
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   // =====================================================

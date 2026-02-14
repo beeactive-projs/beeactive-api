@@ -7,10 +7,124 @@ import { ApiEndpointOptions } from '../decorators/api-response.decorator';
 import { ApiStandardResponses } from './standard-responses';
 
 export const OrganizationDocs = {
+  // ── Discovery (public) ──────────────────────────────
+
+  discoverOrganizations: {
+    summary: 'Discover public organizations',
+    description:
+      'Browse and search public organizations. No authentication required. ' +
+      'Supports filtering by type (FITNESS, YOGA, DANCE, etc.), city, country, and free-text search. ' +
+      'Results sorted by member count (most popular first).',
+    auth: false,
+    responses: [
+      {
+        status: 200,
+        description: 'Organizations found',
+        example: {
+          data: [
+            {
+              id: '550e8400-e29b-41d4-a716-446655440000',
+              name: "John's Fitness Studio",
+              slug: 'johns-fitness-studio',
+              description: 'Personal training and group HIIT sessions',
+              type: 'FITNESS',
+              joinPolicy: 'OPEN',
+              city: 'Bucharest',
+              country: 'RO',
+              memberCount: 42,
+            },
+          ],
+          meta: {
+            page: 1,
+            limit: 20,
+            totalItems: 1,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          },
+        },
+      },
+    ],
+  } as ApiEndpointOptions,
+
+  getPublicProfile: {
+    summary: 'Get public organization profile',
+    description:
+      'Returns the public profile of an organization including trainer info, ' +
+      'specializations, and upcoming sessions. No authentication required. ' +
+      'Only works for public organizations.',
+    auth: false,
+    responses: [
+      {
+        status: 200,
+        description: 'Public profile retrieved',
+        example: {
+          organization: {
+            id: '550e8400-e29b-41d4-a716-446655440000',
+            name: "John's Fitness Studio",
+            slug: 'johns-fitness-studio',
+            type: 'FITNESS',
+            joinPolicy: 'OPEN',
+            city: 'Bucharest',
+            memberCount: 42,
+          },
+          trainer: {
+            firstName: 'John',
+            lastName: 'Doe',
+            displayName: 'Coach John',
+            specializations: ['hiit', 'strength'],
+            yearsOfExperience: 8,
+          },
+          upcomingSessions: [
+            {
+              id: 'session-uuid',
+              title: 'Morning HIIT',
+              scheduledAt: '2026-02-20T08:00:00.000Z',
+              durationMinutes: 45,
+              maxParticipants: 12,
+              price: 50,
+              currency: 'RON',
+            },
+          ],
+        },
+      },
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  selfJoin: {
+    summary: 'Join an organization',
+    description:
+      'Self-join a public organization. Only works if the organization is public and its joinPolicy is OPEN. ' +
+      'For INVITE_ONLY organizations, the user needs an invitation link.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Joined successfully',
+        example: { message: 'You have joined the organization' },
+      },
+      {
+        status: 400,
+        description: 'Already a member',
+      },
+      {
+        status: 403,
+        description:
+          'Organization is not public or join policy requires invitation/approval',
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  // ── CRUD (authenticated) ────────────────────────────
+
   create: {
     summary: 'Create a new organization',
     description:
-      'Create a new organization. Requires ORGANIZER role. Creator becomes the owner.',
+      'Create a new organization. Requires ORGANIZER role. Creator becomes the owner. ' +
+      'You can set type, isPublic, joinPolicy, and contact/location info.',
     auth: true,
     responses: [
       {
@@ -21,6 +135,9 @@ export const OrganizationDocs = {
           name: "John's Fitness Studio",
           slug: 'johns-fitness-studio',
           description: 'Personal training and group sessions',
+          type: 'FITNESS',
+          isPublic: true,
+          joinPolicy: 'OPEN',
           timezone: 'Europe/Bucharest',
           isActive: true,
         },
@@ -44,6 +161,7 @@ export const OrganizationDocs = {
             id: '550e8400-e29b-41d4-a716-446655440000',
             name: "John's Fitness Studio",
             slug: 'johns-fitness-studio',
+            type: 'FITNESS',
           },
         ],
       },
@@ -68,7 +186,9 @@ export const OrganizationDocs = {
 
   update: {
     summary: 'Update organization',
-    description: 'Update organization details. Owner only.',
+    description:
+      'Update organization details. Owner only. If name changes, slug is auto-regenerated. ' +
+      'You can also update type, isPublic, joinPolicy, contact info, and location.',
     auth: true,
     responses: [
       {

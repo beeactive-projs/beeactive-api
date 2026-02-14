@@ -2,19 +2,24 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   Inject,
 } from '@nestjs/common';
 import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { Organization } from './entities/organization.entity';
+import { Op } from 'sequelize';
+import { Organization, JoinPolicy } from './entities/organization.entity';
 import { OrganizationMember } from './entities/organization-member.entity';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import { DiscoverOrganizationsDto } from './dto/discover-organizations.dto';
 import { RoleService } from '../role/role.service';
 import { User } from '../user/entities/user.entity';
 import { ParticipantProfile } from '../profile/entities/participant-profile.entity';
+import { Session } from '../session/entities/session.entity';
+import { OrganizerProfile } from '../profile/entities/organizer-profile.entity';
 
 /**
  * Organization Service
@@ -23,7 +28,8 @@ import { ParticipantProfile } from '../profile/entities/participant-profile.enti
  *
  * Key flows:
  * - Trainer creates org → becomes owner + gets ORGANIZER role in org context
- * - Members join via invitations (handled by InvitationModule)
+ * - Members join via invitations OR self-join (if joinPolicy = OPEN)
+ * - Public orgs appear in discovery search
  * - Members can share/hide their health data per-organization
  */
 @Injectable()
@@ -96,6 +102,15 @@ export class OrganizationService {
       slug,
       description: dto.description,
       timezone: dto.timezone || 'Europe/Bucharest',
+      type: dto.type || 'OTHER',
+      isPublic: dto.isPublic || false,
+      joinPolicy: dto.joinPolicy || 'INVITE_ONLY',
+      contactEmail: dto.contactEmail,
+      contactPhone: dto.contactPhone,
+      address: dto.address,
+      city: dto.city,
+      country: dto.country,
+      memberCount: 1, // owner counts as first member
     });
 
     // Add creator as owner
@@ -418,6 +433,269 @@ export class OrganizationService {
   }
 
   // =====================================================
+  // DISCOVERY (PUBLIC — no membership required)
+  // =====================================================
+
+  /**
+   * Discover public organizations
+   *
+   * Returns paginated list of public, active organizations.
+   * Supports filtering by type, city, country, and free-text search.
+   * Sorted by member count (most popular first).
+   *
+   * No authentication required for this endpoint.
+   */
+  async discoverOrganizations(dto: DiscoverOrganizationsDto) {
+    const page = dto.page || 1;
+    const limit = dto.limit || 20;
+    const offset = (page - 1) * limit;
+
+    const where: any = {
+      isPublic: true,
+      isActive: true,
+    };
+
+    if (dto.type) {
+      where.type = dto.type;
+    }
+
+    if (dto.city) {
+      where.city = { [Op.like]: `%${dto.city}%` };
+    }
+
+    if (dto.country) {
+      where.country = dto.country;
+    }
+
+    if (dto.search) {
+      where[Op.or] = [
+        { name: { [Op.like]: `%${dto.search}%` } },
+        { description: { [Op.like]: `%${dto.search}%` } },
+      ];
+    }
+
+    const { rows: data, count: totalItems } =
+      await this.organizationModel.findAndCountAll({
+        where,
+        attributes: [
+          'id',
+          'name',
+          'slug',
+          'description',
+          'logoUrl',
+          'type',
+          'joinPolicy',
+          'city',
+          'country',
+          'memberCount',
+          'createdAt',
+        ],
+        order: [['memberCount', 'DESC']],
+        limit,
+        offset,
+      });
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
+  }
+
+  /**
+   * Get public profile of an organization
+   *
+   * Returns organization details, owner/trainer info, and upcoming public sessions.
+   * Visible to anyone — no membership required.
+   */
+  async getPublicProfile(organizationId: string) {
+    const organization = await this.organizationModel.findOne({
+      where: {
+        id: organizationId,
+        isPublic: true,
+        isActive: true,
+      },
+      attributes: [
+        'id',
+        'name',
+        'slug',
+        'description',
+        'logoUrl',
+        'type',
+        'joinPolicy',
+        'contactEmail',
+        'contactPhone',
+        'address',
+        'city',
+        'country',
+        'timezone',
+        'memberCount',
+        'createdAt',
+      ],
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found or is not public');
+    }
+
+    // Get the owner (trainer)
+    const ownerMembership = await this.memberModel.findOne({
+      where: { organizationId, isOwner: true, leftAt: null },
+      include: [
+        {
+          model: User,
+          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+        },
+      ],
+    });
+
+    // Get trainer's organizer profile (if public)
+    let trainerProfile: any = null;
+    if (ownerMembership) {
+      const orgProfile = await OrganizerProfile.findOne({
+        where: { userId: ownerMembership.userId, isPublic: true },
+        attributes: [
+          'displayName',
+          'bio',
+          'specializations',
+          'yearsOfExperience',
+          'isAcceptingClients',
+          'locationCity',
+          'locationCountry',
+          'socialLinks',
+          'showSocialLinks',
+          'showEmail',
+          'showPhone',
+        ],
+      });
+
+      if (orgProfile) {
+        trainerProfile = {
+          userId: ownerMembership.userId,
+          firstName: ownerMembership.user.firstName,
+          lastName: ownerMembership.user.lastName,
+          avatarId: ownerMembership.user.avatarId,
+          displayName: orgProfile.displayName,
+          bio: orgProfile.bio,
+          specializations: orgProfile.specializations,
+          yearsOfExperience: orgProfile.yearsOfExperience,
+          isAcceptingClients: orgProfile.isAcceptingClients,
+          socialLinks: orgProfile.showSocialLinks
+            ? orgProfile.socialLinks
+            : null,
+        };
+      } else {
+        trainerProfile = {
+          userId: ownerMembership.userId,
+          firstName: ownerMembership.user.firstName,
+          lastName: ownerMembership.user.lastName,
+          avatarId: ownerMembership.user.avatarId,
+        };
+      }
+    }
+
+    // Get upcoming public/member sessions
+    const upcomingSessions = await Session.findAll({
+      where: {
+        organizationId,
+        visibility: { [Op.in]: ['PUBLIC', 'MEMBERS'] },
+        status: { [Op.in]: ['SCHEDULED', 'IN_PROGRESS'] },
+        scheduledAt: { [Op.gte]: new Date() },
+      },
+      attributes: [
+        'id',
+        'title',
+        'description',
+        'sessionType',
+        'visibility',
+        'scheduledAt',
+        'durationMinutes',
+        'location',
+        'maxParticipants',
+        'price',
+        'currency',
+        'status',
+      ],
+      order: [['scheduledAt', 'ASC']],
+      limit: 10,
+    });
+
+    return {
+      organization,
+      trainer: trainerProfile,
+      upcomingSessions,
+    };
+  }
+
+  /**
+   * Self-join a public organization
+   *
+   * Only works if:
+   * - Organization is public
+   * - Join policy is OPEN
+   * - User is not already a member
+   */
+  async selfJoinOrganization(
+    organizationId: string,
+    userId: string,
+  ): Promise<OrganizationMember> {
+    const organization = await this.organizationModel.findByPk(organizationId);
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (!organization.isPublic) {
+      throw new ForbiddenException(
+        'This organization is not public. You need an invitation to join.',
+      );
+    }
+
+    if (organization.joinPolicy !== JoinPolicy.OPEN) {
+      throw new ForbiddenException(
+        `This organization requires ${organization.joinPolicy === JoinPolicy.INVITE_ONLY ? 'an invitation' : 'approval from the owner'} to join.`,
+      );
+    }
+
+    // Check if already a member
+    const existing = await this.memberModel.findOne({
+      where: { organizationId, userId, leftAt: null },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        'You are already a member of this organization',
+      );
+    }
+
+    const member = await this.memberModel.create({
+      organizationId,
+      userId,
+      isOwner: false,
+    });
+
+    // Update denormalized member count
+    await this.organizationModel.increment('memberCount', {
+      where: { id: organizationId },
+    });
+
+    this.logger.log(
+      `User ${userId} self-joined organization ${organization.name}`,
+      'OrganizationService',
+    );
+
+    return member;
+  }
+
+  // =====================================================
   // HELPERS
   // =====================================================
 
@@ -439,11 +717,18 @@ export class OrganizationService {
 
     if (existing) return existing;
 
-    return this.memberModel.create({
+    const member = await this.memberModel.create({
       organizationId: organizationId,
       userId: userId,
       isOwner: false,
     });
+
+    // Update denormalized member count
+    await this.organizationModel.increment('memberCount', {
+      where: { id: organizationId },
+    });
+
+    return member;
   }
 
   /**

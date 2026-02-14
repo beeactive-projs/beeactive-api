@@ -4,6 +4,7 @@ import {
   Post,
   Patch,
   Body,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import { UpdateParticipantProfileDto } from './dto/update-participant-profile.dt
 import { CreateOrganizerProfileDto } from './dto/create-organizer-profile.dto';
 import { UpdateOrganizerProfileDto } from './dto/update-organizer-profile.dto';
 import { UpdateFullProfileDto } from './dto/update-full-profile.dto';
+import { DiscoverTrainersDto } from './dto/discover-trainers.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { ProfileDocs } from '../../common/docs/profile.docs';
 
@@ -21,26 +23,40 @@ import { ProfileDocs } from '../../common/docs/profile.docs';
  * Profile Controller
  *
  * Manages user profiles:
+ *
+ * Public (no auth):
+ * - GET    /profile/trainers/discover → Browse/search public trainers
+ *
+ * Authenticated:
  * - GET    /profile/me              → Full profile overview (roles + both profiles)
+ * - PATCH  /profile/me              → Unified profile update
  * - GET    /profile/participant      → Get participant profile
  * - PATCH  /profile/participant      → Update participant profile
  * - POST   /profile/organizer        → Activate organizer profile ("I want to organize")
  * - GET    /profile/organizer        → Get organizer profile
  * - PATCH  /profile/organizer        → Update organizer profile
- *
- * All endpoints require JWT authentication.
  */
 @ApiTags('Profiles')
 @Controller('profile')
-@UseGuards(AuthGuard('jwt'))
 export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 
   // =====================================================
-  // PROFILE OVERVIEW
+  // TRAINER DISCOVERY (public — no auth required)
+  // =====================================================
+
+  @Get('trainers/discover')
+  @ApiEndpoint(ProfileDocs.discoverTrainers)
+  async discoverTrainers(@Query() dto: DiscoverTrainersDto) {
+    return this.profileService.discoverTrainers(dto);
+  }
+
+  // =====================================================
+  // PROFILE OVERVIEW (auth required)
   // =====================================================
 
   @Get('me')
+  @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(ProfileDocs.getProfileOverview)
   async getProfileOverview(@Request() req) {
     return this.profileService.getProfileOverview(req.user);
@@ -53,6 +69,7 @@ export class ProfileController {
    * Only provided sections are updated.
    */
   @Patch('me')
+  @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({
     ...ProfileDocs.updateFullProfile,
     body: UpdateFullProfileDto,
@@ -69,12 +86,14 @@ export class ProfileController {
   // =====================================================
 
   @Get('participant')
+  @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(ProfileDocs.getParticipantProfile)
   async getParticipantProfile(@Request() req) {
     return this.profileService.getParticipantProfile(req.user.id);
   }
 
   @Patch('participant')
+  @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({
     ...ProfileDocs.updateParticipantProfile,
     body: UpdateParticipantProfileDto,
@@ -91,6 +110,7 @@ export class ProfileController {
   // =====================================================
 
   @Post('organizer')
+  @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({
     ...ProfileDocs.createOrganizerProfile,
     body: CreateOrganizerProfileDto,
@@ -103,12 +123,14 @@ export class ProfileController {
   }
 
   @Get('organizer')
+  @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(ProfileDocs.getOrganizerProfile)
   async getOrganizerProfile(@Request() req) {
     return this.profileService.getOrganizerProfile(req.user.id);
   }
 
   @Patch('organizer')
+  @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({
     ...ProfileDocs.updateOrganizerProfile,
     body: UpdateOrganizerProfileDto,
