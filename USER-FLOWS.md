@@ -82,11 +82,6 @@ Response includes isEmailVerified flag so frontend can prompt verification
 | No "remember me" functionality | Low | ⏳ Future |
 | No refresh token rotation | Medium | ⏳ Future |
 
-### Remaining Improvements (Future)
-- [ ] Implement logout endpoint using refresh_token table (table already exists in DB)
-- [ ] Store refresh tokens server-side for revocation support
-- [ ] Add refresh token rotation on each refresh
-
 ---
 
 ## Flow 3: Password Reset
@@ -163,7 +158,7 @@ Return { new accessToken }
 
 ## Flow 5: Email Verification
 
-**Status:** ✅ Implemented (NEW)
+**Status:** ✅ Implemented | 🔧 Improvements Applied
 
 ```
 Step 1: On Registration (automatic)
@@ -175,7 +170,8 @@ Step 1: On Registration (automatic)
   ▼
 
 Step 2: User clicks link
-  POST /auth/verify-email { token } [Public, Rate: 5/hour]
+  DEV:  GET /auth/verify-email?token=xxx (API directly, returns HTML page)
+  PROD: Frontend page calls POST /auth/verify-email { token }
     │
     ├─ Hash submitted token (SHA-256)
     ├─ Find user by hashed token
@@ -198,27 +194,47 @@ Step 3: Resend verification (if needed)
   Return { message: "If email exists and is not verified, a new link was sent" }
 ```
 
+### Issues Fixed
+| Issue | Severity | Status |
+|-------|----------|--------|
+| Dev/prod email link handling | Medium | ✅ Fixed - Dev links to API, prod to frontend |
+| GET endpoint for browser verification | Medium | ✅ Fixed - Returns styled HTML page |
+
 ---
 
 ## Flow 6: Profile Management
 
-**Status:** ✅ Implemented
+**Status:** ✅ Implemented | 🔧 Improvements Applied
 
 ```
-GET /profile/me ─────────────────→ Full profile overview (user + participant + organizer)
-GET  /profile/participant ───────→ Get participant profile
-PATCH /profile/participant ──────→ Update participant health/fitness data
-POST  /profile/organizer ────────→ Activate organizer profile + assign ORGANIZER role
-GET  /profile/organizer ─────────→ Get organizer profile
-PATCH /profile/organizer ────────→ Update organizer professional data
+User Profile:
+  GET    /users/me ─────────────→ Get user data (core fields + roles)
+  PATCH  /users/me ─────────────→ Update core fields (name, phone, avatar, language, timezone)
+  DELETE /users/me ─────────────→ Delete account (GDPR soft-delete)
+
+Unified Profile Update:
+  PATCH  /profile/me ───────────→ Update user + participant + organizer in ONE call
+
+Individual Profiles:
+  GET    /profile/me ───────────→ Full profile overview (user + participant + organizer)
+  GET    /profile/participant ──→ Get participant profile
+  PATCH  /profile/participant ──→ Update participant health/fitness data
+  POST   /profile/organizer ───→ Activate organizer profile + assign ORGANIZER role
+  GET    /profile/organizer ───→ Get organizer profile
+  PATCH  /profile/organizer ───→ Update organizer professional data
 ```
 
-### Issues
+### Issues Fixed
 | Issue | Severity | Status |
 |-------|----------|--------|
-| No endpoint to update core user fields (name, email, phone) | High | ⏳ Future |
-| No avatar upload endpoint (avatarId field exists) | Medium | ⏳ Future |
-| No account deletion endpoint (GDPR) | High | ⏳ Future |
+| No endpoint to update core user fields | High | ✅ Fixed - PATCH /users/me |
+| No avatar update endpoint | Medium | ✅ Fixed - avatarId in PATCH /users/me |
+| No account deletion endpoint (GDPR) | High | ✅ Fixed - DELETE /users/me |
+| No unified profile update | Medium | ✅ Fixed - PATCH /profile/me |
+
+### Remaining (Future)
+| Issue | Severity | Status |
+|-------|----------|--------|
 | No email change flow with re-verification | Medium | ⏳ Future |
 
 ---
@@ -252,116 +268,269 @@ User can now: create organizations, create sessions
 
 ## Flow 8: Organization Management
 
-**Status:** ✅ Implemented
+**Status:** ✅ Implemented | 🔧 Improvements Applied
 
 ```
 Create Organization (requires ORGANIZER role):
   POST /organizations → Create org + add creator as owner + assign org-scoped role
+                        Supports: type, isPublic, joinPolicy, contact/location fields
 
 Manage Organization:
-  GET  /organizations ─────────────→ List my organizations
-  GET  /organizations/:id ─────────→ Get org details (members only)
-  PATCH /organizations/:id ────────→ Update org (owner only)
+  GET    /organizations ──────────→ List my organizations
+  GET    /organizations/:id ──────→ Get org details (members only)
+  PATCH  /organizations/:id ──────→ Update org (owner only, slug auto-regenerates on name change)
+  DELETE /organizations/:id ──────→ Delete org (owner only, soft delete)
 
 Members:
-  GET  /organizations/:id/members ──────────→ Paginated member list
-  PATCH /organizations/:id/members/me ──────→ Update own membership (nickname, health sharing)
+  GET    /organizations/:id/members ─────────→ Paginated member list
+  PATCH  /organizations/:id/members/me ──────→ Update own membership (nickname, health sharing)
+  DELETE /organizations/:id/members/me ──────→ Leave organization voluntarily
   DELETE /organizations/:id/members/:userId → Remove member (owner only, can't remove owner)
+
+Organization Types: FITNESS, YOGA, DANCE, CROSSFIT, MARTIAL_ARTS, SWIMMING,
+                    RUNNING, CYCLING, PILATES, SPORTS_TEAM, PERSONAL_TRAINING, OTHER
+
+Join Policies: OPEN (anyone can join), REQUEST (future: needs approval), INVITE_ONLY (invitation required)
 ```
 
-### Issues
+### Issues Fixed
+| Issue | Severity | Status |
+|-------|----------|--------|
+| No voluntary leave for members | High | ✅ Fixed - DELETE /organizations/:id/members/me |
+| No organization deletion | Medium | ✅ Fixed - DELETE /organizations/:id |
+| No slug update when name changes | Low | ✅ Fixed - Auto-regenerates on PATCH |
+| No organization types/categories | Medium | ✅ Fixed - `type` field with 12 categories |
+| No public/private toggle | High | ✅ Fixed - `isPublic` field |
+| No join policy configuration | High | ✅ Fixed - `joinPolicy` (OPEN/REQUEST/INVITE_ONLY) |
+| No contact/location info | Medium | ✅ Fixed - contactEmail, contactPhone, address, city, country |
+
+### Remaining (Future)
 | Issue | Severity | Status |
 |-------|----------|--------|
 | No ownership transfer | Medium | ⏳ Future |
-| No voluntary leave for members | High | ⏳ Future |
-| No organization deletion | Medium | ⏳ Future |
 | No multi-owner support | Low | ⏳ Future |
-| No slug update when name changes | Low | ⏳ Future |
+| REQUEST join policy (approval workflow) | Medium | ⏳ Future |
 
 ---
 
 ## Flow 9: Invitation Flow
 
-**Status:** ✅ Implemented
+**Status:** ✅ Implemented | 🔧 Improvements Applied
 
 ```
 Owner sends invitation:
-  POST /invitations → Generate token → Send email → Return invitation link
+  POST /invitations → Generate hashed token → Send email via Resend → Return invitation link
 
 Recipient actions:
   GET  /invitations/pending ──────────→ My pending invitations
-  POST /invitations/:token/accept ───→ Join org + assign role
+  POST /invitations/:token/accept ───→ Verify email match → Join org + assign role + notify inviter
   POST /invitations/:token/decline ──→ Mark declined
+
+Owner management:
+  POST /invitations/:id/cancel ──────→ Cancel pending invitation (owner only)
+  POST /invitations/:id/resend ──────→ Resend with new token (owner only)
 
 Organization view:
   GET /invitations/organization/:id ─→ Org's sent invitations (paginated)
 ```
 
-### Issues
+### Issues Fixed
 | Issue | Severity | Status |
 |-------|----------|--------|
-| Token stored in plain text (inconsistent with password reset) | Low | ⏳ Future |
-| No invitation cancellation/revocation by owner | Medium | ⏳ Future |
-| No resend invitation endpoint | Medium | ⏳ Future |
-| Acceptance doesn't verify user email matches invitation email | High | ⏳ Future |
-| No notification to inviter when accepted/declined | Medium | ⏳ Future |
-| No check if invited email is already a member | Medium | ⏳ Future |
+| Token stored in plain text | Low | ✅ Fixed - Tokens now hashed (SHA-256) |
+| No invitation cancellation/revocation | Medium | ✅ Fixed - POST /invitations/:id/cancel |
+| No resend invitation endpoint | Medium | ✅ Fixed - POST /invitations/:id/resend |
+| Acceptance doesn't verify email match | High | ✅ Fixed - Email must match invitation |
+| No notification to inviter on accept/decline | Medium | ✅ Fixed - Email notification sent |
+| No check if invited email is already a member | Medium | ✅ Fixed - Checked before creating invitation |
 
 ---
 
 ## Flow 10: Session Management (Organizer)
 
-**Status:** ✅ Implemented
+**Status:** ✅ Implemented | 🔧 Improvements Applied
 
 ```
 Create Session (requires ORGANIZER role):
   POST /sessions → Create session with type, visibility, schedule, capacity
 
 Manage:
-  GET  /sessions ──────→ List visible sessions (paginated, visibility rules)
-  GET  /sessions/:id ──→ Get session details
-  PATCH /sessions/:id ─→ Update session (organizer only)
-  DELETE /sessions/:id → Delete session (organizer only, soft delete)
+  GET    /sessions ──────────→ List visible sessions (paginated, visibility rules)
+  GET    /sessions/discover ─→ Browse public sessions (search by title/description/location)
+  GET    /sessions/:id ──────→ Get session details
+  PATCH  /sessions/:id ──────→ Update session (organizer only, notify on cancel)
+  DELETE /sessions/:id ──────→ Delete session (organizer only, soft delete, notify participants)
+  POST   /sessions/:id/clone → Duplicate session with new date (organizer only)
 ```
 
-| price/currency fields exist but no payment integration | Low | ⏳ Future |
-
-### Issues
+### Issues Fixed
 | Issue | Severity | Status |
 |-------|----------|--------|
-| No automated status transitions (SCHEDULED → IN_PROGRESS → COMPLETED) | Medium | ⏳ Future |
-| isRecurring/recurringRule fields exist but no logic | Medium | ⏳ Future |
-| reminderSent field exists but no reminder system | Medium | ⏳ Future |
-| No session search/discovery for public sessions | Medium | ⏳ Future |
-| No session duplication/cloning | Low | ⏳ Future |
-| Participants not notified on session cancel/delete | Medium | ⏳ Future |
+| No session search/discovery | Medium | ✅ Fixed - GET /sessions/discover |
+| No session duplication/cloning | Low | ✅ Fixed - POST /sessions/:id/clone |
+| Participants not notified on cancel/delete | Medium | ✅ Fixed - Email notifications sent |
+
+### Remaining (Future - JOB SYSTEM)
+| Issue | Severity | Status |
+|-------|----------|--------|
+| No automated status transitions (SCHEDULED → IN_PROGRESS → COMPLETED) | Medium | ⏳ Needs Redis/Bull job system |
+| isRecurring/recurringRule fields exist but no logic | Medium | ⏳ Needs Redis/Bull job system |
+| reminderSent field exists but no reminder system | Medium | ⏳ Needs Redis/Bull job system |
+| price/currency fields exist but no payment integration | Low | ⏳ Future |
+
+> **NOTE:** TODO comments have been placed in SessionService and SessionModule indicating exactly where job system integration is needed.
 
 ---
 
 ## Flow 11: Session Participation
 
-**Status:** ✅ Implemented
+**Status:** ✅ Implemented | 🔧 Improvements Applied
 
 ```
 Join Session:
-  POST /sessions/:id/join → Check visibility + capacity → Create participant record
+  POST /sessions/:id/join → Check visibility + capacity → Register → Notify organizer
+
+Confirm Attendance:
+  POST /sessions/:id/confirm → REGISTERED → CONFIRMED
+
+Self Check-In:
+  POST /sessions/:id/checkin → Available 15 min before to 30 min after session start → ATTENDED
 
 Leave Session:
-  POST /sessions/:id/leave → Set status to CANCELLED
+  POST /sessions/:id/leave → 2-hour cancellation policy → CANCELLED → Notify organizer
 
 Organizer Attendance:
-  PATCH /sessions/:id/participants/:userId → Update status (ATTENDED, NO_SHOW, etc.)
-```
-| No waitlist when session is full | Low | ⏳ Future |
+  PATCH /sessions/:id/participants/:userId → Update status (ATTENDED, NO_SHOW, etc.) → Notify participant
 
-### Issues
+Status Flow:
+  REGISTERED → CONFIRMED → ATTENDED (showed up)
+                          → NO_SHOW (didn't show)
+             → CANCELLED (user cancelled within policy)
+```
+
+### Issues Fixed
 | Issue | Severity | Status |
 |-------|----------|--------|
-| CONFIRMED status exists but no confirmation flow | Low | ⏳ Future |
-| No cancellation policy (time-based) | Low | ⏳ Future |
-| No notification to organizer on join/leave | Medium | ⏳ Future |
-| No notification to participant on status change | Medium | ⏳ Future |
-| No participant self-check-in mechanism | Low | ⏳ Future |
+| CONFIRMED status exists but no flow | Low | ✅ Fixed - POST /sessions/:id/confirm |
+| No cancellation policy (time-based) | Low | ✅ Fixed - 2-hour cutoff before session |
+| No notification to organizer on join/leave | Medium | ✅ Fixed - Email notifications |
+| No notification to participant on status change | Medium | ✅ Fixed - Email on status update |
+| No participant self-check-in | Low | ✅ Fixed - POST /sessions/:id/checkin |
+
+### Remaining (Future)
+| Issue | Severity | Status |
+|-------|----------|--------|
+| No waitlist when session is full | Low | ⏳ Future |
+
+---
+
+## Flow 12: Discovery & Public Browsing
+
+**Status:** ✅ Implemented | NEW
+
+```
+ORGANIZATION DISCOVERY (no auth required):
+  GET /organizations/discover → Browse/search public organizations
+    │ Filters: ?search=yoga&type=YOGA&city=Bucharest&country=RO&page=1&limit=20
+    │ Sorted by: member count (most popular first)
+    │
+    ▼
+  Returns: { data: [{ id, name, slug, description, type, joinPolicy, city, country, memberCount }], meta }
+
+ORGANIZATION PUBLIC PROFILE (no auth required):
+  GET /organizations/:id/public → Full public profile page
+    │
+    ├─ Organization info (name, description, type, location, contact)
+    ├─ Trainer info (name, bio, specializations, experience)
+    └─ Upcoming sessions (next 10 PUBLIC/MEMBERS sessions)
+
+SELF-JOIN (auth required):
+  POST /organizations/:id/join
+    │
+    ├─ Check: isPublic = true?
+    ├─ Check: joinPolicy = OPEN?
+    ├─ Check: not already a member?
+    │
+    ▼
+  User becomes a member → can see MEMBERS-visibility sessions
+
+TRAINER DISCOVERY (no auth required):
+  GET /profile/trainers/discover → Browse/search public trainers
+    │ Filters: ?search=hiit&city=Bucharest&country=RO&page=1&limit=20
+    │ Sorted by: years of experience (most experienced first)
+    │
+    ▼
+  Returns: { data: [{ firstName, lastName, displayName, bio, specializations,
+                       yearsOfExperience, isAcceptingClients, city, country }], meta }
+```
+
+### Frontend Pages This Enables
+
+| Page | Endpoint(s) | Description |
+|------|-------------|-------------|
+| **Explore page** | `GET /organizations/discover` | Grid/list of public orgs with filters |
+| **Organization profile** | `GET /organizations/:id/public` | Landing page for a studio/gym |
+| **Join button** | `POST /organizations/:id/join` | One-click join for OPEN orgs |
+| **Find a trainer** | `GET /profile/trainers/discover` | Search trainers by specialization |
+| **Session marketplace** | `GET /sessions/discover` | Browse public sessions (already existed) |
+
+### User Journey: Participant Finding a Fitness Class
+
+```
+1. User opens app (logged in or not)
+       │
+2. Browse explore page → GET /organizations/discover?type=YOGA&city=Bucharest
+       │
+3. Click on "Zen Yoga Studio" → GET /organizations/zen-yoga-studio-id/public
+       │   Shows: trainer bio, schedule, upcoming classes
+       │
+4a. If joinPolicy=OPEN → Click "Join" → POST /organizations/:id/join
+       │   Now a member! Can see all MEMBERS sessions
+       │
+4b. If joinPolicy=INVITE_ONLY → "Contact trainer" or get an invitation link
+       │
+5. Browse sessions → GET /sessions (now sees org sessions too)
+       │
+6. Join a session → POST /sessions/:id/join
+       │
+7. Before session → POST /sessions/:id/confirm (optional)
+       │
+8. At session → POST /sessions/:id/checkin (15 min before to 30 min after)
+```
+
+### User Journey: Trainer Setting Up
+
+```
+1. Register → POST /auth/register
+       │
+2. Verify email → click link in email
+       │
+3. Become organizer → POST /profile/organizer { displayName: "Coach Maria" }
+       │
+4. Complete profile → PATCH /profile/organizer {
+       │     bio, specializations, yearsOfExperience,
+       │     isPublic: true,  ← makes discoverable
+       │     locationCity, locationCountry, isAcceptingClients
+       │   }
+       │
+5. Create organization → POST /organizations {
+       │     name: "Maria's Yoga & Pilates",
+       │     type: "YOGA",
+       │     isPublic: true,   ← makes discoverable
+       │     joinPolicy: "OPEN",  ← anyone can join
+       │     city: "Bucharest", country: "RO",
+       │     contactEmail, address
+       │   }
+       │
+6. Create sessions → POST /sessions {
+       │     visibility: "PUBLIC",  ← shows in session discovery too
+       │     ...schedule, capacity, pricing
+       │   }
+       │
+7. Members join automatically or via invitation
+       │
+8. Manage attendance → PATCH /sessions/:id/participants/:userId { status: "ATTENDED" }
+```
 
 ---
 
@@ -369,16 +538,46 @@ Organizer Attendance:
 
 | Category | Issue | Severity | Status |
 |----------|-------|----------|--------|
-| **Email** | Emails only logged to console | **High** | ✅ Fixed - Resend |
+| **Email** | Emails only logged to console | **High** | ✅ Fixed - Resend integration |
 | **Auth** | No email verification flow | **High** | ✅ Fixed |
+| **Auth** | Dev/prod email link handling | Medium | ✅ Fixed |
+| **User** | No profile update (name, phone, avatar) | High | ✅ Fixed |
+| **User** | No account deletion (GDPR) | High | ✅ Fixed |
+| **User** | No unified profile update | Medium | ✅ Fixed |
+| **Org** | No voluntary leave for members | High | ✅ Fixed |
+| **Org** | No organization deletion | Medium | ✅ Fixed |
+| **Org** | No slug update on name change | Low | ✅ Fixed |
+| **Invitation** | Tokens stored plain text | Low | ✅ Fixed - Hashed |
+| **Invitation** | No cancel/resend/email match | High | ✅ Fixed |
+| **Session** | No discovery/search/clone | Medium | ✅ Fixed |
+| **Session** | No participant notifications | Medium | ✅ Fixed |
+| **Session** | No confirmed/checkin/policy | Medium | ✅ Fixed |
+| **Discovery** | No organization discovery/search | High | ✅ Fixed - GET /organizations/discover |
+| **Discovery** | No public organization profile | High | ✅ Fixed - GET /organizations/:id/public |
+| **Discovery** | No self-join for public orgs | High | ✅ Fixed - POST /organizations/:id/join |
+| **Discovery** | No trainer discovery | Medium | ✅ Fixed - GET /profile/trainers/discover |
+| **Org** | No organization types/categories | Medium | ✅ Fixed - 12 types |
+| **Org** | No public/private toggle | High | ✅ Fixed - isPublic field |
+| **Org** | No join policy configuration | High | ✅ Fixed - OPEN/REQUEST/INVITE_ONLY |
 | **Auth** | No logout / token revocation | High | ⏳ Future |
 | **Auth** | No refresh token rotation | Medium | ⏳ Future |
 | **Auth** | Tokens not invalidated on password reset | High | ⏳ Future |
-| **User** | No profile update (name, email, phone) | High | ⏳ Future |
-| **User** | No account deletion (GDPR) | High | ⏳ Future |
-| **User** | No change-password for logged-in users | Medium | ⏳ Future |
-| **Org** | No voluntary leave for members | High | ⏳ Future |
+| **User** | No email change flow | Medium | ⏳ Future |
 | **Org** | No ownership transfer | Medium | ⏳ Future |
-| **Invitation** | No email match verification on accept | High | ⏳ Future |
-| **Session** | No automated status transitions | Medium | ⏳ Future |
-| **Session** | No participant notifications | Medium | ⏳ Future |
+| **Session** | No automated status transitions | Medium | ⏳ Needs job system (Redis/Bull) |
+| **Session** | No recurring session logic | Medium | ⏳ Needs job system (Redis/Bull) |
+| **Session** | No reminder system | Medium | ⏳ Needs job system (Redis/Bull) |
+
+---
+
+## Job System Requirements (Future)
+
+> The following features require a background job system (Redis + Bull). TODO comments have been placed in the codebase at every location where jobs are needed.
+
+| Feature | Description | Location |
+|---------|-------------|----------|
+| Session status transitions | SCHEDULED → IN_PROGRESS → COMPLETED based on time | `SessionService.create()` |
+| Session reminders | Email/push X hours before scheduledAt | `SessionService.create()` |
+| Recurring sessions | Generate instances from recurringRule | `SessionService.create()` |
+| Auto NO_SHOW | Mark participants who don't check in | `SessionService` |
+| Email notifications | Move all email sending to job queue for reliability | `SessionService`, `InvitationService` |

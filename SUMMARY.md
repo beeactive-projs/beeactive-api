@@ -287,11 +287,47 @@ Three comprehensive guides created:
 9. **Decorators** = Metadata annotations
 10. **Dependency Injection** = Automatic class instantiation
 
+## 🔄 Code Quality & Architecture Overhaul (February 14, 2026)
+
+### Naming Convention Enforcement
+- ✅ **snake_case DB / camelCase API** — global `CamelCaseInterceptor` ensures all API responses use camelCase
+- ✅ Fixed all Swagger doc examples to use camelCase
+- ✅ Fixed mixed snake_case/camelCase in manually constructed response objects
+- ✅ Fixed raw column names in Sequelize queries (`is_active` → `isActive`)
+
+### Bug Fixes
+- ✅ **Transaction fix** — `auth.service.ts` `register()` now passes transaction to all DB operations
+- ✅ **Timing-safe token comparison** — `crypto.service.ts` uses `timingSafeEqual()` instead of `===`
+- ✅ **Session deduplication** — `getMySessions()` no longer returns duplicates from OR clause overlaps
+- ✅ **N+1 query fix** — `getMembers()` pre-fetches all health profiles in a single query
+- ✅ **DTO spread fix** — session creation uses explicit field mapping instead of `...dto`
+
+### Security Fixes
+- ✅ **Invitation owner check** — only org owners can send invitations (was any member)
+- ✅ **CreateUserDto password** — now enforces `@IsStrongPassword()` (was only `@MinLength(8)`)
+
+### New Features
+- ✅ **Pagination** — all list endpoints now support `?page=1&limit=20` with standardized `{ data, meta }` response
+- ✅ **Email service foundation** — `EmailService` with methods for password reset, verification, invitations, and welcome emails (logs to console, ready for provider integration)
+- ✅ **Slug Unicode support** — organization slugs handle diacritics properly (e.g., "Sală de Fitness" → "sala-de-fitness")
+
+### Cleanup
+- ✅ Removed dead `AppController`, `AppService`, `app.controller.spec.ts`
+- ✅ Removed dead `testing.ts` and stray `Create` file
+- ✅ Removed unused auth docs (logout, verifyEmail, resendVerification)
+- ✅ Fixed hardcoded timezone (now UTC everywhere)
+- ✅ Updated README with project-specific documentation
+
+### New Files
+- `src/common/interceptors/camel-case.interceptor.ts` — global response key transformer
+- `src/common/dto/pagination.dto.ts` — shared pagination DTO and helpers
+- `src/common/services/email.service.ts` — email service foundation
+
 ## 🔮 Next Steps (Future Enhancements)
 
-1. **Email Integration**
-   - Integrate SendGrid/AWS SES for password reset emails
-   - Welcome emails on registration
+1. **Email Provider Integration**
+   - Install SendGrid/Resend/AWS SES SDK
+   - Replace `EmailService.send()` method body
    - Email verification flow
 
 2. **Testing**
