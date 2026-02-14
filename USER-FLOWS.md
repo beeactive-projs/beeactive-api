@@ -1,6 +1,16 @@
-# BeeActive API - User Flows & Status
+# BeeActive API – User Flows & Status
 
-> Auto-generated flow documentation. Tracks all user flows, their current implementation status, and identified gaps/issues.
+This document describes **all user flows** (registration, login, profile, organizations, invitations, sessions, discovery), the **recurring sessions** rule format and endpoints, and the **status** of known issues. Use it as the single source of truth for understanding API behaviour and for frontend integration.
+
+- **Flows 1–5:** Auth (register, login, password reset, refresh, email verification).
+- **Flows 6–7:** Profile (participant/organizer, unified update, organizer activation).
+- **Flow 8:** Organizations (CRUD, members, leave, delete, discovery, public profile, self-join).
+- **Flow 9:** Invitations (send, accept/decline, cancel, resend).
+- **Flow 10:** Sessions (create, update, delete, clone, **recurring sessions** with preview and generate-instances).
+- **Flow 11:** Session participation (join, leave, confirm, check-in, status updates).
+- **Flow 12:** Discovery (organizations, trainers, public profiles).
+
+For **deployment and migrations**, see [DEPLOY.md](./DEPLOY.md).
 
 ---
 
@@ -353,6 +363,11 @@ Organization view:
 ```
 Create Session (requires ORGANIZER role):
   POST /sessions → Create session with type, visibility, schedule, capacity
+    Optional: isRecurring + recurringRule (see Recurring Sessions below)
+
+Recurring sessions (organizer only):
+  GET  /sessions/:id/recurrence-preview?weeks=12 → Upcoming occurrence dates (for calendar)
+  POST /sessions/:id/generate-instances { weeks?: 12 } → Create Session rows for next N weeks
 
 Manage:
   GET    /sessions ──────────→ List visible sessions (paginated, visibility rules)
@@ -363,18 +378,67 @@ Manage:
   POST   /sessions/:id/clone → Duplicate session with new date (organizer only)
 ```
 
+---
+
+### Recurring sessions (detailed)
+
+Recurring sessions let organizers define a **rule** (e.g. “every Monday, Wednesday, Friday at 9:00”) and then **generate** concrete session rows for the next N weeks. The first session created is the **template** (it is a real session with `scheduledAt` = first occurrence). Further occurrences are created by calling **generate-instances** so participants can join each date.
+
+#### Step-by-step flow
+
+| Step | Action | Endpoint | Purpose |
+|------|--------|----------|---------|
+| 1 | Create template session | `POST /sessions` with `isRecurring: true` and `recurringRule` | Creates the **first** session. `scheduledAt` is the first occurrence time. |
+| 2 | (Optional) Preview dates | `GET /sessions/:id/recurrence-preview?weeks=12` | Returns `{ dates: string[] }` (ISO) for the next N weeks. Use in the UI to show a calendar. |
+| 3 | Generate future instances | `POST /sessions/:id/generate-instances` body `{ weeks?: 12 }` | Creates one **Session** row per occurrence in the next N weeks. Skips dates that already have a session. Participants can then join each generated session. |
+
+- You can call **generate-instances** right after create, or later (e.g. “Generate more” when the user extends the series).
+- **Preview** does not create sessions; it only returns dates. **Generate-instances** creates the actual session records.
+
+#### Recurrence rule format (`recurringRule`)
+
+Sent in the body of `POST /sessions` (and optionally `PATCH /sessions/:id`) when `isRecurring` is true.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `frequency` | `"WEEKLY"` \| `"DAILY"` \| `"MONTHLY"` | Yes | When to repeat. |
+| `interval` | number (1–99) | No (default 1) | Every N periods (e.g. `2` = every 2 weeks for WEEKLY). |
+| `daysOfWeek` | number[] (0–6) | For WEEKLY only | 0 = Sunday, 1 = Monday, … 6 = Saturday. E.g. `[1, 3, 5]` = Mon, Wed, Fri. If omitted for WEEKLY, the first occurrence’s weekday is used. |
+| `endDate` | string (ISO date) | No | Do not generate occurrences after this date. |
+| `endAfterOccurrences` | number (1–365) | No | Stop after this many occurrences. Use **either** `endDate` or `endAfterOccurrences`, or neither (then generation is limited by the `weeks` parameter when calling generate-instances). |
+
+**Examples**
+
+- **Every Mon, Wed, Fri at 9:00 until end of June**
+  - `scheduledAt`: `"2026-02-17T09:00:00.000Z"` (first Monday)
+  - `recurringRule`: `{ "frequency": "WEEKLY", "interval": 1, "daysOfWeek": [1, 3, 5], "endDate": "2026-06-30" }`
+- **Every 2 weeks on Tuesday**
+  - `recurringRule`: `{ "frequency": "WEEKLY", "interval": 2, "daysOfWeek": [2] }`
+- **Every 3 days**
+  - `recurringRule`: `{ "frequency": "DAILY", "interval": 3 }`
+- **15th of each month**
+  - `recurringRule`: `{ "frequency": "MONTHLY", "interval": 1 }` (day comes from `scheduledAt`)
+
+#### Frontend usage
+
+- **Create form:** Let the user pick frequency (WEEKLY/DAILY/MONTHLY), for WEEKLY the days of the week, optional end date or “after N times”, and the first session date/time. Send `isRecurring: true` and `recurringRule` in `POST /sessions`.
+- **Calendar view:** Call `GET /sessions/:id/recurrence-preview?weeks=12` and plot the returned `dates` on the calendar (read-only preview).
+- **After save:** Call `POST /sessions/:id/generate-instances` with `{ weeks: 12 }` (or your desired range) so future sessions exist for joining. Optionally offer a “Generate more” button that calls the same endpoint again.
+
+---
+
 ### Issues Fixed
 | Issue | Severity | Status |
 |-------|----------|--------|
 | No session search/discovery | Medium | ✅ Fixed - GET /sessions/discover |
 | No session duplication/cloning | Low | ✅ Fixed - POST /sessions/:id/clone |
 | Participants not notified on cancel/delete | Medium | ✅ Fixed - Email notifications sent |
+| isRecurring/recurringRule no logic | Medium | ✅ Fixed - create with rule, preview, generate-instances |
 
 ### Remaining (Future - JOB SYSTEM)
 | Issue | Severity | Status |
 |-------|----------|--------|
 | No automated status transitions (SCHEDULED → IN_PROGRESS → COMPLETED) | Medium | ⏳ Needs Redis/Bull job system |
-| isRecurring/recurringRule fields exist but no logic | Medium | ⏳ Needs Redis/Bull job system |
 | reminderSent field exists but no reminder system | Medium | ⏳ Needs Redis/Bull job system |
 | price/currency fields exist but no payment integration | Low | ⏳ Future |
 

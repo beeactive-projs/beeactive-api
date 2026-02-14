@@ -1,0 +1,7 @@
+# Railway deployment configuration
+# https://docs.railway.app/guides/start-command
+
+[deploy]
+# Run migrations (--safe = only new ones) then start the API.
+# This ensures 009, 010, and any future migrations run automatically on each deploy.
+startCommand = "npm run railway:start"

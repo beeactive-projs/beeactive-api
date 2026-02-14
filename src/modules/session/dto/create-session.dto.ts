@@ -6,11 +6,14 @@ import {
   IsNumber,
   IsDateString,
   IsBoolean,
+  ValidateNested,
   MaxLength,
   Min,
   Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { RecurringRuleDto } from './recurring-rule.dto';
 
 export class CreateSessionDto {
   @ApiPropertyOptional({
@@ -103,4 +106,23 @@ export class CreateSessionDto {
   @IsEnum(['DRAFT', 'SCHEDULED'])
   @IsOptional()
   status?: string;
+
+  @ApiPropertyOptional({
+    example: false,
+    description:
+      'If true, this session repeats according to recurringRule. Use generate-instances to create future occurrences.',
+  })
+  @IsBoolean()
+  @IsOptional()
+  isRecurring?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'When isRecurring is true: frequency (WEEKLY/DAILY/MONTHLY), interval, daysOfWeek (for WEEKLY), endDate or endAfterOccurrences.',
+    type: RecurringRuleDto,
+  })
+  @ValidateNested()
+  @Type(() => RecurringRuleDto)
+  @IsOptional()
+  recurringRule?: RecurringRuleDto;
 }

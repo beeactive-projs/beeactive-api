@@ -103,7 +103,9 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 - **POST /invitations/:token/accept** — Invitee accepts and joins the org
 
 ### 6. Create & Manage Sessions
-- **POST /sessions** — Create training sessions (linked to your org)
+- **POST /sessions** — Create training sessions (linked to your org). Supports recurring: set \`isRecurring\` and \`recurringRule\` (frequency, daysOfWeek, endDate). See USER-FLOWS.md § Flow 10 for the full rule format.
+- **GET /sessions/:id/recurrence-preview?weeks=12** — Preview upcoming occurrence dates (for calendar UI)
+- **POST /sessions/:id/generate-instances** — Create session rows for the next N weeks from a recurring template
 - **GET /sessions/discover** — Browse public sessions
 - **POST /sessions/:id/clone** — Duplicate a session for another date
 
@@ -123,6 +125,10 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 - Organization management with membership & health data sharing
 - Cancellation policies and self check-in
 - Rate limiting on sensitive endpoints
+
+## Documentation
+- **USER-FLOWS.md** — All flows, recurrence rule format, examples, and frontend usage
+- **DEPLOY.md** — Migrations on deploy and start command setup
 
 ## Security
 - Passwords hashed with bcrypt (12 rounds)

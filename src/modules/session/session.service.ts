@@ -13,6 +13,15 @@ import { Session } from './entities/session.entity';
 import { SessionParticipant } from './entities/session-participant.entity';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
+
+/** Shape of recurringRule JSON stored on Session (for recurring sessions). */
+interface RecurringRule {
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  interval?: number;
+  daysOfWeek?: number[];
+  endDate?: string;
+  endAfterOccurrences?: number;
+}
 import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto';
 import { User } from '../user/entities/user.entity';
 import { OrganizationMember } from '../organization/entities/organization-member.entity';
@@ -90,6 +99,8 @@ export class SessionService {
       price: dto.price,
       currency: dto.currency || 'RON',
       status: dto.status || 'SCHEDULED',
+      isRecurring: dto.isRecurring ?? false,
+      recurringRule: dto.recurringRule ?? null,
     });
 
     // TODO: [JOB SYSTEM] Schedule reminder email job (e.g., 1 hour before scheduledAt)
@@ -399,6 +410,184 @@ export class SessionService {
     );
 
     return cloned;
+  }
+
+  // =====================================================
+  // RECURRING SESSIONS
+  // =====================================================
+
+  /**
+   * Preview recurrence: return list of upcoming occurrence dates for the next N weeks.
+   * Used by the frontend to show a calendar. Includes the template session's date.
+   */
+  async getRecurrencePreview(
+    sessionId: string,
+    userId: string,
+    weeks: number = 12,
+  ): Promise<{ dates: string[] }> {
+    const session = await this.sessionModel.findByPk(sessionId);
+    if (!session)
+      throw new NotFoundException('Session not found');
+    if (session.organizerId !== userId)
+      throw new ForbiddenException('Only the organizer can preview recurrence');
+    if (!session.isRecurring || !session.recurringRule)
+      throw new BadRequestException('Session is not recurring or has no rule');
+
+    const rule = session.recurringRule as RecurringRule;
+    const firstAt = new Date(session.scheduledAt);
+    const dates = this.computeOccurrenceDates(firstAt, rule, weeks, true);
+    return { dates: dates.map((d) => d.toISOString()) };
+  }
+
+  /**
+   * Generate upcoming session instances from a recurring template.
+   * Creates new Session rows for each occurrence in the next N weeks (respecting endDate/endAfterOccurrences).
+   * Skips dates that already have a session (same organizer, same title, same scheduledAt date).
+   */
+  async generateUpcomingInstances(
+    sessionId: string,
+    userId: string,
+    weeks: number = 12,
+  ): Promise<{ created: number; sessions: Session[] }> {
+    const template = await this.sessionModel.findByPk(sessionId);
+    if (!template)
+      throw new NotFoundException('Session not found');
+    if (template.organizerId !== userId)
+      throw new ForbiddenException('Only the organizer can generate instances');
+    if (!template.isRecurring || !template.recurringRule)
+      throw new BadRequestException('Session is not recurring or has no rule');
+
+    const rule = template.recurringRule as RecurringRule;
+    const firstAt = new Date(template.scheduledAt);
+    // Exclude the first occurrence (it's the template itself)
+    const occurrenceDates = this.computeOccurrenceDates(firstAt, rule, weeks, false);
+
+    // Find existing sessions for this template (same organizer, same title, same date)
+    const existingStarts = new Set<string>();
+    const existing = await this.sessionModel.findAll({
+      where: {
+        organizerId: userId,
+        title: template.title,
+        scheduledAt: {
+          [Op.gte]: firstAt,
+          [Op.lte]: new Date(firstAt.getTime() + weeks * 7 * 24 * 60 * 60 * 1000),
+        },
+      },
+      attributes: ['scheduledAt'],
+    });
+    existing.forEach((s) => existingStarts.add(new Date(s.scheduledAt).toISOString()));
+
+    const toCreate = occurrenceDates.filter(
+      (d) => !existingStarts.has(d.toISOString()),
+    );
+
+    const created: Session[] = [];
+    for (const scheduledAt of toCreate) {
+      const session = await this.sessionModel.create({
+        organizationId: template.organizationId,
+        organizerId: template.organizerId,
+        title: template.title,
+        description: template.description,
+        sessionType: template.sessionType,
+        visibility: template.visibility,
+        scheduledAt,
+        durationMinutes: template.durationMinutes,
+        location: template.location,
+        maxParticipants: template.maxParticipants,
+        price: template.price,
+        currency: template.currency,
+        status: 'SCHEDULED',
+        isRecurring: false,
+        recurringRule: null,
+      });
+      created.push(session);
+    }
+
+    this.logger.log(
+      `Generated ${created.length} instances for recurring session "${template.title}"`,
+      'SessionService',
+    );
+
+    return { created: created.length, sessions: created };
+  }
+
+  /**
+   * Compute occurrence dates for a recurring rule.
+   * @param firstAt First occurrence (template session start).
+   * @param includeFirst If true, include firstAt in the list; if false, only dates after firstAt.
+   */
+  private computeOccurrenceDates(
+    firstAt: Date,
+    rule: RecurringRule,
+    maxWeeks: number,
+    includeFirst: boolean,
+  ): Date[] {
+    const interval = rule.interval ?? 1;
+    const endDate = rule.endDate ? new Date(rule.endDate) : null;
+    const endAfter = rule.endAfterOccurrences ?? null;
+    const setTimeFromFirst = (d: Date) => {
+      d.setHours(
+        firstAt.getHours(),
+        firstAt.getMinutes(),
+        firstAt.getSeconds(),
+        0,
+      );
+    };
+
+    const results: Date[] = [];
+    const push = (d: Date) => {
+      if (endDate && d > endDate) return;
+      if (endAfter && results.length >= endAfter) return;
+      results.push(d);
+    };
+
+    if (rule.frequency === 'DAILY') {
+      let d = new Date(firstAt);
+      if (!includeFirst) d.setDate(d.getDate() + interval);
+      while (results.length < maxWeeks * 7 && (!endAfter || results.length < endAfter)) {
+        if (endDate && d > endDate) break;
+        push(new Date(d.getTime()));
+        d.setDate(d.getDate() + interval);
+      }
+      return results;
+    }
+
+    if (rule.frequency === 'MONTHLY') {
+      let d = new Date(firstAt);
+      if (!includeFirst) d.setMonth(d.getMonth() + interval);
+      while (results.length < maxWeeks * 4 && (!endAfter || results.length < endAfter)) {
+        if (endDate && d > endDate) break;
+        push(new Date(d.getTime()));
+        d.setMonth(d.getMonth() + interval);
+      }
+      return results;
+    }
+
+    // WEEKLY: daysOfWeek 0=Sun .. 6=Sat
+    const daysOfWeek = rule.daysOfWeek?.length ? rule.daysOfWeek : [firstAt.getDay()];
+    const weekStart = new Date(firstAt);
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+
+    for (let w = 0; w < maxWeeks; w++) {
+      const base = new Date(weekStart);
+      base.setDate(base.getDate() + w * 7 * interval);
+      for (const day of daysOfWeek) {
+        const occ = new Date(base);
+        occ.setDate(occ.getDate() + day);
+        setTimeFromFirst(occ);
+        if (occ <= firstAt && !includeFirst) continue;
+        if (includeFirst && occ.getTime() === firstAt.getTime()) {
+          push(occ);
+          continue;
+        }
+        if (!includeFirst && occ <= firstAt) continue;
+        if (endDate && occ > endDate) continue;
+        if (endAfter && results.length >= endAfter) return results;
+        push(occ);
+      }
+    }
+    return results;
   }
 
   // =====================================================

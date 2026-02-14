@@ -4,11 +4,15 @@ import {
   IsEnum,
   IsNumber,
   IsDateString,
+  IsBoolean,
+  ValidateNested,
   MaxLength,
   Min,
   Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { RecurringRuleDto } from './recurring-rule.dto';
 
 export class UpdateSessionDto {
   @ApiPropertyOptional({ example: 'Morning Yoga Flow - Updated' })
@@ -76,4 +80,15 @@ export class UpdateSessionDto {
   @IsEnum(['DRAFT', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'])
   @IsOptional()
   status?: string;
+
+  @ApiPropertyOptional({ description: 'Toggle recurring; set recurringRule when true.' })
+  @IsBoolean()
+  @IsOptional()
+  isRecurring?: boolean;
+
+  @ApiPropertyOptional({ type: RecurringRuleDto })
+  @ValidateNested()
+  @Type(() => RecurringRuleDto)
+  @IsOptional()
+  recurringRule?: RecurringRuleDto;
 }

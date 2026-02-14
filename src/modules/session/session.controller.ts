@@ -18,6 +18,7 @@ import { UpdateSessionDto } from './dto/update-session.dto';
 import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto';
 import { CloneSessionDto } from './dto/clone-session.dto';
 import { DiscoverSessionsDto } from './dto/discover-sessions.dto';
+import { GenerateInstancesDto } from './dto/generate-instances.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { SessionDocs } from '../../common/docs/session.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -112,6 +113,35 @@ export class SessionController {
     @Body() dto: CloneSessionDto,
   ) {
     return this.sessionService.cloneSession(id, req.user.id, dto.scheduledAt);
+  }
+
+  @Get(':id/recurrence-preview')
+  @UseGuards(RolesGuard)
+  @Roles('ORGANIZER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint(SessionDocs.recurrencePreview)
+  async getRecurrencePreview(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('weeks') weeks?: string,
+  ) {
+    const numWeeks = weeks ? Math.min(52, Math.max(1, parseInt(weeks, 10) || 12)) : 12;
+    return this.sessionService.getRecurrencePreview(id, req.user.id, numWeeks);
+  }
+
+  @Post(':id/generate-instances')
+  @UseGuards(RolesGuard)
+  @Roles('ORGANIZER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint({ ...SessionDocs.generateInstances, body: GenerateInstancesDto })
+  async generateInstances(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: GenerateInstancesDto,
+  ) {
+    return this.sessionService.generateUpcomingInstances(
+      id,
+      req.user.id,
+      dto.weeks ?? 12,
+    );
   }
 
   // =====================================================

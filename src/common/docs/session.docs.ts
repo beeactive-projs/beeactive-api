@@ -9,7 +9,10 @@ export const SessionDocs = {
   create: {
     summary: 'Create a new session',
     description:
-      'Create a training session. Requires ORGANIZER role. If organizationId is provided, you must be a member.',
+      'Create a training session. Requires ORGANIZER role. If organizationId is provided, you must be a member. ' +
+      'For recurring sessions: set isRecurring to true and provide recurringRule (frequency, interval, daysOfWeek for WEEKLY, optional endDate or endAfterOccurrences). ' +
+      'The created session is the first occurrence; use GET /sessions/:id/recurrence-preview to show dates and POST /sessions/:id/generate-instances to create future session rows. ' +
+      'See USER-FLOWS.md § Flow 10 (Recurring sessions) for full rule format and examples.',
     auth: true,
     responses: [
       {
@@ -118,7 +121,47 @@ export const SessionDocs = {
       {
         status: 201,
         description: 'Session cloned',
+        example: { id: '...', title: '...', scheduledAt: '2026-02-27T09:00:00.000Z' },
       },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  recurrencePreview: {
+    summary: 'Preview recurrence dates',
+    description:
+      'For a recurring session (isRecurring true + recurringRule), returns { dates: string[] } with ISO date-times for the next N weeks (?weeks=12, default 12). ' +
+      'Does not create any sessions; use this to display occurrences on a calendar. Organizer only.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'List of ISO date strings (includes the template session date)',
+        example: { dates: ['2026-02-17T09:00:00.000Z', '2026-02-19T09:00:00.000Z', '2026-02-21T09:00:00.000Z'] },
+      },
+      { status: 400, description: 'Session is not recurring or has no rule' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  generateInstances: {
+    summary: 'Generate upcoming instances',
+    description:
+      'For a recurring session, creates new Session rows for each occurrence in the next N weeks (body: { weeks?: 12 }). ' +
+      'Respects recurringRule endDate and endAfterOccurrences. Skips dates that already have a session (same organizer + title + time). ' +
+      'Returns { created: number, sessions: Session[] }. Organizer only.',
+    auth: true,
+    responses: [
+      {
+        status: 201,
+        description: 'Instances created',
+        example: { created: 24, sessions: [] },
+      },
+      { status: 400, description: 'Session is not recurring or has no rule' },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,
       ApiStandardResponses.NotFound,

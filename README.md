@@ -7,6 +7,16 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 
 ---
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[USER-FLOWS.md](./USER-FLOWS.md)** | All user flows (auth, profile, organizations, invitations, sessions, discovery), recurrence rules, and status of fixes. Use it to understand API behaviour and for frontend integration. |
+| **[DEPLOY.md](./DEPLOY.md)** | How migrations run on deploy, how to set the start command (e.g. `npm run railway:start`), and what to do if migrations did not run on the server. |
+| **Swagger /api/docs** | Interactive API reference (endpoints, request/response schemas). |
+
+---
+
 ## Tech Stack
 
 - **Framework:** NestJS (TypeScript)
