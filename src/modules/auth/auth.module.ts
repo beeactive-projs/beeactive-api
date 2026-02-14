@@ -9,6 +9,7 @@ import { UserModule } from '../user/user.module';
 import { getJwtConfig } from '../../config/jwt.config';
 import { RoleModule } from '../role/role.module';
 import { ProfileModule } from '../profile/profile.module';
+import { EmailService } from '../../common/services/email.service';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { ProfileModule } from '../profile/profile.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, EmailService],
   exports: [AuthService],
 })
 export class AuthModule {}

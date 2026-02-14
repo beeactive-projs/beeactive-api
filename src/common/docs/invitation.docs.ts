@@ -10,7 +10,7 @@ export const InvitationDocs = {
   create: {
     summary: 'Send an invitation',
     description:
-      'Invite someone to join your organization. Returns an invitationLink for testing (no email sent).',
+      'Invite someone to join your organization. Owner only. Returns an invitationLink for testing. Sends email when provider is configured.',
     auth: true,
     responses: [
       {
@@ -34,24 +34,34 @@ export const InvitationDocs = {
   } as ApiEndpointOptions,
 
   getMyPendingInvitations: {
-    summary: 'Get my pending invitations',
+    summary: 'Get my pending invitations (paginated)',
     description:
-      "Returns all pending invitations for the authenticated user's email.",
+      "Returns paginated pending invitations for the authenticated user's email. Accepts ?page=1&limit=20 query params.",
     auth: true,
     responses: [
       {
         status: 200,
         description: 'Pending invitations listed',
-        example: [
-          {
-            id: 'invitation-uuid',
-            inviter: { firstName: 'Sarah', lastName: 'Johnson' },
-            organization: { name: "Sarah's Fitness Studio" },
-            role: { displayName: 'Participant' },
-            message: 'Join my fitness studio!',
-            expiresAt: '2026-02-22T00:00:00.000Z',
+        example: {
+          data: [
+            {
+              id: 'invitation-uuid',
+              inviter: { firstName: 'Sarah', lastName: 'Johnson' },
+              organization: { name: "Sarah's Fitness Studio" },
+              role: { displayName: 'Participant' },
+              message: 'Join my fitness studio!',
+              expiresAt: '2026-02-22T00:00:00.000Z',
+            },
+          ],
+          meta: {
+            page: 1,
+            limit: 20,
+            totalItems: 1,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
           },
-        ],
+        },
       },
       ApiStandardResponses.Unauthorized,
     ],
@@ -97,14 +107,34 @@ export const InvitationDocs = {
   } as ApiEndpointOptions,
 
   getOrganizationInvitations: {
-    summary: 'List organization invitations',
+    summary: 'List organization invitations (paginated)',
     description:
-      'List all invitations sent for an organization. Requires org membership.',
+      'List all invitations sent for an organization. Requires org membership. Accepts ?page=1&limit=20 query params.',
     auth: true,
     responses: [
       {
         status: 200,
         description: 'Organization invitations listed',
+        example: {
+          data: [
+            {
+              id: 'invitation-uuid',
+              email: 'user@example.com',
+              role: { name: 'PARTICIPANT', displayName: 'Participant' },
+              expiresAt: '2026-02-22T00:00:00.000Z',
+              acceptedAt: null,
+              declinedAt: null,
+            },
+          ],
+          meta: {
+            page: 1,
+            limit: 20,
+            totalItems: 1,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          },
+        },
       },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,

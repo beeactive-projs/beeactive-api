@@ -4,8 +4,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  MinLength,
 } from 'class-validator';
+import { IsStrongPassword } from '../../../common/validators/strong-password.validator';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'user@example.com' })
@@ -13,9 +13,15 @@ export class CreateUserDto {
   @IsNotEmpty()
   email: string;
 
-  @ApiProperty({ example: 'password123', minLength: 8 })
+  @ApiProperty({
+    example: 'SecureP@ssw0rd!',
+    description:
+      'Strong password (8+ chars, uppercase, lowercase, number, special char)',
+    minLength: 8,
+  })
   @IsString()
-  @MinLength(8)
+  @IsNotEmpty()
+  @IsStrongPassword()
   password: string;
 
   @ApiProperty({ example: 'John' })

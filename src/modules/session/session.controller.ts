@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -19,6 +20,7 @@ import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { SessionDocs } from '../../common/docs/session.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 
 /**
  * Session Controller
@@ -53,8 +55,12 @@ export class SessionController {
 
   @Get()
   @ApiEndpoint(SessionDocs.getMySessions)
-  async getMySessions(@Request() req) {
-    return this.sessionService.getMySessions(req.user.id);
+  async getMySessions(@Request() req, @Query() pagination: PaginationDto) {
+    return this.sessionService.getMySessions(
+      req.user.id,
+      pagination.page,
+      pagination.limit,
+    );
   }
 
   @Get(':id')

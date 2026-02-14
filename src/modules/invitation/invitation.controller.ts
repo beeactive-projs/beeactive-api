@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -13,6 +14,7 @@ import { InvitationService } from './invitation.service';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { InvitationDocs } from '../../common/docs/invitation.docs';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 
 /**
  * Invitation Controller
@@ -24,7 +26,7 @@ import { InvitationDocs } from '../../common/docs/invitation.docs';
  * - POST   /invitations/:token/decline → Decline invitation
  * - GET    /invitations/organization/:id → List org invitations (owner)
  *
- * NOTE: No emails are sent. The invitation_link is returned in the response
+ * NOTE: No emails are sent. The invitationLink is returned in the response
  * for testing. Share it manually or integrate an email provider later.
  */
 @ApiTags('Invitations')
@@ -41,8 +43,15 @@ export class InvitationController {
 
   @Get('pending')
   @ApiEndpoint(InvitationDocs.getMyPendingInvitations)
-  async getMyPendingInvitations(@Request() req) {
-    return this.invitationService.getMyPendingInvitations(req.user.email);
+  async getMyPendingInvitations(
+    @Request() req,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.invitationService.getMyPendingInvitations(
+      req.user.email,
+      pagination.page,
+      pagination.limit,
+    );
   }
 
   @Post(':token/accept')
@@ -62,10 +71,13 @@ export class InvitationController {
   async getOrganizationInvitations(
     @Param('id') organizationId: string,
     @Request() req,
+    @Query() pagination: PaginationDto,
   ) {
     return this.invitationService.getOrganizationInvitations(
       organizationId,
       req.user.id,
+      pagination.page,
+      pagination.limit,
     );
   }
 }

@@ -109,7 +109,8 @@ src/
 │   ├── interceptors/          # Response interceptors (CamelCaseInterceptor)
 │   ├── logger/                # Winston logger config
 │   ├── middleware/             # Request ID middleware
-│   ├── services/              # Shared services (CryptoService)
+│   ├── dto/                   # Shared DTOs (PaginationDto)
+│   ├── services/              # Shared services (CryptoService, EmailService)
 │   └── validators/            # Custom validators
 ├── config/                    # App configuration
 │   ├── database.config.ts     # Sequelize/MySQL config
@@ -126,6 +127,70 @@ src/
 │   └── user/                  # User management
 ├── app.module.ts              # Root module
 └── main.ts                    # Application entry point
+```
+
+---
+
+## Pagination
+
+All list endpoints support pagination via query parameters:
+
+```
+GET /sessions?page=1&limit=20
+GET /organizations/:id/members?page=2&limit=10
+GET /invitations/pending?page=1&limit=50
+GET /invitations/organization/:id?page=1&limit=20
+```
+
+| Parameter | Default | Min | Max | Description |
+|-----------|---------|-----|-----|-------------|
+| `page` | 1 | 1 | - | Page number (1-indexed) |
+| `limit` | 20 | 1 | 100 | Items per page |
+
+All paginated endpoints return a standard response shape:
+
+```json
+{
+  "data": [ ... ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "totalItems": 47,
+    "totalPages": 3,
+    "hasNextPage": true,
+    "hasPreviousPage": false
+  }
+}
+```
+
+---
+
+## Email Service
+
+The API includes an `EmailService` foundation with methods for:
+- Password reset emails
+- Email verification
+- Organization invitation emails
+- Welcome emails
+
+Currently, emails are **logged to console** instead of sent. To activate real sending, install a provider SDK and replace the `send()` method in `src/common/services/email.service.ts`:
+
+```bash
+# Option 1: SendGrid
+npm install @sendgrid/mail
+
+# Option 2: Resend
+npm install resend
+
+# Option 3: AWS SES
+npm install @aws-sdk/client-ses
+```
+
+Add the API key to `.env`:
+```
+SENDGRID_API_KEY=SG.xxxxx
+# or
+RESEND_API_KEY=re_xxxxx
 ```
 
 ---

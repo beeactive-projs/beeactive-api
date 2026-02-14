@@ -13,7 +13,7 @@ import { Invitation } from './entities/invitation.entity';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { OrganizationService } from '../organization/organization.service';
 import { RoleService } from '../role/role.service';
-import { CryptoService } from '../../common/services';
+import { CryptoService, EmailService } from '../../common/services';
 import { User } from '../user/entities/user.entity';
 import { Organization } from '../organization/entities/organization.entity';
 import { Role } from '../role/entities/role.entity';
@@ -40,6 +40,7 @@ export class InvitationService {
     private organizationService: OrganizationService,
     private roleService: RoleService,
     private cryptoService: CryptoService,
+    private emailService: EmailService,
     private configService: ConfigService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
@@ -55,8 +56,8 @@ export class InvitationService {
     inviterId: string,
     dto: CreateInvitationDto,
   ): Promise<{ invitation: Invitation; invitationLink: string }> {
-    // Verify inviter is owner of the organization
-    const org = await this.organizationService.getById(
+    // Verify inviter is the OWNER of the organization (not just a member)
+    const org = await this.organizationService.assertOwnerAndGet(
       dto.organizationId,
       inviterId,
     );
@@ -99,15 +100,21 @@ export class InvitationService {
     });
 
     // Build invitation link
-    // NOTE: In production, use FRONTEND_URL instead of API URL
     const frontendUrl =
       this.configService.get('FRONTEND_URL') || 'http://localhost:4200';
     const invitationLink = `${frontendUrl}/accept-invitation?token=${token}`;
 
-    // TODO: Send email with invitation link
-    // await this.emailService.sendInvitation(dto.email, invitationLink, inviter, org);
+    // Send invitation email (currently logs, sends when provider configured)
+    await this.emailService.sendInvitationEmail(
+      dto.email,
+      token,
+      'Organization Owner', // TODO: pass inviter name when User is loaded
+      org.name,
+      dto.message,
+    );
+
     this.logger.log(
-      `Invitation sent to ${dto.email} for org ${org.name}. Link: ${invitationLink}`,
+      `Invitation sent to ${dto.email} for org ${org.name}`,
       'InvitationService',
     );
 
@@ -200,30 +207,53 @@ export class InvitationService {
   /**
    * List pending invitations for the authenticated user's email
    */
-  async getMyPendingInvitations(userEmail: string): Promise<Invitation[]> {
-    return this.invitationModel.findAll({
-      where: {
-        email: userEmail,
-        acceptedAt: null,
-        declinedAt: null,
+  async getMyPendingInvitations(
+    userEmail: string,
+    page: number = 1,
+    limit: number = 20,
+  ) {
+    const offset = (page - 1) * limit;
+
+    const { rows: data, count: totalItems } =
+      await this.invitationModel.findAndCountAll({
+        where: {
+          email: userEmail,
+          acceptedAt: null,
+          declinedAt: null,
+        },
+        include: [
+          {
+            model: User,
+            as: 'inviter',
+            attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+          },
+          {
+            model: Organization,
+            attributes: ['id', 'name', 'slug'],
+          },
+          {
+            model: Role,
+            attributes: ['id', 'name', 'displayName'],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+        distinct: true,
+      });
+
+    const totalPages = Math.ceil(totalItems / limit);
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
-      include: [
-        {
-          model: User,
-          as: 'inviter',
-          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
-        },
-        {
-          model: Organization,
-          attributes: ['id', 'name', 'slug'],
-        },
-        {
-          model: Role,
-          attributes: ['id', 'name', 'displayName'],
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-    });
+    };
   }
 
   /**
@@ -232,19 +262,40 @@ export class InvitationService {
   async getOrganizationInvitations(
     organizationId: string,
     userId: string,
-  ): Promise<Invitation[]> {
+    page: number = 1,
+    limit: number = 20,
+  ) {
     // Verify user has access to this org
     await this.organizationService.getById(organizationId, userId);
 
-    return this.invitationModel.findAll({
-      where: { organizationId: organizationId },
-      include: [
-        {
-          model: Role,
-          attributes: ['id', 'name', 'displayName'],
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-    });
+    const offset = (page - 1) * limit;
+
+    const { rows: data, count: totalItems } =
+      await this.invitationModel.findAndCountAll({
+        where: { organizationId: organizationId },
+        include: [
+          {
+            model: Role,
+            attributes: ['id', 'name', 'displayName'],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+        distinct: true,
+      });
+
+    const totalPages = Math.ceil(totalItems / limit);
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 }

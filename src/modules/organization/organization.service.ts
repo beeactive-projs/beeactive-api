@@ -42,13 +42,20 @@ export class OrganizationService {
 
   /**
    * Generate URL-friendly slug from organization name
+   *
+   * Handles Unicode/diacritics properly:
+   * - "Sală de Fitness" → "sala-de-fitness"
+   * - "Café Résumé" → "cafe-resume"
    */
   private generateSlug(name: string): string {
     return name
+      .normalize('NFD') // Decompose diacritics (ă → a + combining mark)
+      .replace(/[\u0300-\u036f]/g, '') // Remove combining marks
       .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
+      .replace(/[^a-z0-9\s-]/g, '') // Remove remaining non-alphanumeric
+      .replace(/\s+/g, '-') // Spaces to hyphens
+      .replace(/-+/g, '-') // Collapse multiple hyphens
+      .replace(/^-|-$/g, '') // Trim leading/trailing hyphens
       .substring(0, 100);
   }
 
@@ -184,35 +191,61 @@ export class OrganizationService {
    *
    * Returns basic info for all members.
    * Health data is only included if the member has sharedHealthInfo = true.
+   *
+   * FIX: Pre-fetches all health profiles in a single query (no N+1).
    */
-  async getMembers(organizationId: string, userId: string) {
+  async getMembers(
+    organizationId: string,
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ) {
     // Verify the requesting user is a member
     await this.assertMember(organizationId, userId);
 
-    const members = await this.memberModel.findAll({
-      where: { organizationId: organizationId, leftAt: null },
-      include: [
-        {
-          model: User,
-          attributes: [
-            'id',
-            'email',
-            'firstName',
-            'lastName',
-            'phone',
-            'avatarId',
-          ],
-        },
-      ],
-    });
+    const offset = (page - 1) * limit;
+
+    const { rows: members, count: totalItems } =
+      await this.memberModel.findAndCountAll({
+        where: { organizationId: organizationId, leftAt: null },
+        include: [
+          {
+            model: User,
+            attributes: [
+              'id',
+              'email',
+              'firstName',
+              'lastName',
+              'phone',
+              'avatarId',
+            ],
+          },
+        ],
+        limit,
+        offset,
+        order: [['joinedAt', 'ASC']],
+      });
 
     // Check if the requester is the org owner (trainers see more data)
     const requester = members.find((m) => m.userId === userId);
     const isOwner = requester?.isOwner || false;
 
-    const result: any[] = [];
+    // Pre-fetch all health profiles in ONE query (fixes N+1 problem)
+    let profileMap = new Map<string, ParticipantProfile>();
+    if (isOwner) {
+      const memberIdsWithHealthShared = members
+        .filter((m) => m.sharedHealthInfo && m.userId !== userId)
+        .map((m) => m.userId);
 
-    for (const member of members) {
+      if (memberIdsWithHealthShared.length > 0) {
+        const profiles = await this.participantProfileModel.findAll({
+          where: { userId: memberIdsWithHealthShared },
+        });
+        profileMap = new Map(profiles.map((p) => [p.userId, p]));
+      }
+    }
+
+    const data = members.map((member) => {
       const memberData: any = {
         id: member.id,
         userId: member.userId,
@@ -227,10 +260,7 @@ export class OrganizationService {
 
       // If requester is owner AND member has shared health info → include it
       if (isOwner && member.sharedHealthInfo && member.userId !== userId) {
-        const profile = await this.participantProfileModel.findOne({
-          where: { userId: member.userId },
-        });
-
+        const profile = profileMap.get(member.userId);
         if (profile) {
           memberData.healthData = {
             fitnessLevel: profile.fitnessLevel,
@@ -243,10 +273,21 @@ export class OrganizationService {
         }
       }
 
-      result.push(memberData);
-    }
+      return memberData;
+    });
 
-    return result;
+    const totalPages = Math.ceil(totalItems / limit);
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   /**
@@ -334,6 +375,30 @@ export class OrganizationService {
       userId: userId,
       isOwner: false,
     });
+  }
+
+  /**
+   * Assert user is the owner and return the organization
+   *
+   * Used by InvitationService to verify only owners can send invitations.
+   *
+   * @throws ForbiddenException if user is not a member or not the owner
+   * @throws NotFoundException if organization not found
+   */
+  async assertOwnerAndGet(
+    organizationId: string,
+    userId: string,
+  ): Promise<Organization> {
+    const organization =
+      await this.organizationModel.findByPk(organizationId);
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    await this.assertOwner(organizationId, userId);
+
+    return organization;
   }
 
   private async assertMember(

@@ -16,6 +16,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RoleService } from '../role/role.service';
 import { ProfileService } from '../profile/profile.service';
 import { Sequelize } from 'sequelize-typescript';
+import { EmailService } from '../../common/services/email.service';
 
 /**
  * Auth Service
@@ -42,6 +43,7 @@ export class AuthService {
     private profileService: ProfileService,
     private configService: ConfigService,
     private sequelize: Sequelize,
+    private emailService: EmailService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -259,7 +261,7 @@ export class AuthService {
    * 1. Find user by email
    * 2. Generate secure reset token
    * 3. Save hashed token in database
-   * 4. TODO: Send email with plain token
+   * 4. Send password reset email (logs in dev, real email when provider is configured)
    *
    * Note: Always return success even if email doesn't exist
    * (prevents email enumeration attacks)
@@ -275,22 +277,19 @@ export class AuthService {
       const resetToken =
         await this.userService.generatePasswordResetToken(user);
 
-      // TODO: Integrate email provider (Resend, SendGrid) to send reset email
-      // await this.emailService.sendPasswordResetEmail(user.email, resetToken);
-
-      // For testing: build the reset link and return it in the response
-      const frontendUrl =
-        this.configService.get('FRONTEND_URL') || 'http://localhost:4200';
-      const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+      // Send password reset email (currently logs, sends when provider configured)
+      await this.emailService.sendPasswordResetEmail(user.email, resetToken);
 
       this.logger.log(
-        `Password reset requested for ${user.email}. Link: ${resetLink}`,
+        `Password reset requested for ${user.email}`,
         'AuthService',
       );
 
-      // In development, return the link for testing
-      // In production, remove resetLink from the response
+      // In development, return the reset link for testing convenience
       if (this.configService.get('NODE_ENV') !== 'production') {
+        const frontendUrl =
+          this.configService.get('FRONTEND_URL') || 'http://localhost:4200';
+        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
         return {
           message:
             'If your email is registered, you will receive a password reset link.',

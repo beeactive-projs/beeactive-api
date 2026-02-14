@@ -33,14 +33,40 @@ export const SessionDocs = {
   } as ApiEndpointOptions,
 
   getMySessions: {
-    summary: 'List my visible sessions',
+    summary: 'List my visible sessions (paginated)',
     description:
-      'Returns all sessions visible to you: your own sessions, org MEMBERS sessions, PUBLIC sessions, and sessions you joined.',
+      'Returns paginated sessions visible to you. Accepts ?page=1&limit=20 query params. Includes: your own sessions, org MEMBERS sessions, PUBLIC sessions, and sessions you joined.',
     auth: true,
     responses: [
       {
         status: 200,
         description: 'Sessions listed',
+        example: {
+          data: [
+            {
+              id: '550e8400-e29b-41d4-a716-446655440000',
+              title: 'Morning Yoga Flow',
+              sessionType: 'GROUP',
+              visibility: 'MEMBERS',
+              scheduledAt: '2026-02-15T09:00:00.000Z',
+              durationMinutes: 60,
+              status: 'SCHEDULED',
+              organizer: {
+                id: 'user-uuid',
+                firstName: 'John',
+                lastName: 'Doe',
+              },
+            },
+          ],
+          meta: {
+            page: 1,
+            limit: 20,
+            totalItems: 1,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          },
+        },
       },
       ApiStandardResponses.Unauthorized,
     ],

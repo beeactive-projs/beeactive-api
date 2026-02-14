@@ -65,12 +65,21 @@ export class SessionService {
       }
     }
 
+    // Explicitly map DTO fields (safer than spreading)
     const session = await this.sessionModel.create({
-      ...dto,
+      organizationId: dto.organizationId,
       organizerId: userId,
+      title: dto.title,
+      description: dto.description,
+      sessionType: dto.sessionType,
       visibility: dto.visibility || 'MEMBERS',
-      status: dto.status || 'SCHEDULED',
+      scheduledAt: dto.scheduledAt,
+      durationMinutes: dto.durationMinutes,
+      location: dto.location,
+      maxParticipants: dto.maxParticipants,
+      price: dto.price,
       currency: dto.currency || 'RON',
+      status: dto.status || 'SCHEDULED',
     });
 
     this.logger.log(
@@ -82,15 +91,22 @@ export class SessionService {
   }
 
   /**
-   * Get sessions visible to the user
+   * Get sessions visible to the user (paginated, deduplicated)
    *
    * Returns:
    * - Sessions the user organized
    * - Sessions where visibility=MEMBERS and user is in the same org
    * - Sessions where visibility=PUBLIC
    * - Sessions the user is registered for
+   *
+   * FIX: Uses Sequelize's group/distinct to prevent duplicates when a session
+   * matches multiple OR conditions.
    */
-  async getMySessions(userId: string): Promise<Session[]> {
+  async getMySessions(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ) {
     // Get user's organization IDs
     const memberships = await this.memberModel.findAll({
       where: { userId: userId, leftAt: null },
@@ -105,39 +121,69 @@ export class SessionService {
     });
     const registeredSessionIds = registrations.map((r) => r.sessionId);
 
-    const sessions = await this.sessionModel.findAll({
-      where: {
-        [Op.or]: [
-          // Sessions I organized
-          { organizerId: userId },
-          // Sessions in my organizations with MEMBERS visibility
-          ...(orgIds.length > 0
-            ? [
-                {
-                  organizationId: { [Op.in]: orgIds },
-                  visibility: { [Op.in]: ['MEMBERS', 'PUBLIC'] },
-                },
-              ]
-            : []),
-          // Sessions I'm registered for
-          ...(registeredSessionIds.length > 0
-            ? [{ id: { [Op.in]: registeredSessionIds } }]
-            : []),
-          // Public sessions
-          { visibility: 'PUBLIC' },
-        ],
-      },
-      include: [
-        {
-          model: User,
-          as: 'organizer',
-          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
-        },
+    const offset = (page - 1) * limit;
+
+    const whereClause = {
+      [Op.or]: [
+        // Sessions I organized
+        { organizerId: userId },
+        // Sessions in my organizations with MEMBERS/PUBLIC visibility
+        ...(orgIds.length > 0
+          ? [
+              {
+                organizationId: { [Op.in]: orgIds },
+                visibility: { [Op.in]: ['MEMBERS', 'PUBLIC'] },
+              },
+            ]
+          : []),
+        // Sessions I'm registered for
+        ...(registeredSessionIds.length > 0
+          ? [{ id: { [Op.in]: registeredSessionIds } }]
+          : []),
+        // Public sessions
+        { visibility: 'PUBLIC' },
       ],
-      order: [['scheduled_at', 'ASC']],
+    };
+
+    const { rows: sessions, count: totalItems } =
+      await this.sessionModel.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: User,
+            as: 'organizer',
+            attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+          },
+        ],
+        order: [['scheduledAt', 'ASC']],
+        limit,
+        offset,
+        distinct: true, // Prevent duplicate counting from JOINs
+        // Sequelize deduplicates by primary key
+        // subQuery: false would cause issues here, so we use default
+      });
+
+    // Deduplicate sessions by ID (safety net for OR clause overlaps)
+    const seen = new Set<string>();
+    const uniqueSessions = sessions.filter((s) => {
+      if (seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
     });
 
-    return sessions;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: uniqueSessions,
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   /**

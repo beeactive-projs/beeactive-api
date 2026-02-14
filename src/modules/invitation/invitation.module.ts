@@ -5,7 +5,7 @@ import { InvitationController } from './invitation.controller';
 import { InvitationService } from './invitation.service';
 import { OrganizationModule } from '../organization/organization.module';
 import { RoleModule } from '../role/role.module';
-import { CryptoService } from '../../common/services';
+import { CryptoService, EmailService } from '../../common/services';
 
 /**
  * Invitation Module
@@ -20,7 +20,7 @@ import { CryptoService } from '../../common/services';
     RoleModule,
   ],
   controllers: [InvitationController],
-  providers: [InvitationService, CryptoService],
+  providers: [InvitationService, CryptoService, EmailService],
   exports: [InvitationService],
 })
 export class InvitationModule {}

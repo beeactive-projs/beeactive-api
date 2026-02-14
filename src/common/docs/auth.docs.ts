@@ -110,52 +110,8 @@ export const AuthDocs = {
     ],
   } as ApiEndpointOptions,
 
-  logout: {
-    summary: 'Logout user',
-    description:
-      'Invalidate current refresh token. User must login again to get new tokens.',
-    responses: [
-      {
-        status: 200,
-        description: 'Successfully logged out',
-        example: {
-          message: 'Successfully logged out',
-        },
-      },
-      ApiStandardResponses.Unauthorized,
-    ],
-  } as ApiEndpointOptions,
-
-  verifyEmail: {
-    summary: 'Verify email address',
-    description:
-      'Verify user email using verification token sent during registration.',
-    responses: [
-      {
-        status: 200,
-        description: 'Email successfully verified',
-        example: {
-          message: 'Email successfully verified',
-        },
-      },
-      ApiStandardResponses.BadRequest,
-      ApiStandardResponses.Unauthorized,
-    ],
-  } as ApiEndpointOptions,
-
-  resendVerification: {
-    summary: 'Resend verification email',
-    description: 'Send a new email verification link to user.',
-    responses: [
-      {
-        status: 200,
-        description: 'Verification email sent',
-        example: {
-          message: 'Verification email sent',
-        },
-      },
-      ApiStandardResponses.BadRequest,
-      ApiStandardResponses.TooManyRequests,
-    ],
-  } as ApiEndpointOptions,
+  // TODO: Implement these endpoints when email service is integrated
+  // - logout: Invalidate refresh token
+  // - verifyEmail: Verify email using token sent during registration
+  // - resendVerification: Resend email verification link
 };

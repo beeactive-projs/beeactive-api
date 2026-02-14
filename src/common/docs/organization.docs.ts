@@ -83,28 +83,38 @@ export const OrganizationDocs = {
   } as ApiEndpointOptions,
 
   getMembers: {
-    summary: 'List organization members',
+    summary: 'List organization members (paginated)',
     description:
-      'Returns all members. If you are the owner AND a member has sharedHealthInfo=true, their health data is included.',
+      'Returns paginated members list. Accepts ?page=1&limit=20 query params. If you are the owner AND a member has sharedHealthInfo=true, their health data is included.',
     auth: true,
     responses: [
       {
         status: 200,
         description: 'Members listed',
-        example: [
-          {
-            id: 'member-uuid',
-            userId: 'user-uuid',
-            firstName: 'Jane',
-            lastName: 'Doe',
-            isOwner: false,
-            sharedHealthInfo: true,
-            healthData: {
-              fitnessLevel: 'INTERMEDIATE',
-              goals: ['weight_loss'],
+        example: {
+          data: [
+            {
+              id: 'member-uuid',
+              userId: 'user-uuid',
+              firstName: 'Jane',
+              lastName: 'Doe',
+              isOwner: false,
+              sharedHealthInfo: true,
+              healthData: {
+                fitnessLevel: 'INTERMEDIATE',
+                goals: ['weight_loss'],
+              },
             },
+          ],
+          meta: {
+            page: 1,
+            limit: 20,
+            totalItems: 1,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
           },
-        ],
+        },
       },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,

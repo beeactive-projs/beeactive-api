@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -19,6 +20,7 @@ import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { OrganizationDocs } from '../../common/docs/organization.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 
 /**
  * Organization Controller
@@ -78,8 +80,17 @@ export class OrganizationController {
 
   @Get(':id/members')
   @ApiEndpoint(OrganizationDocs.getMembers)
-  async getMembers(@Param('id') id: string, @Request() req) {
-    return this.organizationService.getMembers(id, req.user.id);
+  async getMembers(
+    @Param('id') id: string,
+    @Request() req,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.organizationService.getMembers(
+      id,
+      req.user.id,
+      pagination.page,
+      pagination.limit,
+    );
   }
 
   @Patch(':id/members/me')

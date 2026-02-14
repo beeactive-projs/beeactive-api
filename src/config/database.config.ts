@@ -36,11 +36,9 @@ export const getDatabaseConfig = (
       : false,
 
   // Timezone setting (important for DATETIME fields)
-  // Use UTC for production to avoid timezone issues, local time for dev
-  timezone:
-    configService.get<string>('NODE_ENV') === 'production'
-      ? '+00:00' // UTC for production (Railway MySQL uses UTC)
-      : '+02:00', // Romania timezone (EET/EEST) for local dev
+  // Use UTC for both production and development for consistency.
+  // Application-level timezone logic should be handled in the app layer.
+  timezone: '+00:00',
 
   // Connection pool settings (for production)
   pool: {
