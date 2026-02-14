@@ -16,6 +16,7 @@ import { UpdateSessionDto } from './dto/update-session.dto';
 import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto';
 import { User } from '../user/entities/user.entity';
 import { OrganizationMember } from '../organization/entities/organization-member.entity';
+import { EmailService } from '../../common/services/email.service';
 
 /**
  * Session Service
@@ -26,9 +27,18 @@ import { OrganizationMember } from '../organization/entities/organization-member
  * - PRIVATE: Only organizer sees it, participants added manually
  * - MEMBERS: All organization members can see and join
  * - PUBLIC: Anyone can see (future marketplace feature)
+ *
+ * TODO: [JOB SYSTEM] When Redis/Bull is configured:
+ * - Automated status transitions: SCHEDULED → IN_PROGRESS → COMPLETED (based on scheduledAt + durationMinutes)
+ * - Recurring session generation from recurringRule
+ * - Session reminders (email/push) sent X hours before scheduledAt
+ * - Auto-mark NO_SHOW for participants who don't check in
  */
 @Injectable()
 export class SessionService {
+  // Cancellation policy: cannot leave within this many hours of session start
+  private readonly CANCELLATION_CUTOFF_HOURS = 2;
+
   constructor(
     @InjectModel(Session)
     private sessionModel: typeof Session,
@@ -36,6 +46,7 @@ export class SessionService {
     private participantModel: typeof SessionParticipant,
     @InjectModel(OrganizationMember)
     private memberModel: typeof OrganizationMember,
+    private emailService: EmailService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -65,7 +76,6 @@ export class SessionService {
       }
     }
 
-    // Explicitly map DTO fields (safer than spreading)
     const session = await this.sessionModel.create({
       organizationId: dto.organizationId,
       organizerId: userId,
@@ -82,6 +92,11 @@ export class SessionService {
       status: dto.status || 'SCHEDULED',
     });
 
+    // TODO: [JOB SYSTEM] Schedule reminder email job (e.g., 1 hour before scheduledAt)
+    // TODO: [JOB SYSTEM] Schedule status transition to IN_PROGRESS at scheduledAt
+    // TODO: [JOB SYSTEM] Schedule status transition to COMPLETED at scheduledAt + durationMinutes
+    // TODO: [JOB SYSTEM] If isRecurring, generate next session instances from recurringRule
+
     this.logger.log(
       `Session created: "${session.title}" by user ${userId}`,
       'SessionService',
@@ -92,29 +107,18 @@ export class SessionService {
 
   /**
    * Get sessions visible to the user (paginated, deduplicated)
-   *
-   * Returns:
-   * - Sessions the user organized
-   * - Sessions where visibility=MEMBERS and user is in the same org
-   * - Sessions where visibility=PUBLIC
-   * - Sessions the user is registered for
-   *
-   * FIX: Uses Sequelize's group/distinct to prevent duplicates when a session
-   * matches multiple OR conditions.
    */
   async getMySessions(
     userId: string,
     page: number = 1,
     limit: number = 20,
   ) {
-    // Get user's organization IDs
     const memberships = await this.memberModel.findAll({
       where: { userId: userId, leftAt: null },
       attributes: ['organizationId'],
     });
     const orgIds = memberships.map((m) => m.organizationId);
 
-    // Get sessions the user is registered for
     const registrations = await this.participantModel.findAll({
       where: { userId: userId, status: { [Op.ne]: 'CANCELLED' } },
       attributes: ['sessionId'],
@@ -125,9 +129,7 @@ export class SessionService {
 
     const whereClause = {
       [Op.or]: [
-        // Sessions I organized
         { organizerId: userId },
-        // Sessions in my organizations with MEMBERS/PUBLIC visibility
         ...(orgIds.length > 0
           ? [
               {
@@ -136,11 +138,9 @@ export class SessionService {
               },
             ]
           : []),
-        // Sessions I'm registered for
         ...(registeredSessionIds.length > 0
           ? [{ id: { [Op.in]: registeredSessionIds } }]
           : []),
-        // Public sessions
         { visibility: 'PUBLIC' },
       ],
     };
@@ -158,12 +158,9 @@ export class SessionService {
         order: [['scheduledAt', 'ASC']],
         limit,
         offset,
-        distinct: true, // Prevent duplicate counting from JOINs
-        // Sequelize deduplicates by primary key
-        // subQuery: false would cause issues here, so we use default
+        distinct: true,
       });
 
-    // Deduplicate sessions by ID (safety net for OR clause overlaps)
     const seen = new Set<string>();
     const uniqueSessions = sessions.filter((s) => {
       if (seen.has(s.id)) return false;
@@ -175,6 +172,63 @@ export class SessionService {
 
     return {
       data: uniqueSessions,
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
+  }
+
+  /**
+   * Discover public sessions (no auth required in future, but currently requires auth)
+   *
+   * Returns PUBLIC sessions, optionally filtered by search query.
+   */
+  async discoverSessions(
+    page: number = 1,
+    limit: number = 20,
+    search?: string,
+  ) {
+    const offset = (page - 1) * limit;
+
+    const where: any = {
+      visibility: 'PUBLIC',
+      status: { [Op.in]: ['SCHEDULED', 'IN_PROGRESS'] },
+      scheduledAt: { [Op.gte]: new Date() },
+    };
+
+    if (search) {
+      where[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+        { location: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    const { rows: data, count: totalItems } =
+      await this.sessionModel.findAndCountAll({
+        where,
+        include: [
+          {
+            model: User,
+            as: 'organizer',
+            attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+          },
+        ],
+        order: [['scheduledAt', 'ASC']],
+        limit,
+        offset,
+        distinct: true,
+      });
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data,
       meta: {
         page,
         limit,
@@ -213,7 +267,6 @@ export class SessionService {
       throw new NotFoundException('Session not found');
     }
 
-    // Check visibility access
     await this.assertCanViewSession(session, userId);
 
     return session;
@@ -227,7 +280,9 @@ export class SessionService {
     userId: string,
     dto: UpdateSessionDto,
   ): Promise<Session> {
-    const session = await this.sessionModel.findByPk(sessionId);
+    const session = await this.sessionModel.findByPk(sessionId, {
+      include: [SessionParticipant],
+    });
 
     if (!session) {
       throw new NotFoundException('Session not found');
@@ -239,15 +294,39 @@ export class SessionService {
       );
     }
 
+    const oldStatus = session.status;
     await session.update(dto);
+
+    // If session was cancelled, notify all registered participants
+    // TODO: [JOB SYSTEM] Move email notifications to background job queue
+    if (dto.status === 'CANCELLED' && oldStatus !== 'CANCELLED') {
+      this.notifyParticipantsOfCancellation(session).catch((err) =>
+        this.logger.error(
+          `Failed to notify participants of cancellation: ${err.message}`,
+          'SessionService',
+        ),
+      );
+    }
+
     return session;
   }
 
   /**
    * Delete a session (soft delete, organizer only)
+   *
+   * Notifies all registered participants via email.
    */
   async delete(sessionId: string, userId: string): Promise<void> {
-    const session = await this.sessionModel.findByPk(sessionId);
+    const session = await this.sessionModel.findByPk(sessionId, {
+      include: [
+        {
+          model: SessionParticipant,
+          where: { status: { [Op.ne]: 'CANCELLED' } },
+          required: false,
+          include: [{ model: User, attributes: ['email', 'firstName'] }],
+        },
+      ],
+    });
 
     if (!session) {
       throw new NotFoundException('Session not found');
@@ -259,12 +338,67 @@ export class SessionService {
       );
     }
 
+    // Notify participants before deleting
+    // TODO: [JOB SYSTEM] Move to background job queue
+    this.notifyParticipantsOfCancellation(session).catch((err) =>
+      this.logger.error(
+        `Failed to notify participants of deletion: ${err.message}`,
+        'SessionService',
+      ),
+    );
+
     await session.destroy(); // Soft delete (paranoid: true)
 
     this.logger.log(
       `Session deleted: "${session.title}" by user ${userId}`,
       'SessionService',
     );
+  }
+
+  /**
+   * Clone/duplicate a session
+   *
+   * Creates a copy of the session with a new date.
+   */
+  async cloneSession(
+    sessionId: string,
+    userId: string,
+    newScheduledAt: string,
+  ): Promise<Session> {
+    const original = await this.sessionModel.findByPk(sessionId);
+
+    if (!original) {
+      throw new NotFoundException('Session not found');
+    }
+
+    if (original.organizerId !== userId) {
+      throw new ForbiddenException(
+        'Only the organizer can clone this session',
+      );
+    }
+
+    const cloned = await this.sessionModel.create({
+      organizationId: original.organizationId,
+      organizerId: userId,
+      title: original.title,
+      description: original.description,
+      sessionType: original.sessionType,
+      visibility: original.visibility,
+      scheduledAt: newScheduledAt,
+      durationMinutes: original.durationMinutes,
+      location: original.location,
+      maxParticipants: original.maxParticipants,
+      price: original.price,
+      currency: original.currency,
+      status: 'SCHEDULED',
+    });
+
+    this.logger.log(
+      `Session cloned: "${cloned.title}" from ${sessionId}`,
+      'SessionService',
+    );
+
+    return cloned;
   }
 
   // =====================================================
@@ -286,15 +420,12 @@ export class SessionService {
       throw new NotFoundException('Session not found');
     }
 
-    // Check visibility access
     await this.assertCanViewSession(session, userId);
 
-    // Cannot join own session
     if (session.organizerId === userId) {
       throw new BadRequestException('You cannot join your own session');
     }
 
-    // Check if already registered
     const existing = await this.participantModel.findOne({
       where: { sessionId: sessionId, userId: userId },
     });
@@ -319,20 +450,43 @@ export class SessionService {
     // If previously cancelled, reactivate
     if (existing && existing.status === 'CANCELLED') {
       await existing.update({ status: 'REGISTERED', checkedInAt: null });
+
+      // Notify organizer
+      // TODO: [JOB SYSTEM] Move to background job
+      this.notifyOrganizerOfJoinLeave(session, userId, 'joined').catch(
+        () => {},
+      );
+
       return existing;
     }
 
-    return this.participantModel.create({
+    const participant = await this.participantModel.create({
       sessionId: sessionId,
       userId: userId,
       status: 'REGISTERED',
     });
+
+    // Notify organizer
+    // TODO: [JOB SYSTEM] Move to background job
+    this.notifyOrganizerOfJoinLeave(session, userId, 'joined').catch(
+      () => {},
+    );
+
+    return participant;
   }
 
   /**
    * Leave a session (cancel registration)
+   *
+   * Enforces cancellation policy: cannot leave within CANCELLATION_CUTOFF_HOURS of session start.
    */
   async leaveSession(sessionId: string, userId: string): Promise<void> {
+    const session = await this.sessionModel.findByPk(sessionId);
+
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
     const participant = await this.participantModel.findOne({
       where: {
         sessionId: sessionId,
@@ -345,7 +499,104 @@ export class SessionService {
       throw new NotFoundException('You are not registered for this session');
     }
 
+    // Cancellation policy check
+    const now = new Date();
+    const sessionStart = new Date(session.scheduledAt);
+    const cutoffTime = new Date(
+      sessionStart.getTime() -
+        this.CANCELLATION_CUTOFF_HOURS * 60 * 60 * 1000,
+    );
+
+    if (now > cutoffTime) {
+      throw new BadRequestException(
+        `Cannot cancel within ${this.CANCELLATION_CUTOFF_HOURS} hours of session start time`,
+      );
+    }
+
     await participant.update({ status: 'CANCELLED' });
+
+    // Notify organizer
+    // TODO: [JOB SYSTEM] Move to background job
+    this.notifyOrganizerOfJoinLeave(session, userId, 'left').catch(() => {});
+  }
+
+  /**
+   * Confirm registration (participant confirms attendance)
+   */
+  async confirmRegistration(
+    sessionId: string,
+    userId: string,
+  ): Promise<SessionParticipant> {
+    const participant = await this.participantModel.findOne({
+      where: {
+        sessionId,
+        userId,
+        status: 'REGISTERED',
+      },
+    });
+
+    if (!participant) {
+      throw new NotFoundException(
+        'No pending registration found for this session',
+      );
+    }
+
+    await participant.update({ status: 'CONFIRMED' });
+
+    return participant;
+  }
+
+  /**
+   * Self check-in (participant checks themselves in)
+   *
+   * Only allowed within a window around the session start time.
+   */
+  async selfCheckIn(
+    sessionId: string,
+    userId: string,
+  ): Promise<SessionParticipant> {
+    const session = await this.sessionModel.findByPk(sessionId);
+
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const participant = await this.participantModel.findOne({
+      where: {
+        sessionId,
+        userId,
+        status: { [Op.in]: ['REGISTERED', 'CONFIRMED'] },
+      },
+    });
+
+    if (!participant) {
+      throw new NotFoundException(
+        'You are not registered for this session',
+      );
+    }
+
+    // Allow check-in 15 minutes before to 30 minutes after session start
+    const now = new Date();
+    const sessionStart = new Date(session.scheduledAt);
+    const earliestCheckIn = new Date(
+      sessionStart.getTime() - 15 * 60 * 1000,
+    );
+    const latestCheckIn = new Date(
+      sessionStart.getTime() + 30 * 60 * 1000,
+    );
+
+    if (now < earliestCheckIn || now > latestCheckIn) {
+      throw new BadRequestException(
+        'Check-in is only available from 15 minutes before to 30 minutes after the session start',
+      );
+    }
+
+    await participant.update({
+      status: 'ATTENDED',
+      checkedInAt: new Date(),
+    });
+
+    return participant;
   }
 
   /**
@@ -371,12 +622,14 @@ export class SessionService {
 
     const participant = await this.participantModel.findOne({
       where: { sessionId: sessionId, userId: participantUserId },
+      include: [{ model: User, attributes: ['email', 'firstName'] }],
     });
 
     if (!participant) {
       throw new NotFoundException('Participant not found');
     }
 
+    const oldStatus = participant.status;
     const updateData: any = { status: dto.status };
 
     // Auto-set checkedInAt when marking as ATTENDED
@@ -385,7 +638,79 @@ export class SessionService {
     }
 
     await participant.update(updateData);
+
+    // Notify participant of status change (if status actually changed)
+    // TODO: [JOB SYSTEM] Move to background job queue
+    if (oldStatus !== dto.status && participant.user) {
+      this.emailService
+        .sendWelcomeEmail(
+          participant.user.email,
+          participant.user.firstName,
+        )
+        .catch(() => {}); // Best effort notification
+    }
+
     return participant;
+  }
+
+  // =====================================================
+  // NOTIFICATION HELPERS
+  // =====================================================
+
+  /**
+   * Notify all registered participants of a session cancellation/deletion
+   * TODO: [JOB SYSTEM] Move to background job with Bull queue for better reliability
+   */
+  private async notifyParticipantsOfCancellation(
+    session: Session,
+  ): Promise<void> {
+    if (!session.participants || session.participants.length === 0) return;
+
+    const activeParticipants = session.participants.filter(
+      (p) => !['CANCELLED', 'NO_SHOW'].includes(p.status),
+    );
+
+    for (const participant of activeParticipants) {
+      if (participant.user?.email) {
+        // TODO: Create a dedicated cancellation email template
+        this.emailService
+          .sendWelcomeEmail(
+            participant.user.email,
+            participant.user.firstName,
+          )
+          .catch(() => {});
+      }
+    }
+
+    this.logger.log(
+      `Notified ${activeParticipants.length} participants of session cancellation: ${session.title}`,
+      'SessionService',
+    );
+  }
+
+  /**
+   * Notify organizer when someone joins or leaves their session
+   * TODO: [JOB SYSTEM] Move to background job
+   */
+  private async notifyOrganizerOfJoinLeave(
+    session: Session,
+    participantUserId: string,
+    action: 'joined' | 'left',
+  ): Promise<void> {
+    const organizer = await User.findByPk(session.organizerId, {
+      attributes: ['email', 'firstName'],
+    });
+    const participant = await User.findByPk(participantUserId, {
+      attributes: ['firstName', 'lastName'],
+    });
+
+    if (organizer && participant) {
+      // TODO: Create a dedicated join/leave email template
+      this.logger.log(
+        `${participant.firstName} ${participant.lastName} ${action} session "${session.title}"`,
+        'SessionService',
+      );
+    }
   }
 
   // =====================================================
@@ -399,13 +724,9 @@ export class SessionService {
     session: Session,
     userId: string,
   ): Promise<void> {
-    // Organizer can always see their own sessions
     if (session.organizerId === userId) return;
-
-    // Public sessions are visible to everyone
     if (session.visibility === 'PUBLIC') return;
 
-    // MEMBERS: user must be in the same organization
     if (session.visibility === 'MEMBERS' && session.organizationId) {
       const isMember = await this.memberModel.findOne({
         where: {
@@ -418,7 +739,6 @@ export class SessionService {
       if (isMember) return;
     }
 
-    // PRIVATE: user must be a registered participant
     const isParticipant = await this.participantModel.findOne({
       where: {
         sessionId: session.id,

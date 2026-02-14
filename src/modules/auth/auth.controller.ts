@@ -1,6 +1,7 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -107,6 +108,26 @@ export class AuthController {
   @ApiEndpoint({ ...AuthDocs.verifyEmail, body: VerifyEmailDto })
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
     return this.authService.verifyEmail(verifyEmailDto);
+  }
+
+  /**
+   * Verify email (GET - browser-friendly)
+   *
+   * Used in development for direct verification via email link.
+   * In production, the frontend handles this and calls POST /auth/verify-email.
+   */
+  @Get('verify-email')
+  @Throttle({ default: { limit: 5, ttl: 3600000 } })
+  async verifyEmailGet(@Query('token') token: string, @Res() res: Response) {
+    const successHtml = `<html><body style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#fef3c7;"><div style="text-align:center;padding:40px;background:white;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);"><h1 style="color:#f59e0b;">Email Verified!</h1><p>Your email has been verified successfully. You can close this page.</p></div></body></html>`;
+    const errorHtml = `<html><body style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#fef2f2;"><div style="text-align:center;padding:40px;background:white;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);"><h1 style="color:#ef4444;">Verification Failed</h1><p>This link is invalid or has expired. Please request a new verification email.</p></div></body></html>`;
+
+    try {
+      await this.authService.verifyEmail({ token });
+      res.status(200).send(successHtml);
+    } catch (_err) {
+      res.status(400).send(errorHtml);
+    }
   }
 
   /**

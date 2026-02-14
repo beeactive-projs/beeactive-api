@@ -112,6 +112,21 @@ export const ProfileDocs = {
     ],
   } as ApiEndpointOptions,
 
+  updateFullProfile: {
+    summary: 'Update full profile (unified)',
+    description:
+      'Update user + participant + organizer profiles in a single API call. Only provided sections are updated. Pass { user: {...}, participant: {...}, organizer: {...} }.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Profile sections updated',
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+    ],
+  } as ApiEndpointOptions,
+
   createOrganizerProfile: {
     summary: 'Activate organizer profile',
     description:

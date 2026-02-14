@@ -104,21 +104,12 @@ export class AuthService {
 
       this.logger.log(`User registered: ${user.email}`, 'AuthService');
 
-      // Send emails (non-blocking — failures won't break registration)
+      // Send verification email only (welcome email sent after verification)
       this.emailService
         .sendEmailVerification(user.email, verificationToken)
         .catch((err) =>
           this.logger.error(
             `Failed to send verification email: ${err.message}`,
-            'AuthService',
-          ),
-        );
-
-      this.emailService
-        .sendWelcomeEmail(user.email, user.firstName)
-        .catch((err) =>
-          this.logger.error(
-            `Failed to send welcome email: ${err.message}`,
             'AuthService',
           ),
         );
@@ -367,6 +358,16 @@ export class AuthService {
     await this.userService.markEmailVerified(user);
 
     this.logger.log(`Email verified for user: ${user.email}`, 'AuthService');
+
+    // Send welcome email now that email is verified
+    this.emailService
+      .sendWelcomeEmail(user.email, user.firstName)
+      .catch((err) =>
+        this.logger.error(
+          `Failed to send welcome email: ${err.message}`,
+          'AuthService',
+        ),
+      );
 
     return {
       message: 'Email verified successfully. You can now use all features.',

@@ -16,6 +16,8 @@ import { SessionService } from './session.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto';
+import { CloneSessionDto } from './dto/clone-session.dto';
+import { DiscoverSessionsDto } from './dto/discover-sessions.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { SessionDocs } from '../../common/docs/session.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -28,11 +30,15 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
  * Training session management:
  * - POST   /sessions                              → Create session (ORGANIZER)
  * - GET    /sessions                              → List my visible sessions
+ * - GET    /sessions/discover                     → Discover public sessions
  * - GET    /sessions/:id                          → Get session details
  * - PATCH  /sessions/:id                          → Update session (organizer only)
  * - DELETE /sessions/:id                          → Delete session (organizer only)
+ * - POST   /sessions/:id/clone                    → Clone/duplicate a session
  * - POST   /sessions/:id/join                     → Join session (participant)
  * - POST   /sessions/:id/leave                    → Leave session (participant)
+ * - POST   /sessions/:id/confirm                  → Confirm registration
+ * - POST   /sessions/:id/checkin                  → Self check-in
  * - PATCH  /sessions/:id/participants/:userId     → Update participant status (organizer)
  */
 @ApiTags('Sessions')
@@ -63,6 +69,16 @@ export class SessionController {
     );
   }
 
+  @Get('discover')
+  @ApiEndpoint(SessionDocs.discoverSessions)
+  async discoverSessions(@Query() query: DiscoverSessionsDto) {
+    return this.sessionService.discoverSessions(
+      query.page,
+      query.limit,
+      query.search,
+    );
+  }
+
   @Get(':id')
   @ApiEndpoint(SessionDocs.getById)
   async getById(@Param('id') id: string, @Request() req) {
@@ -86,6 +102,18 @@ export class SessionController {
     return { message: 'Session deleted successfully' };
   }
 
+  @Post(':id/clone')
+  @UseGuards(RolesGuard)
+  @Roles('ORGANIZER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint({ ...SessionDocs.cloneSession, body: CloneSessionDto })
+  async cloneSession(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: CloneSessionDto,
+  ) {
+    return this.sessionService.cloneSession(id, req.user.id, dto.scheduledAt);
+  }
+
   // =====================================================
   // PARTICIPANT MANAGEMENT
   // =====================================================
@@ -103,8 +131,23 @@ export class SessionController {
     return { message: 'You have left the session' };
   }
 
+  @Post(':id/confirm')
+  @ApiEndpoint(SessionDocs.confirmRegistration)
+  async confirmRegistration(@Param('id') id: string, @Request() req) {
+    return this.sessionService.confirmRegistration(id, req.user.id);
+  }
+
+  @Post(':id/checkin')
+  @ApiEndpoint(SessionDocs.selfCheckIn)
+  async selfCheckIn(@Param('id') id: string, @Request() req) {
+    return this.sessionService.selfCheckIn(id, req.user.id);
+  }
+
   @Patch(':id/participants/:userId')
-  @ApiEndpoint({ ...SessionDocs.updateParticipantStatus, body: UpdateParticipantStatusDto })
+  @ApiEndpoint({
+    ...SessionDocs.updateParticipantStatus,
+    body: UpdateParticipantStatusDto,
+  })
   async updateParticipantStatus(
     @Param('id') sessionId: string,
     @Param('userId') participantUserId: string,

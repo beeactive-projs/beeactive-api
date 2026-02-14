@@ -4,6 +4,7 @@ import { Invitation } from './entities/invitation.entity';
 import { InvitationController } from './invitation.controller';
 import { InvitationService } from './invitation.service';
 import { OrganizationModule } from '../organization/organization.module';
+import { OrganizationMember } from '../organization/entities/organization-member.entity';
 import { RoleModule } from '../role/role.module';
 import { CryptoService, EmailService } from '../../common/services';
 
@@ -15,7 +16,7 @@ import { CryptoService, EmailService } from '../../common/services';
  */
 @Module({
   imports: [
-    SequelizeModule.forFeature([Invitation]),
+    SequelizeModule.forFeature([Invitation, OrganizationMember]),
     OrganizationModule,
     RoleModule,
   ],

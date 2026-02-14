@@ -74,23 +74,62 @@ async function bootstrap() {
 
 A comprehensive REST API for managing fitness training sessions, trainers, and clients.
 
+---
+
+## User Journey Flow
+
+### 1. Registration & Login
+- **POST /auth/register** — Create account (auto-assigned PARTICIPANT role)
+- Verify email via link (GET /auth/verify-email in dev, frontend in prod)
+- **POST /auth/login** — Get JWT access + refresh tokens
+
+### 2. Complete Your Profile
+- **GET /profile/me** — See your full profile overview
+- **PATCH /profile/me** — Update user + participant + organizer in one call
+- **PATCH /profile/participant** — Update health & fitness data
+
+### 3. Become an Organizer
+- **POST /profile/organizer** — Activate organizer profile (gets ORGANIZER role)
+- **PATCH /profile/organizer** — Fill in professional details (bio, specializations)
+
+### 4. Create an Organization
+- **POST /organizations** — Create your fitness studio/gym (requires ORGANIZER role)
+- You become the OWNER with org-scoped ORGANIZER role
+- **PATCH /organizations/:id** — Update details (slug auto-regenerates on name change)
+
+### 5. Invite Members
+- **POST /invitations** — Send invitation to someone's email
+- They receive an email and can accept/decline
+- **POST /invitations/:token/accept** — Invitee accepts and joins the org
+
+### 6. Create & Manage Sessions
+- **POST /sessions** — Create training sessions (linked to your org)
+- **GET /sessions/discover** — Browse public sessions
+- **POST /sessions/:id/clone** — Duplicate a session for another date
+
+### 7. Participate in Sessions
+- **POST /sessions/:id/join** — Register for a session
+- **POST /sessions/:id/confirm** — Confirm your attendance
+- **POST /sessions/:id/checkin** — Self check-in (15 min before to 30 min after)
+- **POST /sessions/:id/leave** — Cancel (2-hour cancellation policy)
+
+---
+
 ## Features
-- 🔐 JWT-based authentication with refresh tokens
-- 👥 Role-based access control (RBAC)
-- 🏋️ Session management for trainers and clients
-- 📧 Password reset via email
-- 🔒 Account lockout after failed login attempts
-- ⚡ Rate limiting on sensitive endpoints
+- JWT-based auth with refresh tokens
+- Role-based access (PARTICIPANT, ORGANIZER, ADMIN)
+- Email via Resend (verification, password reset, invitations)
+- Session management with visibility rules (PRIVATE, MEMBERS, PUBLIC)
+- Organization management with membership & health data sharing
+- Cancellation policies and self check-in
+- Rate limiting on sensitive endpoints
 
 ## Security
-- All passwords hashed with bcrypt (12 rounds)
-- Tokens hashed before storage
+- Passwords hashed with bcrypt (12 rounds)
+- All tokens (reset, verification, invitation) hashed before storage
 - HTTPS required in production
 - Security headers via Helmet
 - Input validation and sanitization
-
-## Support
-For issues or questions, contact: support@beeactive.com
     `.trim(),
     )
     .setVersion('1.0.0')

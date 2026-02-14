@@ -106,6 +106,13 @@ export class OrganizationController {
     return this.organizationService.updateMyMembership(id, req.user.id, dto);
   }
 
+  @Delete(':id/members/me')
+  @ApiEndpoint(OrganizationDocs.leaveOrganization)
+  async leaveOrganization(@Param('id') id: string, @Request() req) {
+    await this.organizationService.leaveOrganization(id, req.user.id);
+    return { message: 'You have left the organization' };
+  }
+
   @Delete(':id/members/:userId')
   @ApiEndpoint(OrganizationDocs.removeMember)
   async removeMember(
@@ -115,5 +122,12 @@ export class OrganizationController {
   ) {
     await this.organizationService.removeMember(id, memberId, req.user.id);
     return { message: 'Member removed successfully' };
+  }
+
+  @Delete(':id')
+  @ApiEndpoint(OrganizationDocs.deleteOrganization)
+  async deleteOrganization(@Param('id') id: string, @Request() req) {
+    await this.organizationService.deleteOrganization(id, req.user.id);
+    return { message: 'Organization deleted successfully' };
   }
 }

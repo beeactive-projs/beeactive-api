@@ -141,6 +141,23 @@ export const OrganizationDocs = {
     ],
   } as ApiEndpointOptions,
 
+  leaveOrganization: {
+    summary: 'Leave organization',
+    description:
+      'Voluntarily leave an organization. Owners cannot leave — they must delete the org or transfer ownership.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Left organization',
+        example: { message: 'You have left the organization' },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
   removeMember: {
     summary: 'Remove a member',
     description:
@@ -151,6 +168,23 @@ export const OrganizationDocs = {
         status: 200,
         description: 'Member removed',
         example: { message: 'Member removed successfully' },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  deleteOrganization: {
+    summary: 'Delete organization',
+    description:
+      'Soft-delete an organization. Owner only. All members are effectively removed.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Organization deleted',
+        example: { message: 'Organization deleted successfully' },
       },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,

@@ -13,7 +13,9 @@ import { OrganizerProfile } from './entities/organizer-profile.entity';
 import { UpdateParticipantProfileDto } from './dto/update-participant-profile.dto';
 import { CreateOrganizerProfileDto } from './dto/create-organizer-profile.dto';
 import { UpdateOrganizerProfileDto } from './dto/update-organizer-profile.dto';
+import { UpdateFullProfileDto } from './dto/update-full-profile.dto';
 import { RoleService } from '../role/role.service';
+import { UserService } from '../user/user.service';
 import { User } from '../user/entities/user.entity';
 
 /**
@@ -34,6 +36,7 @@ export class ProfileService {
     @InjectModel(OrganizerProfile)
     private organizerProfileModel: typeof OrganizerProfile,
     private roleService: RoleService,
+    private userService: UserService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -155,6 +158,50 @@ export class ProfileService {
 
     await profile.update(dto);
     return profile;
+  }
+
+  // =====================================================
+  // UNIFIED PROFILE UPDATE
+  // =====================================================
+
+  /**
+   * Update full profile (user + participant + organizer) in one call
+   *
+   * Only provided sections are updated. If a section is omitted, it's skipped.
+   */
+  async updateFullProfile(userId: string, dto: UpdateFullProfileDto) {
+    const results: any = {};
+
+    // Update core user fields
+    if (dto.user && Object.keys(dto.user).length > 0) {
+      results.user = await this.userService.updateUser(userId, dto.user);
+    }
+
+    // Update participant profile
+    if (dto.participant && Object.keys(dto.participant).length > 0) {
+      results.participant = await this.updateParticipantProfile(
+        userId,
+        dto.participant,
+      );
+    }
+
+    // Update organizer profile (only if it exists)
+    if (dto.organizer && Object.keys(dto.organizer).length > 0) {
+      const orgProfile = await this.getOrganizerProfile(userId);
+      if (orgProfile) {
+        results.organizer = await this.updateOrganizerProfile(
+          userId,
+          dto.organizer,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Full profile updated for user ${userId} (sections: ${Object.keys(results).join(', ')})`,
+      'ProfileService',
+    );
+
+    return results;
   }
 
   // =====================================================

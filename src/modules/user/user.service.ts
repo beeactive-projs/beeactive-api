@@ -5,6 +5,7 @@ import { Transaction } from 'sequelize';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { CryptoService } from '../../common/services';
 
 /**
@@ -91,6 +92,40 @@ export class UserService {
     );
 
     return user;
+  }
+
+  /**
+   * Update user profile fields
+   *
+   * @param userId - User's UUID
+   * @param dto - Fields to update
+   * @returns Updated user
+   */
+  async updateUser(userId: string, dto: UpdateUserDto): Promise<User> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new ConflictException('User not found');
+    }
+    await user.update(dto);
+    return user;
+  }
+
+  /**
+   * Soft-delete user account (GDPR)
+   *
+   * Sets deletedAt timestamp. The user record is preserved but
+   * inaccessible through normal queries (paranoid mode).
+   *
+   * @param userId - User's UUID
+   */
+  async deleteAccount(userId: string): Promise<void> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new ConflictException('User not found');
+    }
+    user.isActive = false;
+    await user.save();
+    await user.destroy(); // Soft delete (paranoid: true)
   }
 
   /**

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -20,14 +21,13 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
  * Invitation Controller
  *
  * Manages invitations to join organizations:
- * - POST   /invitations              → Send invitation (org owner)
- * - GET    /invitations/pending       → My pending invitations
- * - POST   /invitations/:token/accept → Accept invitation
- * - POST   /invitations/:token/decline → Decline invitation
- * - GET    /invitations/organization/:id → List org invitations (owner)
- *
- * NOTE: No emails are sent. The invitationLink is returned in the response
- * for testing. Share it manually or integrate an email provider later.
+ * - POST   /invitations                  → Send invitation (org owner)
+ * - GET    /invitations/pending           → My pending invitations
+ * - POST   /invitations/:token/accept     → Accept invitation
+ * - POST   /invitations/:token/decline    → Decline invitation
+ * - POST   /invitations/:id/cancel        → Cancel invitation (org owner)
+ * - POST   /invitations/:id/resend        → Resend invitation email (org owner)
+ * - GET    /invitations/organization/:id  → List org invitations (owner)
  */
 @ApiTags('Invitations')
 @Controller('invitations')
@@ -57,13 +57,25 @@ export class InvitationController {
   @Post(':token/accept')
   @ApiEndpoint(InvitationDocs.accept)
   async accept(@Param('token') token: string, @Request() req) {
-    return this.invitationService.accept(token, req.user.id);
+    return this.invitationService.accept(token, req.user.id, req.user.email);
   }
 
   @Post(':token/decline')
   @ApiEndpoint(InvitationDocs.decline)
   async decline(@Param('token') token: string) {
     return this.invitationService.decline(token);
+  }
+
+  @Post(':id/cancel')
+  @ApiEndpoint(InvitationDocs.cancel)
+  async cancel(@Param('id') id: string, @Request() req) {
+    return this.invitationService.cancel(id, req.user.id);
+  }
+
+  @Post(':id/resend')
+  @ApiEndpoint(InvitationDocs.resend)
+  async resend(@Param('id') id: string, @Request() req) {
+    return this.invitationService.resend(id, req.user.id);
   }
 
   @Get('organization/:id')

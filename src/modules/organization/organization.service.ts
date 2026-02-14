@@ -163,6 +163,8 @@ export class OrganizationService {
 
   /**
    * Update organization (owner only)
+   *
+   * If name is changed, slug is automatically regenerated.
    */
   async update(
     organizationId: string,
@@ -178,8 +180,75 @@ export class OrganizationService {
     // Check ownership
     await this.assertOwner(organizationId, userId);
 
+    // If name changes, regenerate slug
+    if (dto.name && dto.name !== organization.name) {
+      const baseSlug = this.generateSlug(dto.name);
+      const slug = await this.ensureUniqueSlug(baseSlug);
+      (dto as any).slug = slug;
+    }
+
     await organization.update(dto);
     return organization;
+  }
+
+  /**
+   * Delete organization (owner only, soft delete)
+   */
+  async deleteOrganization(
+    organizationId: string,
+    userId: string,
+  ): Promise<void> {
+    const organization = await this.organizationModel.findByPk(organizationId);
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    await this.assertOwner(organizationId, userId);
+
+    organization.isActive = false;
+    await organization.save();
+    await organization.destroy(); // Soft delete (paranoid: true)
+
+    this.logger.log(
+      `Organization deleted: ${organization.name} by user ${userId}`,
+      'OrganizationService',
+    );
+  }
+
+  /**
+   * Leave an organization voluntarily
+   *
+   * Owners cannot leave — they must transfer ownership first (future) or delete the org.
+   */
+  async leaveOrganization(
+    organizationId: string,
+    userId: string,
+  ): Promise<void> {
+    const member = await this.memberModel.findOne({
+      where: {
+        organizationId,
+        userId,
+        leftAt: null,
+      },
+    });
+
+    if (!member) {
+      throw new NotFoundException('You are not a member of this organization');
+    }
+
+    if (member.isOwner) {
+      throw new ForbiddenException(
+        'Organization owner cannot leave. Transfer ownership first or delete the organization.',
+      );
+    }
+
+    await member.update({ leftAt: new Date() });
+
+    this.logger.log(
+      `User ${userId} left organization ${organizationId}`,
+      'OrganizationService',
+    );
   }
 
   // =====================================================
@@ -389,15 +458,9 @@ export class OrganizationService {
     organizationId: string,
     userId: string,
   ): Promise<Organization> {
-    const organization =
-      await this.organizationModel.findByPk(organizationId);
-
-    if (!organization) {
-      throw new NotFoundException('Organization not found');
-    }
-
+    const organization = await this.organizationModel.findByPk(organizationId);
+    if (!organization) throw new NotFoundException('Organization not found');
     await this.assertOwner(organizationId, userId);
-
     return organization;
   }
 

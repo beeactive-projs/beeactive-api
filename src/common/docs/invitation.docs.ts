@@ -106,6 +106,42 @@ export const InvitationDocs = {
     ],
   } as ApiEndpointOptions,
 
+  cancel: {
+    summary: 'Cancel an invitation',
+    description:
+      'Cancel a pending invitation. Org owner only. Cannot cancel already accepted invitations.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Invitation cancelled',
+        example: { message: 'Invitation cancelled' },
+      },
+      { status: 400, description: 'Cannot cancel accepted invitation' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  resend: {
+    summary: 'Resend invitation email',
+    description:
+      'Resend the invitation email with a new token. Org owner only. Extends expiry by 7 days.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Invitation resent',
+        example: { message: 'Invitation resent' },
+      },
+      { status: 400, description: 'Cannot resend accepted invitation' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
   getOrganizationInvitations: {
     summary: 'List organization invitations (paginated)',
     description:

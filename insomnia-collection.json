@@ -1,0 +1,732 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-02-14T00:00:00.000Z",
+  "__export_source": "insomnia.importers:v0.1.0",
+  "resources": [
+    {
+      "_id": "wrk_beeactive",
+      "parentId": null,
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "BeeActive API",
+      "description": "BeeActive Fitness Platform API Collection",
+      "scope": "collection",
+      "_type": "workspace"
+    },
+    {
+      "_id": "env_base",
+      "parentId": "wrk_beeactive",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://localhost:3800",
+        "access_token": "",
+        "refresh_token": "",
+        "user_id": "",
+        "org_id": "",
+        "session_id": "",
+        "invitation_token": ""
+      },
+      "dataPropertyOrder": {
+        "&": ["base_url", "access_token", "refresh_token", "user_id", "org_id", "session_id", "invitation_token"]
+      },
+      "_type": "environment"
+    },
+    {
+      "_id": "fld_auth",
+      "parentId": "wrk_beeactive",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "1. Authentication",
+      "description": "Registration, login, password reset, email verification",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_register",
+      "parentId": "fld_auth",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/auth/register",
+      "name": "Register",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"phone\": \"+40123456789\"\n}"
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_login",
+      "parentId": "fld_auth",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/auth/login",
+      "name": "Login",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_refresh",
+      "parentId": "fld_auth",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/auth/refresh",
+      "name": "Refresh Token",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"refreshToken\": \"{{ _.refresh_token }}\"\n}"
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_forgot_password",
+      "parentId": "fld_auth",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/auth/forgot-password",
+      "name": "Forgot Password",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"test@example.com\"\n}"
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_reset_password",
+      "parentId": "fld_auth",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/auth/reset-password",
+      "name": "Reset Password",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"token\": \"PASTE_TOKEN_HERE\",\n  \"newPassword\": \"NewSecurePass123!\"\n}"
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_verify_email",
+      "parentId": "fld_auth",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/auth/verify-email",
+      "name": "Verify Email (POST)",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"token\": \"PASTE_TOKEN_HERE\"\n}"
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_resend_verification",
+      "parentId": "fld_auth",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/auth/resend-verification",
+      "name": "Resend Verification",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"test@example.com\"\n}"
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "_type": "request"
+    },
+    {
+      "_id": "fld_users",
+      "parentId": "wrk_beeactive",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "2. Users",
+      "description": "User account management",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_get_me",
+      "parentId": "fld_users",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/users/me",
+      "name": "Get My Profile",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_me",
+      "parentId": "fld_users",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/users/me",
+      "name": "Update My Profile",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"phone\": \"+40123456789\",\n  \"avatarId\": 1,\n  \"language\": \"en\",\n  \"timezone\": \"Europe/Bucharest\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_delete_me",
+      "parentId": "fld_users",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/users/me",
+      "name": "Delete Account (GDPR)",
+      "method": "DELETE",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "fld_profiles",
+      "parentId": "wrk_beeactive",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "3. Profiles",
+      "description": "Participant & organizer profiles",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_profile_overview",
+      "parentId": "fld_profiles",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/profile/me",
+      "name": "Get Profile Overview",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_full_profile",
+      "parentId": "fld_profiles",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/profile/me",
+      "name": "Update Full Profile (Unified)",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"user\": {\n    \"firstName\": \"John\",\n    \"lastName\": \"Doe\"\n  },\n  \"participant\": {\n    \"fitnessLevel\": \"INTERMEDIATE\",\n    \"goals\": [\"weight_loss\", \"muscle_gain\"]\n  }\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_participant",
+      "parentId": "fld_profiles",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/profile/participant",
+      "name": "Get Participant Profile",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_participant",
+      "parentId": "fld_profiles",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/profile/participant",
+      "name": "Update Participant Profile",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"fitnessLevel\": \"INTERMEDIATE\",\n  \"goals\": [\"weight_loss\"],\n  \"heightCm\": 180,\n  \"weightKg\": 75\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_create_organizer",
+      "parentId": "fld_profiles",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/profile/organizer",
+      "name": "Activate Organizer Profile",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"displayName\": \"Coach John\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_organizer",
+      "parentId": "fld_profiles",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/profile/organizer",
+      "name": "Get Organizer Profile",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_organizer",
+      "parentId": "fld_profiles",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/profile/organizer",
+      "name": "Update Organizer Profile",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"bio\": \"Certified personal trainer\",\n  \"specializations\": [\"hiit\", \"yoga\"],\n  \"yearsOfExperience\": 5\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "fld_orgs",
+      "parentId": "wrk_beeactive",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "4. Organizations",
+      "description": "Organization management",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_create_org",
+      "parentId": "fld_orgs",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations",
+      "name": "Create Organization",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"John's Fitness Studio\",\n  \"description\": \"Personal training and group sessions\",\n  \"timezone\": \"Europe/Bucharest\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_list_orgs",
+      "parentId": "fld_orgs",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations",
+      "name": "List My Organizations",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_org",
+      "parentId": "fld_orgs",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/{{ _.org_id }}",
+      "name": "Get Organization",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_org",
+      "parentId": "fld_orgs",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/{{ _.org_id }}",
+      "name": "Update Organization",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"Updated Fitness Studio\",\n  \"description\": \"Updated description\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_delete_org",
+      "parentId": "fld_orgs",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/{{ _.org_id }}",
+      "name": "Delete Organization",
+      "method": "DELETE",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_list_members",
+      "parentId": "fld_orgs",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/{{ _.org_id }}/members?page=1&limit=20",
+      "name": "List Members",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_membership",
+      "parentId": "fld_orgs",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/{{ _.org_id }}/members/me",
+      "name": "Update My Membership",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"sharedHealthInfo\": true,\n  \"nickname\": \"Johnny\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_leave_org",
+      "parentId": "fld_orgs",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/{{ _.org_id }}/members/me",
+      "name": "Leave Organization",
+      "method": "DELETE",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_remove_member",
+      "parentId": "fld_orgs",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/organizations/{{ _.org_id }}/members/USER_ID_HERE",
+      "name": "Remove Member (Owner)",
+      "method": "DELETE",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "fld_invitations",
+      "parentId": "wrk_beeactive",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "5. Invitations",
+      "description": "Invitation management",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_send_invitation",
+      "parentId": "fld_invitations",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/invitations",
+      "name": "Send Invitation",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"invite@example.com\",\n  \"organizationId\": \"{{ _.org_id }}\",\n  \"roleName\": \"PARTICIPANT\",\n  \"message\": \"Join my fitness studio!\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_pending_invitations",
+      "parentId": "fld_invitations",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/invitations/pending?page=1&limit=20",
+      "name": "My Pending Invitations",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_accept_invitation",
+      "parentId": "fld_invitations",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/invitations/{{ _.invitation_token }}/accept",
+      "name": "Accept Invitation",
+      "method": "POST",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_decline_invitation",
+      "parentId": "fld_invitations",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/invitations/{{ _.invitation_token }}/decline",
+      "name": "Decline Invitation",
+      "method": "POST",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_cancel_invitation",
+      "parentId": "fld_invitations",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/invitations/INVITATION_ID/cancel",
+      "name": "Cancel Invitation (Owner)",
+      "method": "POST",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_resend_invitation",
+      "parentId": "fld_invitations",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/invitations/INVITATION_ID/resend",
+      "name": "Resend Invitation (Owner)",
+      "method": "POST",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_org_invitations",
+      "parentId": "fld_invitations",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/invitations/organization/{{ _.org_id }}?page=1&limit=20",
+      "name": "List Org Invitations",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "fld_sessions",
+      "parentId": "wrk_beeactive",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "6. Sessions",
+      "description": "Session management and participation",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_create_session",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions",
+      "name": "Create Session",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"organizationId\": \"{{ _.org_id }}\",\n  \"title\": \"Morning Yoga Flow\",\n  \"description\": \"Gentle yoga for all levels\",\n  \"sessionType\": \"GROUP\",\n  \"visibility\": \"MEMBERS\",\n  \"scheduledAt\": \"2026-02-20T09:00:00.000Z\",\n  \"durationMinutes\": 60,\n  \"location\": \"Fitness Studio, Bucharest\",\n  \"maxParticipants\": 20,\n  \"price\": 50,\n  \"currency\": \"RON\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_list_sessions",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions?page=1&limit=20",
+      "name": "List My Sessions",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_discover_sessions",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/discover?page=1&limit=20&search=yoga",
+      "name": "Discover Public Sessions",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_session",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/{{ _.session_id }}",
+      "name": "Get Session Details",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_session",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/{{ _.session_id }}",
+      "name": "Update Session",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"title\": \"Updated Session\",\n  \"status\": \"CANCELLED\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_delete_session",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/{{ _.session_id }}",
+      "name": "Delete Session",
+      "method": "DELETE",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_clone_session",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/{{ _.session_id }}/clone",
+      "name": "Clone Session",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"scheduledAt\": \"2026-02-27T09:00:00.000Z\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "req_join_session",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/{{ _.session_id }}/join",
+      "name": "Join Session",
+      "method": "POST",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_leave_session",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/{{ _.session_id }}/leave",
+      "name": "Leave Session",
+      "method": "POST",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_confirm_session",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/{{ _.session_id }}/confirm",
+      "name": "Confirm Registration",
+      "method": "POST",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_checkin_session",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/{{ _.session_id }}/checkin",
+      "name": "Self Check-In",
+      "method": "POST",
+      "headers": [{"name": "Authorization", "value": "Bearer {{ _.access_token }}"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_participant",
+      "parentId": "fld_sessions",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/sessions/{{ _.session_id }}/participants/USER_ID_HERE",
+      "name": "Update Participant Status (Organizer)",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"status\": \"ATTENDED\"\n}"
+      },
+      "headers": [
+        {"name": "Content-Type", "value": "application/json"},
+        {"name": "Authorization", "value": "Bearer {{ _.access_token }}"}
+      ],
+      "_type": "request"
+    },
+    {
+      "_id": "fld_health",
+      "parentId": "wrk_beeactive",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "name": "7. Health",
+      "description": "Health check",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_health",
+      "parentId": "fld_health",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/health",
+      "name": "Health Check",
+      "method": "GET",
+      "_type": "request"
+    }
+  ]
+}

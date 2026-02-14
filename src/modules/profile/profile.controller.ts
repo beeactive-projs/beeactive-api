@@ -13,6 +13,7 @@ import { ProfileService } from './profile.service';
 import { UpdateParticipantProfileDto } from './dto/update-participant-profile.dto';
 import { CreateOrganizerProfileDto } from './dto/create-organizer-profile.dto';
 import { UpdateOrganizerProfileDto } from './dto/update-organizer-profile.dto';
+import { UpdateFullProfileDto } from './dto/update-full-profile.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { ProfileDocs } from '../../common/docs/profile.docs';
 
@@ -43,6 +44,24 @@ export class ProfileController {
   @ApiEndpoint(ProfileDocs.getProfileOverview)
   async getProfileOverview(@Request() req) {
     return this.profileService.getProfileOverview(req.user);
+  }
+
+  /**
+   * Unified profile update
+   *
+   * Update user + participant + organizer profiles in a single API call.
+   * Only provided sections are updated.
+   */
+  @Patch('me')
+  @ApiEndpoint({
+    ...ProfileDocs.updateFullProfile,
+    body: UpdateFullProfileDto,
+  })
+  async updateFullProfile(
+    @Request() req,
+    @Body() dto: UpdateFullProfileDto,
+  ) {
+    return this.profileService.updateFullProfile(req.user.id, dto);
   }
 
   // =====================================================

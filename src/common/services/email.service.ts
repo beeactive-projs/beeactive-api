@@ -3,15 +3,22 @@ import type { LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { Resend } from 'resend';
+import {
+  emailVerificationTemplate,
+  welcomeTemplate,
+  passwordResetTemplate,
+  invitationTemplate,
+  sessionCancelledTemplate,
+} from './email-templates';
 
 /**
  * Email Service
  *
- * Sends emails via Resend (https://resend.com).
+ * Sends branded emails via Resend (https://resend.com).
  * Falls back to console logging when RESEND_API_KEY is not set.
  *
  * All email methods follow the same pattern:
- * - Build the email content (subject + HTML)
+ * - Build branded HTML from templates
  * - Send via Resend (or log in dev when no API key)
  * - Never throw on failure — email errors shouldn't break the main flow
  */
@@ -20,6 +27,8 @@ export class EmailService {
   private readonly fromEmail: string;
   private readonly fromName: string;
   private readonly frontendUrl: string;
+  private readonly apiUrl: string;
+  private readonly isProduction: boolean;
   private readonly resend: Resend | null;
 
   constructor(
@@ -28,11 +37,17 @@ export class EmailService {
     private readonly logger: LoggerService,
   ) {
     this.fromEmail =
-      this.configService.get('EMAIL_FROM') || 'noreply@beeactive.com';
+      this.configService.get('EMAIL_FROM') || 'noreply@beeactive.fit';
     this.fromName =
       this.configService.get('EMAIL_FROM_NAME') || 'BeeActive';
     this.frontendUrl =
       this.configService.get('FRONTEND_URL') || 'http://localhost:4200';
+    this.isProduction =
+      this.configService.get('NODE_ENV') === 'production';
+
+    // In dev, email links point to the API for direct verification
+    const port = this.configService.get('PORT') || 3000;
+    this.apiUrl = `http://localhost:${port}`;
 
     // Initialize Resend if API key is available
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
@@ -48,15 +63,50 @@ export class EmailService {
     }
   }
 
+  /**
+   * Get the base URL for email links.
+   * In dev: points to API directly (http://localhost:PORT)
+   * In prod: points to frontend (FRONTEND_URL)
+   */
+  private getBaseUrl(): string {
+    return this.isProduction ? this.frontendUrl : this.apiUrl;
+  }
+
   // =====================================================
   // AUTH EMAILS
   // =====================================================
 
   /**
+   * Send email verification email
+   */
+  async sendEmailVerification(
+    email: string,
+    verificationToken: string,
+  ): Promise<void> {
+    // In dev: link goes to API GET endpoint directly
+    // In prod: link goes to frontend which calls the API
+    const verifyLink = this.isProduction
+      ? `${this.frontendUrl}/verify-email?token=${verificationToken}`
+      : `${this.apiUrl}/auth/verify-email?token=${verificationToken}`;
+
+    const subject = 'Verify your BeeActive email';
+    const html = emailVerificationTemplate(verifyLink);
+
+    await this.send(email, subject, html);
+  }
+
+  /**
+   * Send welcome email (called after email verification, not on registration)
+   */
+  async sendWelcomeEmail(email: string, firstName: string): Promise<void> {
+    const subject = 'Welcome to BeeActive!';
+    const html = welcomeTemplate(firstName, this.frontendUrl);
+
+    await this.send(email, subject, html);
+  }
+
+  /**
    * Send password reset email
-   *
-   * @param email - Recipient email
-   * @param resetToken - Plain reset token (NOT the hashed one)
    */
   async sendPasswordResetEmail(
     email: string,
@@ -65,40 +115,7 @@ export class EmailService {
     const resetLink = `${this.frontendUrl}/reset-password?token=${resetToken}`;
 
     const subject = 'Reset your BeeActive password';
-    const html = `
-      <h2>Password Reset Request</h2>
-      <p>You requested to reset your password. Click the link below to set a new password:</p>
-      <p><a href="${resetLink}" style="padding: 12px 24px; background-color: #f59e0b; color: white; text-decoration: none; border-radius: 6px; display: inline-block;">Reset Password</a></p>
-      <p>This link will expire in <strong>1 hour</strong>.</p>
-      <p>If you didn't request this, you can safely ignore this email.</p>
-      <hr />
-      <p style="color: #666; font-size: 12px;">BeeActive - Fitness Platform</p>
-    `.trim();
-
-    await this.send(email, subject, html);
-  }
-
-  /**
-   * Send email verification email
-   *
-   * @param email - Recipient email
-   * @param verificationToken - Plain verification token
-   */
-  async sendEmailVerification(
-    email: string,
-    verificationToken: string,
-  ): Promise<void> {
-    const verifyLink = `${this.frontendUrl}/verify-email?token=${verificationToken}`;
-
-    const subject = 'Verify your BeeActive email';
-    const html = `
-      <h2>Welcome to BeeActive!</h2>
-      <p>Please verify your email address by clicking the link below:</p>
-      <p><a href="${verifyLink}" style="padding: 12px 24px; background-color: #f59e0b; color: white; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Email</a></p>
-      <p>This link will expire in <strong>24 hours</strong>.</p>
-      <hr />
-      <p style="color: #666; font-size: 12px;">BeeActive - Fitness Platform</p>
-    `.trim();
+    const html = passwordResetTemplate(resetLink);
 
     await this.send(email, subject, html);
   }
@@ -109,12 +126,6 @@ export class EmailService {
 
   /**
    * Send organization invitation email
-   *
-   * @param email - Invitee email
-   * @param invitationToken - Plain invitation token
-   * @param inviterName - Name of the person sending the invitation
-   * @param organizationName - Name of the organization
-   * @param message - Optional personal message from inviter
    */
   async sendInvitationEmail(
     email: string,
@@ -126,35 +137,46 @@ export class EmailService {
     const acceptLink = `${this.frontendUrl}/accept-invitation?token=${invitationToken}`;
 
     const subject = `You're invited to join ${organizationName} on BeeActive`;
-    const html = `
-      <h2>You've Been Invited!</h2>
-      <p><strong>${inviterName}</strong> has invited you to join <strong>${organizationName}</strong> on BeeActive.</p>
-      ${message ? `<blockquote style="border-left: 3px solid #f59e0b; padding-left: 12px; color: #555;">"${message}"</blockquote>` : ''}
-      <p><a href="${acceptLink}" style="padding: 12px 24px; background-color: #f59e0b; color: white; text-decoration: none; border-radius: 6px; display: inline-block;">Accept Invitation</a></p>
-      <p>This invitation will expire in <strong>7 days</strong>.</p>
-      <hr />
-      <p style="color: #666; font-size: 12px;">BeeActive - Fitness Platform</p>
-    `.trim();
+    const html = invitationTemplate(
+      inviterName,
+      organizationName,
+      acceptLink,
+      message,
+    );
 
     await this.send(email, subject, html);
   }
 
   // =====================================================
-  // NOTIFICATION EMAILS
+  // SESSION NOTIFICATION EMAILS
   // =====================================================
 
   /**
-   * Send welcome email after registration
+   * Send session cancellation notification to a participant
    */
-  async sendWelcomeEmail(email: string, firstName: string): Promise<void> {
-    const subject = 'Welcome to BeeActive!';
-    const html = `
-      <h2>Welcome, ${firstName}!</h2>
-      <p>Thanks for joining BeeActive. Start your fitness journey today!</p>
-      <p><a href="${this.frontendUrl}" style="padding: 12px 24px; background-color: #f59e0b; color: white; text-decoration: none; border-radius: 6px; display: inline-block;">Get Started</a></p>
-      <hr />
-      <p style="color: #666; font-size: 12px;">BeeActive - Fitness Platform</p>
-    `.trim();
+  async sendSessionCancelledEmail(
+    email: string,
+    participantName: string,
+    sessionTitle: string,
+    organizerName: string,
+    scheduledAt: Date,
+  ): Promise<void> {
+    const formattedDate = scheduledAt.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const subject = `Session "${sessionTitle}" has been cancelled`;
+    const html = sessionCancelledTemplate(
+      participantName,
+      sessionTitle,
+      organizerName,
+      formattedDate,
+    );
 
     await this.send(email, subject, html);
   }
