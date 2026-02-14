@@ -81,6 +81,7 @@ const ALL_MIGRATIONS = [
   '006_seed_plans_features.sql',
   '007_create_super_admin.sql',
   '008_update_profiles_and_members.sql',
+  '009_add_email_verification_expires.sql',
 ];
 
 async function runMigrations() {

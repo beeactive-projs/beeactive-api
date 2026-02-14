@@ -108,7 +108,13 @@ export class User extends Model {
     type: DataType.STRING(255),
     allowNull: true,
   })
-  declare emailVerificationToken: string;
+  declare emailVerificationToken: string | null;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare emailVerificationExpires: Date | null;
 
   @Column({
     type: DataType.STRING(255),

@@ -110,8 +110,42 @@ export const AuthDocs = {
     ],
   } as ApiEndpointOptions,
 
-  // TODO: Implement these endpoints when email service is integrated
-  // - logout: Invalidate refresh token
-  // - verifyEmail: Verify email using token sent during registration
-  // - resendVerification: Resend email verification link
+  verifyEmail: {
+    summary: 'Verify email address',
+    description:
+      'Verify user email using the token sent during registration. Token is single-use and expires after 24 hours.',
+    responses: [
+      {
+        status: 200,
+        description: 'Email verified successfully',
+        example: {
+          message:
+            'Email verified successfully. You can now use all features.',
+        },
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.TooManyRequests,
+    ],
+  } as ApiEndpointOptions,
+
+  resendVerification: {
+    summary: 'Resend verification email',
+    description:
+      'Resend the email verification link. Always returns success to prevent email enumeration.',
+    responses: [
+      {
+        status: 200,
+        description: 'If email exists and is not verified, a new link is sent',
+        example: {
+          message:
+            'If your email is registered and not yet verified, a new verification link has been sent.',
+        },
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.TooManyRequests,
+    ],
+  } as ApiEndpointOptions,
+
+  // TODO: Implement these endpoints
+  // - logout: Invalidate refresh token (refresh_token table already exists)
 };

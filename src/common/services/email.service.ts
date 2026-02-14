@@ -2,29 +2,25 @@ import { Injectable, Inject } from '@nestjs/common';
 import type { LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { Resend } from 'resend';
 
 /**
  * Email Service
  *
- * Foundation for sending emails throughout the application.
- * Currently logs emails to console instead of sending them.
- *
- * To integrate a real provider:
- * 1. Install the provider SDK (e.g., npm install @sendgrid/mail or resend)
- * 2. Add API key to .env (e.g., SENDGRID_API_KEY or RESEND_API_KEY)
- * 3. Replace the log-only implementations below with actual sends
+ * Sends emails via Resend (https://resend.com).
+ * Falls back to console logging when RESEND_API_KEY is not set.
  *
  * All email methods follow the same pattern:
- * - Build the email content
- * - Send via provider (or log in dev)
- * - Return success/failure
+ * - Build the email content (subject + HTML)
+ * - Send via Resend (or log in dev when no API key)
+ * - Never throw on failure — email errors shouldn't break the main flow
  */
 @Injectable()
 export class EmailService {
   private readonly fromEmail: string;
   private readonly fromName: string;
   private readonly frontendUrl: string;
-  private readonly isProduction: boolean;
+  private readonly resend: Resend | null;
 
   constructor(
     private configService: ConfigService,
@@ -37,8 +33,19 @@ export class EmailService {
       this.configService.get('EMAIL_FROM_NAME') || 'BeeActive';
     this.frontendUrl =
       this.configService.get('FRONTEND_URL') || 'http://localhost:4200';
-    this.isProduction =
-      this.configService.get('NODE_ENV') === 'production';
+
+    // Initialize Resend if API key is available
+    const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
+    if (resendApiKey) {
+      this.resend = new Resend(resendApiKey);
+      this.logger.log('Resend email provider initialized', 'EmailService');
+    } else {
+      this.resend = null;
+      this.logger.warn(
+        'RESEND_API_KEY not set — emails will be logged to console only',
+        'EmailService',
+      );
+    }
   }
 
   // =====================================================
@@ -133,7 +140,7 @@ export class EmailService {
   }
 
   // =====================================================
-  // NOTIFICATION EMAILS (future)
+  // NOTIFICATION EMAILS
   // =====================================================
 
   /**
@@ -153,55 +160,60 @@ export class EmailService {
   }
 
   // =====================================================
-  // CORE SEND METHOD
+  // CORE SEND METHOD (Resend Integration)
   // =====================================================
 
   /**
-   * Send an email
+   * Send an email via Resend
    *
-   * Currently logs to console. Replace this method body with your
-   * email provider integration:
-   *
-   * SendGrid:
-   *   const sgMail = require('@sendgrid/mail');
-   *   sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'));
-   *   await sgMail.send({ to, from, subject, html });
-   *
-   * Resend:
-   *   const resend = new Resend(this.configService.get('RESEND_API_KEY'));
-   *   await resend.emails.send({ from, to, subject, html });
-   *
-   * AWS SES:
-   *   const ses = new SESClient({ region: 'eu-west-1' });
-   *   await ses.send(new SendEmailCommand({ ... }));
+   * Falls back to console logging if RESEND_API_KEY is not configured.
+   * Never throws — email failure should not break the main application flow.
    */
   private async send(
     to: string,
     subject: string,
     html: string,
   ): Promise<void> {
-    // TODO: Replace with real email provider when ready
-    // For now, log the email details
-    this.logger.log(
-      `[EMAIL] To: ${to} | Subject: ${subject} | From: ${this.fromName} <${this.fromEmail}>`,
-      'EmailService',
-    );
+    const from = `${this.fromName} <${this.fromEmail}>`;
 
-    if (!this.isProduction) {
-      // In development, log the full HTML for debugging
+    if (this.resend) {
+      try {
+        const { data, error } = await this.resend.emails.send({
+          from,
+          to: [to],
+          subject,
+          html,
+        });
+
+        if (error) {
+          this.logger.error(
+            `Failed to send email to ${to}: ${error.message}`,
+            'EmailService',
+          );
+          return;
+        }
+
+        this.logger.log(
+          `Email sent to ${to} | Subject: "${subject}" | ID: ${data?.id}`,
+          'EmailService',
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to send email to ${to}: ${(error as Error).message}`,
+          'EmailService',
+        );
+        // Don't throw — email failure shouldn't break the main flow
+      }
+    } else {
+      // No Resend API key — log email to console for development
+      this.logger.log(
+        `[EMAIL - DEV MODE] To: ${to} | Subject: ${subject} | From: ${from}`,
+        'EmailService',
+      );
       this.logger.debug?.(
         `[EMAIL HTML] ${html.substring(0, 200)}...`,
         'EmailService',
       );
     }
-
-    // When you integrate a provider, add error handling:
-    // try {
-    //   await provider.send({ to, from: `${this.fromName} <${this.fromEmail}>`, subject, html });
-    //   this.logger.log(`Email sent to ${to}: ${subject}`, 'EmailService');
-    // } catch (error) {
-    //   this.logger.error(`Failed to send email to ${to}: ${error.message}`, 'EmailService');
-    //   // Don't throw — email failure shouldn't break the main flow
-    // }
   }
 }

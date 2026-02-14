@@ -162,6 +162,68 @@ export class UserService {
   }
 
   /**
+   * Generate email verification token
+   *
+   * Creates a secure token, hashes it, and stores hash in database.
+   * Returns plain token to send to user via email.
+   * Token is valid for 24 hours.
+   *
+   * @param user - User object
+   * @param transaction - Optional Sequelize transaction
+   * @returns Plain token (to send in email)
+   */
+  async generateEmailVerificationToken(
+    user: User,
+    transaction?: Transaction,
+  ): Promise<string> {
+    const { token, hashedToken, expiresAt } =
+      this.cryptoService.generateTokenWithExpiry(24); // 24 hour validity
+
+    user.emailVerificationToken = hashedToken;
+    user.emailVerificationExpires = expiresAt;
+    await user.save({ transaction });
+
+    return token; // Return plain token to send via email
+  }
+
+  /**
+   * Find user by email verification token
+   *
+   * @param token - Plain token from email link
+   * @returns User object or null if token invalid/expired
+   */
+  async findByEmailVerificationToken(token: string): Promise<User | null> {
+    const hashedToken = this.cryptoService.hashToken(token);
+
+    const user = await this.userModel.findOne({
+      where: {
+        emailVerificationToken: hashedToken,
+      },
+    });
+
+    // Check if token is expired
+    if (user && user.emailVerificationExpires) {
+      if (new Date() > user.emailVerificationExpires) {
+        return null; // Token expired
+      }
+    }
+
+    return user;
+  }
+
+  /**
+   * Mark user email as verified
+   *
+   * @param user - User object
+   */
+  async markEmailVerified(user: User): Promise<void> {
+    user.isEmailVerified = true;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpires = null;
+    await user.save();
+  }
+
+  /**
    * Generate password reset token
    *
    * Creates a secure token, hashes it, and stores hash in database.

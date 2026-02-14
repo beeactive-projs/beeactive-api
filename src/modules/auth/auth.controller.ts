@@ -7,6 +7,8 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { AuthDocs } from '../../common/docs/auth.docs';
 
@@ -35,7 +37,7 @@ export class AuthController {
    * Rate limit: 3 requests per hour (prevents spam account creation)
    */
   @Post('register')
-  @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 requests per hour
+  // @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 requests per hour
   @ApiEndpoint({ ...AuthDocs.register, body: RegisterDto })
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
@@ -92,5 +94,36 @@ export class AuthController {
   @ApiEndpoint({ ...AuthDocs.resetPassword, body: ResetPasswordDto })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  /**
+   * Verify email
+   *
+   * Verify user email using token sent during registration.
+   * Rate limit: 5 requests per hour
+   */
+  @Post('verify-email')
+  @Throttle({ default: { limit: 5, ttl: 3600000 } }) // 5 requests per hour
+  @ApiEndpoint({ ...AuthDocs.verifyEmail, body: VerifyEmailDto })
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+    return this.authService.verifyEmail(verifyEmailDto);
+  }
+
+  /**
+   * Resend verification email
+   *
+   * Resend email verification link if not yet verified.
+   * Rate limit: 2 requests per hour (prevents email spam)
+   */
+  @Post('resend-verification')
+  @Throttle({ default: { limit: 2, ttl: 3600000 } }) // 2 requests per hour
+  @ApiEndpoint({
+    ...AuthDocs.resendVerification,
+    body: ResendVerificationDto,
+  })
+  async resendVerification(
+    @Body() resendVerificationDto: ResendVerificationDto,
+  ) {
+    return this.authService.resendVerification(resendVerificationDto);
   }
 }

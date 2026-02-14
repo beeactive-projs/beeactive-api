@@ -48,4 +48,12 @@ export const envValidationSchema = Joi.object({
 
   // Bcrypt rounds (default: 12)
   BCRYPT_ROUNDS: Joi.number().min(10).max(15).default(12),
+
+  // Resend API key for sending emails
+  // Optional in dev (emails logged to console), recommended for all environments
+  RESEND_API_KEY: Joi.string().optional(),
+
+  // Email sender configuration
+  EMAIL_FROM: Joi.string().email().optional(),
+  EMAIL_FROM_NAME: Joi.string().optional(),
 });

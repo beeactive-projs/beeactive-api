@@ -13,6 +13,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { RoleService } from '../role/role.service';
 import { ProfileService } from '../profile/profile.service';
 import { Sequelize } from 'sequelize-typescript';
@@ -83,6 +85,13 @@ export class AuthService {
       // Create empty participant profile (filled in later by user)
       await this.profileService.createParticipantProfile(user.id, transaction);
 
+      // Generate email verification token (hashed, 24h expiry)
+      const verificationToken =
+        await this.userService.generateEmailVerificationToken(
+          user,
+          transaction,
+        );
+
       // Commit transaction — all operations succeed together
       await transaction.commit();
 
@@ -95,6 +104,25 @@ export class AuthService {
 
       this.logger.log(`User registered: ${user.email}`, 'AuthService');
 
+      // Send emails (non-blocking — failures won't break registration)
+      this.emailService
+        .sendEmailVerification(user.email, verificationToken)
+        .catch((err) =>
+          this.logger.error(
+            `Failed to send verification email: ${err.message}`,
+            'AuthService',
+          ),
+        );
+
+      this.emailService
+        .sendWelcomeEmail(user.email, user.firstName)
+        .catch((err) =>
+          this.logger.error(
+            `Failed to send welcome email: ${err.message}`,
+            'AuthService',
+          ),
+        );
+
       return {
         ...tokens,
         user: {
@@ -102,6 +130,7 @@ export class AuthService {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          isEmailVerified: false,
           roles: roleNames,
         },
       };
@@ -185,6 +214,7 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        isEmailVerified: user.isEmailVerified,
         roles: roleNames,
       },
     };
@@ -302,6 +332,82 @@ export class AuthService {
     return {
       message:
         'If your email is registered, you will receive a password reset link.',
+    };
+  }
+
+  /**
+   * Verify email address
+   *
+   * Flow:
+   * 1. Hash the submitted token
+   * 2. Find user by hashed token
+   * 3. Check token expiration (24h)
+   * 4. Mark email as verified
+   * 5. Clear verification token
+   *
+   * @param verifyEmailDto - Token from email link
+   * @returns Success message
+   * @throws BadRequestException if token invalid/expired
+   */
+  async verifyEmail(verifyEmailDto: VerifyEmailDto) {
+    const user = await this.userService.findByEmailVerificationToken(
+      verifyEmailDto.token,
+    );
+
+    if (!user) {
+      throw new BadRequestException(
+        'Invalid or expired verification token',
+      );
+    }
+
+    if (user.isEmailVerified) {
+      return { message: 'Email is already verified.' };
+    }
+
+    await this.userService.markEmailVerified(user);
+
+    this.logger.log(`Email verified for user: ${user.email}`, 'AuthService');
+
+    return {
+      message: 'Email verified successfully. You can now use all features.',
+    };
+  }
+
+  /**
+   * Resend email verification
+   *
+   * Generates a new verification token and sends a new email.
+   * Always returns success to prevent email enumeration.
+   *
+   * @param resendVerificationDto - Email address
+   * @returns Success message
+   */
+  async resendVerification(resendVerificationDto: ResendVerificationDto) {
+    const user = await this.userService.findByEmail(
+      resendVerificationDto.email,
+    );
+
+    if (user && !user.isEmailVerified) {
+      // Generate new verification token
+      const verificationToken =
+        await this.userService.generateEmailVerificationToken(user);
+
+      // Send verification email
+      await this.emailService.sendEmailVerification(
+        user.email,
+        verificationToken,
+      );
+
+      this.logger.log(
+        `Verification email resent to: ${user.email}`,
+        'AuthService',
+      );
+    }
+
+    // Always return success (don't reveal if email exists or is already verified)
+    return {
+      message:
+        'If your email is registered and not yet verified, a new verification link has been sent.',
     };
   }
 
