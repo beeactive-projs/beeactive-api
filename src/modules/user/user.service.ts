@@ -1,6 +1,7 @@
 import { Injectable, ConflictException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/sequelize';
+import { Transaction } from 'sequelize';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -62,7 +63,10 @@ export class UserService {
    * @returns Created user object
    * @throws ConflictException if email already exists
    */
-  async create(userData: CreateUserDto): Promise<User> {
+  async create(
+    userData: CreateUserDto,
+    transaction?: Transaction,
+  ): Promise<User> {
     // Check if user already exists (do this BEFORE expensive bcrypt operation)
     const existingUser = await this.findByEmail(userData.email);
     if (existingUser) {
@@ -75,13 +79,16 @@ export class UserService {
     const hashedPassword = await bcrypt.hash(userData.password, bcryptRounds);
 
     // Create user
-    const user = await this.userModel.create({
-      email: userData.email,
-      passwordHash: hashedPassword,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      phone: userData.phone,
-    });
+    const user = await this.userModel.create(
+      {
+        email: userData.email,
+        passwordHash: hashedPassword,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phone: userData.phone,
+      },
+      { transaction },
+    );
 
     return user;
   }

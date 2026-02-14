@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Transaction } from 'sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { ParticipantProfile } from './entities/participant-profile.entity';
 import { OrganizerProfile } from './entities/organizer-profile.entity';
@@ -44,8 +45,14 @@ export class ProfileService {
   /**
    * Create empty participant profile (called during registration)
    */
-  async createParticipantProfile(userId: string): Promise<ParticipantProfile> {
-    return this.participantProfileModel.create({ userId: userId });
+  async createParticipantProfile(
+    userId: string,
+    transaction?: Transaction,
+  ): Promise<ParticipantProfile> {
+    return this.participantProfileModel.create(
+      { userId: userId },
+      { transaction },
+    );
   }
 
   /**

@@ -1,6 +1,7 @@
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Transaction } from 'sequelize';
 import { Role } from './entities/role.entity';
 import { Permission } from './entities/permission.entity';
 import { UserRole } from './entities/user-role.entity';
@@ -61,6 +62,7 @@ export class RoleService {
     roleId: string,
     organizationId?: string,
     expiresAt?: Date,
+    transaction?: Transaction,
   ): Promise<UserRole> {
     const existing = await this.userRoleModel.findOne({
       where: {
@@ -68,18 +70,22 @@ export class RoleService {
         roleId: roleId,
         organizationId: organizationId || null,
       },
+      transaction,
     });
 
     if (existing) {
       return existing;
     }
 
-    return this.userRoleModel.create({
-      userId: userId,
-      roleId: roleId,
-      organizationId: organizationId,
-      expiresAt: expiresAt,
-    });
+    return this.userRoleModel.create(
+      {
+        userId: userId,
+        roleId: roleId,
+        organizationId: organizationId,
+        expiresAt: expiresAt,
+      },
+      { transaction },
+    );
   }
 
   async assignRoleToUserByName(
@@ -87,9 +93,16 @@ export class RoleService {
     roleName: string,
     organizationId?: string,
     expiresAt?: Date,
+    transaction?: Transaction,
   ): Promise<UserRole> {
     const role = await this.findByName(roleName);
-    return this.assignRoleToUser(userId, role.id, organizationId, expiresAt);
+    return this.assignRoleToUser(
+      userId,
+      role.id,
+      organizationId,
+      expiresAt,
+      transaction,
+    );
   }
 
   async removeRoleFromUser(

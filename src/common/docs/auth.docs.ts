@@ -21,8 +21,8 @@ export const AuthDocs = {
           user: {
             id: '550e8400-e29b-41d4-a716-446655440000',
             email: 'user@example.com',
-            first_name: 'John',
-            last_name: 'Doe',
+            firstName: 'John',
+            lastName: 'Doe',
             roles: ['PARTICIPANT'],
           },
         },
@@ -47,8 +47,8 @@ export const AuthDocs = {
           user: {
             id: '550e8400-e29b-41d4-a716-446655440000',
             email: 'user@example.com',
-            first_name: 'John',
-            last_name: 'Doe',
+            firstName: 'John',
+            lastName: 'Doe',
             roles: ['PARTICIPANT', 'ORGANIZER'],
           },
         },

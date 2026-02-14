@@ -22,7 +22,7 @@ export const OrganizationDocs = {
           slug: 'johns-fitness-studio',
           description: 'Personal training and group sessions',
           timezone: 'Europe/Bucharest',
-          is_active: true,
+          isActive: true,
         },
       },
       ApiStandardResponses.BadRequest,
@@ -85,7 +85,7 @@ export const OrganizationDocs = {
   getMembers: {
     summary: 'List organization members',
     description:
-      'Returns all members. If you are the owner AND a member has shared_health_info=true, their health data is included.',
+      'Returns all members. If you are the owner AND a member has sharedHealthInfo=true, their health data is included.',
     auth: true,
     responses: [
       {
@@ -94,13 +94,13 @@ export const OrganizationDocs = {
         example: [
           {
             id: 'member-uuid',
-            user_id: 'user-uuid',
-            first_name: 'Jane',
-            last_name: 'Doe',
-            is_owner: false,
-            shared_health_info: true,
-            health_data: {
-              fitness_level: 'INTERMEDIATE',
+            userId: 'user-uuid',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            isOwner: false,
+            sharedHealthInfo: true,
+            healthData: {
+              fitnessLevel: 'INTERMEDIATE',
               goals: ['weight_loss'],
             },
           },
@@ -122,7 +122,7 @@ export const OrganizationDocs = {
         description: 'Membership updated',
         example: {
           id: 'member-uuid',
-          shared_health_info: true,
+          sharedHealthInfo: true,
           nickname: 'Johnny',
         },
       },

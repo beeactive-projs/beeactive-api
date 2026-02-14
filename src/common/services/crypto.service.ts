@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHash, timingSafeEqual } from 'crypto';
 
 /**
  * Crypto Service
@@ -49,7 +49,11 @@ export class CryptoService {
   }
 
   /**
-   * Compare a plain token with a hashed token
+   * Compare a plain token with a hashed token (timing-safe)
+   *
+   * Uses crypto.timingSafeEqual() to prevent timing attacks.
+   * A timing attack measures how long comparison takes to find
+   * which characters match — timingSafeEqual always takes the same time.
    *
    * @param plainToken - The token provided by user
    * @param hashedToken - The hashed token from database
@@ -61,7 +65,16 @@ export class CryptoService {
    */
   compareToken(plainToken: string, hashedToken: string): boolean {
     const hashedInput = this.hashToken(plainToken);
-    return hashedInput === hashedToken;
+
+    // Both are SHA-256 hex strings (64 chars), so same length is guaranteed
+    const bufferA = Buffer.from(hashedInput, 'hex');
+    const bufferB = Buffer.from(hashedToken, 'hex');
+
+    if (bufferA.length !== bufferB.length) {
+      return false;
+    }
+
+    return timingSafeEqual(bufferA, bufferB);
   }
 
   /**

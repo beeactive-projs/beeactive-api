@@ -10,7 +10,7 @@ export const InvitationDocs = {
   create: {
     summary: 'Send an invitation',
     description:
-      'Invite someone to join your organization. Returns an invitation_link for testing (no email sent).',
+      'Invite someone to join your organization. Returns an invitationLink for testing (no email sent).',
     auth: true,
     responses: [
       {
@@ -20,10 +20,10 @@ export const InvitationDocs = {
           invitation: {
             id: 'invitation-uuid',
             email: 'mike@trainer.com',
-            organization_id: 'org-uuid',
-            expires_at: '2026-02-22T00:00:00.000Z',
+            organizationId: 'org-uuid',
+            expiresAt: '2026-02-22T00:00:00.000Z',
           },
-          invitation_link:
+          invitationLink:
             'http://localhost:4200/accept-invitation?token=abc123...',
         },
       },
@@ -45,11 +45,11 @@ export const InvitationDocs = {
         example: [
           {
             id: 'invitation-uuid',
-            inviter: { first_name: 'Sarah', last_name: 'Johnson' },
+            inviter: { firstName: 'Sarah', lastName: 'Johnson' },
             organization: { name: "Sarah's Fitness Studio" },
-            role: { display_name: 'Participant' },
+            role: { displayName: 'Participant' },
             message: 'Join my fitness studio!',
-            expires_at: '2026-02-22T00:00:00.000Z',
+            expiresAt: '2026-02-22T00:00:00.000Z',
           },
         ],
       },
@@ -68,7 +68,7 @@ export const InvitationDocs = {
         description: 'Invitation accepted',
         example: {
           message: 'Invitation accepted successfully',
-          organization_id: 'org-uuid',
+          organizationId: 'org-uuid',
         },
       },
       {

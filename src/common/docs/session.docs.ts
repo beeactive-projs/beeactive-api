@@ -10,7 +10,7 @@ export const SessionDocs = {
   create: {
     summary: 'Create a new session',
     description:
-      'Create a training session. Requires ORGANIZER role. If organization_id is provided, you must be a member.',
+      'Create a training session. Requires ORGANIZER role. If organizationId is provided, you must be a member.',
     auth: true,
     responses: [
       {
@@ -19,10 +19,10 @@ export const SessionDocs = {
         example: {
           id: '550e8400-e29b-41d4-a716-446655440000',
           title: 'Morning Yoga Flow',
-          session_type: 'GROUP',
+          sessionType: 'GROUP',
           visibility: 'MEMBERS',
-          scheduled_at: '2026-02-15T09:00:00.000Z',
-          duration_minutes: 60,
+          scheduledAt: '2026-02-15T09:00:00.000Z',
+          durationMinutes: 60,
           status: 'SCHEDULED',
         },
       },
@@ -105,8 +105,8 @@ export const SessionDocs = {
         description: 'Successfully joined session',
         example: {
           id: 'participant-uuid',
-          session_id: 'session-uuid',
-          user_id: 'user-uuid',
+          sessionId: 'session-uuid',
+          userId: 'user-uuid',
           status: 'REGISTERED',
         },
       },

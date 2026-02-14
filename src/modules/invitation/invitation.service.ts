@@ -54,7 +54,7 @@ export class InvitationService {
   async create(
     inviterId: string,
     dto: CreateInvitationDto,
-  ): Promise<{ invitation: Invitation; invitation_link: string }> {
+  ): Promise<{ invitation: Invitation; invitationLink: string }> {
     // Verify inviter is owner of the organization
     const org = await this.organizationService.getById(
       dto.organizationId,
@@ -113,7 +113,7 @@ export class InvitationService {
 
     return {
       invitation,
-      invitation_link: invitationLink,
+      invitationLink,
     };
   }
 
@@ -219,10 +219,10 @@ export class InvitationService {
         },
         {
           model: Role,
-          attributes: ['id', 'name', 'display_name'],
+          attributes: ['id', 'name', 'displayName'],
         },
       ],
-      order: [['created_at', 'DESC']],
+      order: [['createdAt', 'DESC']],
     });
   }
 
@@ -241,10 +241,10 @@ export class InvitationService {
       include: [
         {
           model: Role,
-          attributes: ['id', 'name', 'display_name'],
+          attributes: ['id', 'name', 'displayName'],
         },
       ],
-      order: [['created_at', 'DESC']],
+      order: [['createdAt', 'DESC']],
     });
   }
 }

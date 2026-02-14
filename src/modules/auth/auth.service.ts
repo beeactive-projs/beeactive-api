@@ -62,19 +62,26 @@ export class AuthService {
    */
   async register(registerDto: RegisterDto) {
     // ✅ IMPROVEMENT: Use transaction for atomicity
+    // All DB operations share this transaction — if any fails, ALL are rolled back
     const transaction = await this.sequelize.transaction();
 
     try {
-      // Create user
-      const user = await this.userService.create(registerDto);
+      // Create user (pass transaction so it's part of the atomic operation)
+      const user = await this.userService.create(registerDto, transaction);
 
       // Assign default role
-      await this.roleService.assignRoleToUserByName(user.id, 'PARTICIPANT');
+      await this.roleService.assignRoleToUserByName(
+        user.id,
+        'PARTICIPANT',
+        undefined,
+        undefined,
+        transaction,
+      );
 
       // Create empty participant profile (filled in later by user)
-      await this.profileService.createParticipantProfile(user.id);
+      await this.profileService.createParticipantProfile(user.id, transaction);
 
-      // Commit transaction
+      // Commit transaction — all operations succeed together
       await transaction.commit();
 
       // Generate tokens

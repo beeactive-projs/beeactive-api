@@ -122,7 +122,7 @@ export class OrganizationService {
       include: [
         {
           model: Organization,
-          where: { is_active: true },
+          where: { isActive: true },
         },
       ],
     });
@@ -232,12 +232,12 @@ export class OrganizationService {
         });
 
         if (profile) {
-          memberData.health_data = {
+          memberData.healthData = {
             fitnessLevel: profile.fitnessLevel,
             goals: profile.goals,
-            medical_conditions: profile.medicalConditions,
-            height_cm: profile.heightCm,
-            weight_kg: profile.weightKg,
+            medicalConditions: profile.medicalConditions,
+            heightCm: profile.heightCm,
+            weightKg: profile.weightKg,
             notes: profile.notes,
           };
         }

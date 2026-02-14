@@ -5,7 +5,7 @@ import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { WinstonModule } from 'nest-winston';
 import { getDatabaseConfig } from './config/database.config';
 import { envValidationSchema } from './config/env.validation';
@@ -19,6 +19,7 @@ import { ProfileModule } from './modules/profile/profile.module';
 import { OrganizationModule } from './modules/organization/organization.module';
 import { SessionModule } from './modules/session/session.module';
 import { InvitationModule } from './modules/invitation/invitation.module';
+import { CamelCaseInterceptor } from './common/interceptors/camel-case.interceptor';
 
 /**
  * App Module
@@ -111,6 +112,12 @@ import { InvitationModule } from './modules/invitation/invitation.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // ✅ CONVENTION: Transform all response keys to camelCase
+    // DB uses snake_case, API responses use camelCase
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: CamelCaseInterceptor,
     },
   ],
 })

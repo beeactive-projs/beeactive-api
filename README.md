@@ -1,98 +1,173 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# BeeActive API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A comprehensive REST API for managing fitness training sessions, trainers, and clients. Built with [NestJS](https://nestjs.com), [Sequelize](https://sequelize.org), and [MySQL](https://www.mysql.com).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+**Production URL:** https://beeactive-api-production.up.railway.app  
+**Swagger Docs:** https://beeactive-api-production.up.railway.app/api/docs
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Tech Stack
 
-## Project setup
+- **Framework:** NestJS (TypeScript)
+- **ORM:** Sequelize with MySQL
+- **Auth:** Passport.js + JWT (access + refresh tokens)
+- **Logging:** Winston (structured JSON logs)
+- **Docs:** Swagger / OpenAPI
+- **Deployment:** Railway
+
+---
+
+## Project Setup
 
 ```bash
-$ npm install
+# Install dependencies
+npm install
+
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your database credentials and secrets
+
+# Run database migrations
+cd migrations && sh RUN_MIGRATIONS.sh
+
+# Start in development mode (watch)
+npm run start:dev
+
+# Start in production mode
+npm run start:prod
 ```
 
-## Compile and run the project
+**Swagger docs** are available at `http://localhost:3000/api/docs`  
+**Health check** at `http://localhost:3000/health`
 
-```bash
-# development
-$ npm run start
+---
 
-# watch mode
-$ npm run start:dev
+## Naming Conventions
 
-# production mode
-$ npm run start:prod
+### Database: `snake_case`
+
+All database tables and columns use `snake_case`:
+
+```sql
+-- Tables
+user, organization, session_participant, organizer_profile
+
+-- Columns
+first_name, last_name, created_at, is_active, shared_health_info
 ```
 
-## Run tests
+### API Responses: `camelCase`
 
-```bash
-# unit tests
-$ npm run test
+All API responses return `camelCase` keys:
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+```json
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "isActive": true,
+  "createdAt": "2026-01-15T10:30:00.000Z",
+  "sharedHealthInfo": true,
+  "healthData": {
+    "fitnessLevel": "INTERMEDIATE",
+    "heightCm": 180.5,
+    "weightKg": 75.0
+  }
+}
 ```
 
-## Deployment
+### How It Works
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+1. **Sequelize `underscored: true`** — maps camelCase model properties (e.g., `firstName`) to snake_case DB columns (e.g., `first_name`) automatically.
+2. **`CamelCaseInterceptor`** — a global NestJS interceptor that transforms all response object keys to camelCase. This acts as a safety net to ensure consistency even for manually constructed objects.
+3. **Swagger doc examples** — all use camelCase to match the actual API response format.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Rules
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+| Layer | Convention | Example |
+|-------|-----------|---------|
+| Database columns | `snake_case` | `first_name`, `created_at` |
+| SQL migrations | `snake_case` | `ALTER TABLE user ADD COLUMN last_login_at` |
+| Sequelize model properties | `camelCase` | `firstName`, `createdAt` |
+| Sequelize queries | `camelCase` (model property names) | `where: { isActive: true }` |
+| DTO properties | `camelCase` | `firstName`, `organizationId` |
+| API request bodies | `camelCase` | `{ "firstName": "John" }` |
+| API responses | `camelCase` | `{ "firstName": "John" }` |
+| Swagger examples | `camelCase` | `firstName`, `createdAt` |
+
+---
+
+## Project Structure
+
+```
+src/
+├── common/                    # Shared utilities
+│   ├── decorators/            # Custom decorators (@Public, @Roles, @ApiEndpoint)
+│   ├── docs/                  # Swagger documentation (per module)
+│   ├── filters/               # Exception filters
+│   ├── guards/                # Auth & permission guards
+│   ├── interceptors/          # Response interceptors (CamelCaseInterceptor)
+│   ├── logger/                # Winston logger config
+│   ├── middleware/             # Request ID middleware
+│   ├── services/              # Shared services (CryptoService)
+│   └── validators/            # Custom validators
+├── config/                    # App configuration
+│   ├── database.config.ts     # Sequelize/MySQL config
+│   ├── env.validation.ts      # Environment variable validation (Joi)
+│   └── jwt.config.ts          # JWT config
+├── modules/
+│   ├── auth/                  # Authentication (register, login, refresh, password reset)
+│   ├── health/                # Health check endpoint
+│   ├── invitation/            # Organization invitations
+│   ├── organization/          # Organizations, members, health data sharing
+│   ├── profile/               # Participant & organizer profiles
+│   ├── role/                  # RBAC (roles & permissions)
+│   ├── session/               # Training sessions
+│   └── user/                  # User management
+├── app.module.ts              # Root module
+└── main.ts                    # Application entry point
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## Security Features
 
-Check out a few resources that may come in handy when working with NestJS:
+- JWT access tokens (2h) + refresh tokens (7d)
+- bcrypt password hashing (12 rounds)
+- Account lockout after 5 failed login attempts
+- Rate limiting (global + per-endpoint)
+- Helmet security headers
+- Strong password enforcement
+- Token hashing (SHA-256) before DB storage with timing-safe comparison
+- Input validation and sanitization (class-validator + whitelist)
+- Environment validation on startup (Joi)
+- Global error filter (no stack traces in production)
+- Request ID tracking
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+---
 
-## Support
+## RBAC System
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+5 roles: `SUPER_ADMIN`, `ADMIN`, `ORGANIZER`, `PARTICIPANT`, `GUEST`  
+18 granular permissions with role-permission mapping via junction table.
 
-## Stay in touch
+---
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## Environment Variables
+
+See `.env.example` for all required and optional variables.
+
+Key variables:
+- `DATABASE_URL` — MySQL connection string
+- `JWT_SECRET` — Secret for signing access tokens (required)
+- `JWT_REFRESH_SECRET` — Secret for signing refresh tokens (required)
+- `JWT_EXPIRES_IN` — Access token lifetime (default: `2h`)
+- `JWT_REFRESH_EXPIRES_IN` — Refresh token lifetime (default: `7d`)
+- `BCRYPT_ROUNDS` — Password hashing rounds (default: `12`)
+- `FRONTEND_URL` — Frontend URL for CORS and email links
+
+---
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Private project.
