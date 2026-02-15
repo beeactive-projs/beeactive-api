@@ -11,8 +11,8 @@ INSERT INTO `role` (`id`, `name`, `display_name`, `description`, `level`, `is_sy
 ('7261bd94-006c-11f1-b74f-0242ac110002', 'SUPER_ADMIN', 'Super Administrator', 'Full platform access - platform owner', 1, 1, NOW(), NOW()),
 ('7261d03c-006c-11f1-b74f-0242ac110002', 'ADMIN', 'Administrator', 'Platform administration and user management', 2, 1, NOW(), NOW()),
 ('7261d117-006c-11f1-b74f-0242ac110002', 'SUPPORT', 'Support Agent', 'Customer support - read-only access to help users', 3, 1, NOW(), NOW()),
-('7261d176-006c-11f1-b74f-0242ac110002', 'ORGANIZER', 'Organizer', 'Can create and manage sessions, invite participants', 5, 1, NOW(), NOW()),
-('7261d1cc-006c-11f1-b74f-0242ac110002', 'PARTICIPANT', 'Participant', 'Can join sessions and manage own profile', 10, 1, NOW(), NOW());
+('7261d176-006c-11f1-b74f-0242ac110002', 'INSTRUCTOR', 'Instructor', 'Can create and manage sessions, groups, and clients', 5, 1, NOW(), NOW()),
+('7261d1cc-006c-11f1-b74f-0242ac110002', 'USER', 'User', 'Can join sessions, groups, and manage own profile', 10, 1, NOW(), NOW());
 
 -- --------------------------------------------------------
 -- Insert Permissions
@@ -33,23 +33,24 @@ INSERT INTO `permission` (`id`, `name`, `display_name`, `description`, `resource
 ('72653de0-006c-11f1-b74f-0242ac110002', 'session.delete', 'Delete Sessions', 'Can cancel/delete sessions', 'session', 'delete', NOW()),
 ('72653e49-006c-11f1-b74f-0242ac110002', 'session.manage', 'Manage All Sessions', 'Full session management across all users', 'session', 'manage', NOW());
 
--- Organization Permissions
+-- Group Permissions (was organization)
 INSERT INTO `permission` (`id`, `name`, `display_name`, `description`, `resource`, `action`, `created_at`) VALUES
-('72653ef6-006c-11f1-b74f-0242ac110002', 'organization.create', 'Create Organizations', 'Can create organizations', 'organization', 'create', NOW()),
-('72653f64-006c-11f1-b74f-0242ac110002', 'organization.read', 'View Organizations', 'Can view organization details', 'organization', 'read', NOW()),
-('72653fca-006c-11f1-b74f-0242ac110002', 'organization.update', 'Update Organizations', 'Can modify organizations', 'organization', 'update', NOW()),
-('7265402f-006c-11f1-b74f-0242ac110002', 'organization.delete', 'Delete Organizations', 'Can delete organizations', 'organization', 'delete', NOW());
+('72653ef6-006c-11f1-b74f-0242ac110002', 'group.create', 'Create Groups', 'Can create groups', 'group', 'create', NOW()),
+('72653f64-006c-11f1-b74f-0242ac110002', 'group.read', 'View Groups', 'Can view group details', 'group', 'read', NOW()),
+('72653fca-006c-11f1-b74f-0242ac110002', 'group.update', 'Update Groups', 'Can modify groups', 'group', 'update', NOW()),
+('7265402f-006c-11f1-b74f-0242ac110002', 'group.delete', 'Delete Groups', 'Can delete groups', 'group', 'delete', NOW());
 
 -- Invitation Permissions
 INSERT INTO `permission` (`id`, `name`, `display_name`, `description`, `resource`, `action`, `created_at`) VALUES
 ('726540a4-006c-11f1-b74f-0242ac110002', 'invitation.send', 'Send Invitations', 'Can send invitations', 'invitation', 'create', NOW()),
 ('72654114-006c-11f1-b74f-0242ac110002', 'invitation.manage', 'Manage Invitations', 'Full invitation management', 'invitation', 'manage', NOW());
 
--- Feature & Subscription Permissions
+-- Client Permissions
 INSERT INTO `permission` (`id`, `name`, `display_name`, `description`, `resource`, `action`, `created_at`) VALUES
-('72654177-006c-11f1-b74f-0242ac110002', 'feature.manage', 'Manage Features', 'Can manage feature flags', 'feature', 'manage', NOW()),
-('726541d7-006c-11f1-b74f-0242ac110002', 'subscription.read', 'View Subscriptions', 'Can view subscription info', 'subscription', 'read', NOW()),
-('72654260-006c-11f1-b74f-0242ac110002', 'subscription.manage', 'Manage Subscriptions', 'Full subscription management', 'subscription', 'manage', NOW());
+('72654177-006c-11f1-b74f-0242ac110002', 'client.create', 'Create Client Relationships', 'Can create instructor-client relationships', 'client', 'create', NOW()),
+('726541d7-006c-11f1-b74f-0242ac110002', 'client.read', 'View Clients', 'Can view client information', 'client', 'read', NOW()),
+('72654260-006c-11f1-b74f-0242ac110002', 'client.update', 'Update Clients', 'Can update client information', 'client', 'update', NOW()),
+('726542c0-006c-11f1-b74f-0242ac110002', 'client.delete', 'Delete Clients', 'Can remove client relationships', 'client', 'delete', NOW());
 
 -- --------------------------------------------------------
 -- Assign Permissions to SUPER_ADMIN (All Permissions)
@@ -70,15 +71,15 @@ INSERT INTO `role_permission` (`id`, `role_id`, `permission_id`, `created_at`) V
 (UUID(), '7261d03c-006c-11f1-b74f-0242ac110002', '72653d13-006c-11f1-b74f-0242ac110002', NOW()), -- session.read
 (UUID(), '7261d03c-006c-11f1-b74f-0242ac110002', '72653e49-006c-11f1-b74f-0242ac110002', NOW()), -- session.manage
 
--- Organization management
-(UUID(), '7261d03c-006c-11f1-b74f-0242ac110002', '72653f64-006c-11f1-b74f-0242ac110002', NOW()), -- organization.read
-(UUID(), '7261d03c-006c-11f1-b74f-0242ac110002', '72653fca-006c-11f1-b74f-0242ac110002', NOW()), -- organization.update
+-- Group management
+(UUID(), '7261d03c-006c-11f1-b74f-0242ac110002', '72653f64-006c-11f1-b74f-0242ac110002', NOW()), -- group.read
+(UUID(), '7261d03c-006c-11f1-b74f-0242ac110002', '72653fca-006c-11f1-b74f-0242ac110002', NOW()), -- group.update
 
 -- Invitation management
 (UUID(), '7261d03c-006c-11f1-b74f-0242ac110002', '72654114-006c-11f1-b74f-0242ac110002', NOW()), -- invitation.manage
 
--- Subscription viewing
-(UUID(), '7261d03c-006c-11f1-b74f-0242ac110002', '726541d7-006c-11f1-b74f-0242ac110002', NOW()); -- subscription.read
+-- Client management
+(UUID(), '7261d03c-006c-11f1-b74f-0242ac110002', '726541d7-006c-11f1-b74f-0242ac110002', NOW()); -- client.read
 
 -- --------------------------------------------------------
 -- Assign Permissions to SUPPORT
@@ -87,11 +88,11 @@ INSERT INTO `role_permission` (`id`, `role_id`, `permission_id`, `created_at`) V
 -- Read-only access
 (UUID(), '7261d117-006c-11f1-b74f-0242ac110002', '72653a6a-006c-11f1-b74f-0242ac110002', NOW()), -- user.read
 (UUID(), '7261d117-006c-11f1-b74f-0242ac110002', '72653d13-006c-11f1-b74f-0242ac110002', NOW()), -- session.read
-(UUID(), '7261d117-006c-11f1-b74f-0242ac110002', '72653f64-006c-11f1-b74f-0242ac110002', NOW()), -- organization.read
-(UUID(), '7261d117-006c-11f1-b74f-0242ac110002', '726541d7-006c-11f1-b74f-0242ac110002', NOW()); -- subscription.read
+(UUID(), '7261d117-006c-11f1-b74f-0242ac110002', '72653f64-006c-11f1-b74f-0242ac110002', NOW()), -- group.read
+(UUID(), '7261d117-006c-11f1-b74f-0242ac110002', '726541d7-006c-11f1-b74f-0242ac110002', NOW()); -- client.read
 
 -- --------------------------------------------------------
--- Assign Permissions to ORGANIZER
+-- Assign Permissions to INSTRUCTOR
 -- --------------------------------------------------------
 INSERT INTO `role_permission` (`id`, `role_id`, `permission_id`, `created_at`) VALUES
 -- Session management (own sessions)
@@ -100,15 +101,29 @@ INSERT INTO `role_permission` (`id`, `role_id`, `permission_id`, `created_at`) V
 (UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '72653d7a-006c-11f1-b74f-0242ac110002', NOW()), -- session.update
 (UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '72653de0-006c-11f1-b74f-0242ac110002', NOW()), -- session.delete
 
+-- Group management (own groups)
+(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '72653ef6-006c-11f1-b74f-0242ac110002', NOW()), -- group.create
+(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '72653f64-006c-11f1-b74f-0242ac110002', NOW()), -- group.read
+(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '72653fca-006c-11f1-b74f-0242ac110002', NOW()), -- group.update
+(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '7265402f-006c-11f1-b74f-0242ac110002', NOW()), -- group.delete
+
 -- Invitation sending
-(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '726540a4-006c-11f1-b74f-0242ac110002', NOW()); -- invitation.send
+(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '726540a4-006c-11f1-b74f-0242ac110002', NOW()), -- invitation.send
+
+-- Client management
+(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '72654177-006c-11f1-b74f-0242ac110002', NOW()), -- client.create
+(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '726541d7-006c-11f1-b74f-0242ac110002', NOW()), -- client.read
+(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '72654260-006c-11f1-b74f-0242ac110002', NOW()), -- client.update
+(UUID(), '7261d176-006c-11f1-b74f-0242ac110002', '726542c0-006c-11f1-b74f-0242ac110002', NOW()); -- client.delete
 
 -- --------------------------------------------------------
--- Assign Permissions to PARTICIPANT
+-- Assign Permissions to USER
 -- --------------------------------------------------------
 INSERT INTO `role_permission` (`id`, `role_id`, `permission_id`, `created_at`) VALUES
 -- Session viewing (join sessions)
-(UUID(), '7261d1cc-006c-11f1-b74f-0242ac110002', '72653d13-006c-11f1-b74f-0242ac110002', NOW()); -- session.read
+(UUID(), '7261d1cc-006c-11f1-b74f-0242ac110002', '72653d13-006c-11f1-b74f-0242ac110002', NOW()), -- session.read
+-- Group viewing (join groups)
+(UUID(), '7261d1cc-006c-11f1-b74f-0242ac110002', '72653f64-006c-11f1-b74f-0242ac110002', NOW()); -- group.read
 
 -- =========================================================
 -- Roles and permissions seeded successfully

@@ -38,12 +38,10 @@ export class EmailService {
   ) {
     this.fromEmail =
       this.configService.get('EMAIL_FROM') || 'noreply@beeactive.fit';
-    this.fromName =
-      this.configService.get('EMAIL_FROM_NAME') || 'BeeActive';
+    this.fromName = this.configService.get('EMAIL_FROM_NAME') || 'BeeActive';
     this.frontendUrl =
       this.configService.get('FRONTEND_URL') || 'http://localhost:4200';
-    this.isProduction =
-      this.configService.get('NODE_ENV') === 'production';
+    this.isProduction = this.configService.get('NODE_ENV') === 'production';
 
     // In dev, email links point to the API for direct verification
     const port = this.configService.get('PORT') || 3000;
@@ -191,11 +189,7 @@ export class EmailService {
    * Falls back to console logging if RESEND_API_KEY is not configured.
    * Never throws — email failure should not break the main application flow.
    */
-  private async send(
-    to: string,
-    subject: string,
-    html: string,
-  ): Promise<void> {
+  private async send(to: string, subject: string, html: string): Promise<void> {
     const from = `${this.fromName} <${this.fromEmail}>`;
 
     if (this.resend) {

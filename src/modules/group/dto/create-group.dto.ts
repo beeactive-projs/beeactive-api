@@ -5,18 +5,16 @@ import {
   IsBoolean,
   IsEnum,
   IsEmail,
+  IsArray,
   MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  OrganizationType,
-  JoinPolicy,
-} from '../entities/organization.entity';
+import { JoinPolicy } from '../entities/group.entity';
 
-export class CreateOrganizationDto {
+export class CreateGroupDto {
   @ApiProperty({
-    example: "John's Fitness Studio",
-    description: 'Organization name',
+    example: 'Morning HIIT Crew',
+    description: 'Group name',
   })
   @IsString()
   @IsNotEmpty()
@@ -24,8 +22,8 @@ export class CreateOrganizationDto {
   name: string;
 
   @ApiPropertyOptional({
-    example: 'Personal training and group HIIT sessions',
-    description: 'Organization description',
+    example: 'High-intensity interval training every weekday morning',
+    description: 'Group description',
   })
   @IsString()
   @IsOptional()
@@ -40,17 +38,8 @@ export class CreateOrganizationDto {
   timezone?: string;
 
   @ApiPropertyOptional({
-    enum: OrganizationType,
-    example: OrganizationType.FITNESS,
-    description: 'Organization category',
-  })
-  @IsEnum(OrganizationType)
-  @IsOptional()
-  type?: OrganizationType;
-
-  @ApiPropertyOptional({
     example: false,
-    description: 'Make this organization visible in public search',
+    description: 'Make this group visible in public search',
   })
   @IsBoolean()
   @IsOptional()
@@ -60,13 +49,23 @@ export class CreateOrganizationDto {
     enum: JoinPolicy,
     example: JoinPolicy.INVITE_ONLY,
     description:
-      'How new members join: OPEN (anyone), REQUEST (needs approval), INVITE_ONLY',
+      'How new members join: OPEN (anyone), APPROVAL (needs approval), INVITE_ONLY',
   })
   @IsEnum(JoinPolicy)
   @IsOptional()
   joinPolicy?: JoinPolicy;
 
-  @ApiPropertyOptional({ example: 'contact@fitnessstudio.com' })
+  @ApiPropertyOptional({
+    example: ['fitness', 'hiit', 'morning'],
+    description: 'Tags for categorization and search filtering',
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  tags?: string[];
+
+  @ApiPropertyOptional({ example: 'trainer@example.com' })
   @IsEmail()
   @IsOptional()
   contactEmail?: string;

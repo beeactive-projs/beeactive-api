@@ -20,14 +20,14 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 /**
  * Invitation Controller
  *
- * Manages invitations to join organizations:
- * - POST   /invitations                  → Send invitation (org owner)
- * - GET    /invitations/pending           → My pending invitations
- * - POST   /invitations/:token/accept     → Accept invitation
- * - POST   /invitations/:token/decline    → Decline invitation
- * - POST   /invitations/:id/cancel        → Cancel invitation (org owner)
- * - POST   /invitations/:id/resend        → Resend invitation email (org owner)
- * - GET    /invitations/organization/:id  → List org invitations (owner)
+ * Manages invitations to join groups:
+ * - POST   /invitations                → Send invitation (group owner)
+ * - GET    /invitations/pending        → My pending invitations
+ * - POST   /invitations/:token/accept  → Accept invitation
+ * - POST   /invitations/:token/decline → Decline invitation
+ * - POST   /invitations/:id/cancel     → Cancel invitation (group owner)
+ * - POST   /invitations/:id/resend     → Resend invitation email (group owner)
+ * - GET    /invitations/group/:id      → List group invitations (owner)
  */
 @ApiTags('Invitations')
 @Controller('invitations')
@@ -62,8 +62,8 @@ export class InvitationController {
 
   @Post(':token/decline')
   @ApiEndpoint(InvitationDocs.decline)
-  async decline(@Param('token') token: string) {
-    return this.invitationService.decline(token);
+  async decline(@Param('token') token: string, @Request() req) {
+    return this.invitationService.decline(token, req.user.email);
   }
 
   @Post(':id/cancel')
@@ -78,15 +78,15 @@ export class InvitationController {
     return this.invitationService.resend(id, req.user.id);
   }
 
-  @Get('organization/:id')
-  @ApiEndpoint(InvitationDocs.getOrganizationInvitations)
-  async getOrganizationInvitations(
-    @Param('id') organizationId: string,
+  @Get('group/:id')
+  @ApiEndpoint(InvitationDocs.getGroupInvitations)
+  async getGroupInvitations(
+    @Param('id') groupId: string,
     @Request() req,
     @Query() pagination: PaginationDto,
   ) {
-    return this.invitationService.getOrganizationInvitations(
-      organizationId,
+    return this.invitationService.getGroupInvitations(
+      groupId,
       req.user.id,
       pagination.page,
       pagination.limit,

@@ -11,20 +11,20 @@ import {
 import { User } from '../../user/entities/user.entity';
 
 /**
- * Organizer Profile Entity
+ * Instructor Profile Entity
  *
- * Professional data for trainers/instructors.
- * This is what clients see when they view a trainer's profile.
+ * Professional data for instructors/trainers.
+ * This is what clients see when they view an instructor's profile.
  *
- * Created when a user activates "I want to organize activities".
- * Fields are filled in progressively by the trainer.
+ * Created when a user activates "I want to instruct activities".
+ * Fields are filled in progressively by the instructor.
  */
 @Table({
-  tableName: 'organizer_profile',
+  tableName: 'instructor_profile',
   timestamps: true,
   underscored: true,
 })
-export class OrganizerProfile extends Model {
+export class InstructorProfile extends Model {
   @Column({
     type: DataType.CHAR(36),
     defaultValue: DataType.UUIDV4,

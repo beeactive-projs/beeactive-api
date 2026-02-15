@@ -24,7 +24,8 @@ interface RecurringRule {
 }
 import { UpdateParticipantStatusDto } from './dto/update-participant-status.dto';
 import { User } from '../user/entities/user.entity';
-import { OrganizationMember } from '../organization/entities/organization-member.entity';
+import { GroupMember } from '../group/entities/group-member.entity';
+import { InstructorClient } from '../client/entities/instructor-client.entity';
 import { EmailService } from '../../common/services/email.service';
 
 /**
@@ -33,9 +34,10 @@ import { EmailService } from '../../common/services/email.service';
  * Manages training sessions and participant registrations.
  *
  * Visibility rules:
- * - PRIVATE: Only organizer sees it, participants added manually
- * - MEMBERS: All organization members can see and join
- * - PUBLIC: Anyone can see (future marketplace feature)
+ * - PUBLIC: Anyone can view
+ * - GROUP: Must be member of session.groupId
+ * - CLIENTS: Must be client of session.instructorId (check instructor_client table)
+ * - PRIVATE: Only the instructor can view
  *
  * TODO: [JOB SYSTEM] When Redis/Bull is configured:
  * - Automated status transitions: SCHEDULED → IN_PROGRESS → COMPLETED (based on scheduledAt + durationMinutes)
@@ -53,8 +55,10 @@ export class SessionService {
     private sessionModel: typeof Session,
     @InjectModel(SessionParticipant)
     private participantModel: typeof SessionParticipant,
-    @InjectModel(OrganizationMember)
-    private memberModel: typeof OrganizationMember,
+    @InjectModel(GroupMember)
+    private memberModel: typeof GroupMember,
+    @InjectModel(InstructorClient)
+    private instructorClientModel: typeof InstructorClient,
     private emailService: EmailService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
@@ -68,11 +72,11 @@ export class SessionService {
    * Create a new session
    */
   async create(userId: string, dto: CreateSessionDto): Promise<Session> {
-    // If org-linked, verify user is a member of the organization
-    if (dto.organizationId) {
+    // If group-linked, verify user is a member of the group
+    if (dto.groupId) {
       const isMember = await this.memberModel.findOne({
         where: {
-          organizationId: dto.organizationId,
+          groupId: dto.groupId,
           userId: userId,
           leftAt: null,
         },
@@ -80,18 +84,18 @@ export class SessionService {
 
       if (!isMember) {
         throw new ForbiddenException(
-          'You must be a member of this organization to create sessions',
+          'You must be a member of this group to create sessions',
         );
       }
     }
 
     const session = await this.sessionModel.create({
-      organizationId: dto.organizationId,
-      organizerId: userId,
+      groupId: dto.groupId,
+      instructorId: userId,
       title: dto.title,
       description: dto.description,
       sessionType: dto.sessionType,
-      visibility: dto.visibility || 'MEMBERS',
+      visibility: dto.visibility || 'GROUP',
       scheduledAt: dto.scheduledAt,
       durationMinutes: dto.durationMinutes,
       location: dto.location,
@@ -120,28 +124,48 @@ export class SessionService {
    * Get sessions visible to the user (paginated, deduplicated)
    */
   async getMySessions(userId: string, page: number = 1, limit: number = 20) {
-    const memberships = await this.memberModel.findAll({
-      where: { userId: userId, leftAt: null },
-      attributes: ['organizationId'],
-    });
-    const orgIds = memberships.map((m) => m.organizationId);
+    // Batch-load membership, registration, and client data in parallel
+    const [memberships, registrations, clientRelationships] = await Promise.all(
+      [
+        this.memberModel.findAll({
+          where: { userId, leftAt: null },
+          attributes: ['groupId'],
+        }),
+        this.participantModel.findAll({
+          where: { userId, status: { [Op.ne]: 'CANCELLED' } },
+          attributes: ['sessionId'],
+        }),
+        this.instructorClientModel.findAll({
+          where: { clientId: userId, status: 'ACTIVE' },
+          attributes: ['instructorId'],
+        }),
+      ],
+    );
 
-    const registrations = await this.participantModel.findAll({
-      where: { userId: userId, status: { [Op.ne]: 'CANCELLED' } },
-      attributes: ['sessionId'],
-    });
+    const groupIds = memberships.map((m) => m.groupId);
     const registeredSessionIds = registrations.map((r) => r.sessionId);
+    const clientOfInstructorIds = clientRelationships.map(
+      (r) => r.instructorId,
+    );
 
     const offset = (page - 1) * limit;
 
     const whereClause = {
       [Op.or]: [
-        { organizerId: userId },
-        ...(orgIds.length > 0
+        { instructorId: userId },
+        ...(groupIds.length > 0
           ? [
               {
-                organizationId: { [Op.in]: orgIds },
-                visibility: { [Op.in]: ['MEMBERS', 'PUBLIC'] },
+                groupId: { [Op.in]: groupIds },
+                visibility: { [Op.in]: ['GROUP', 'PUBLIC'] },
+              },
+            ]
+          : []),
+        ...(clientOfInstructorIds.length > 0
+          ? [
+              {
+                instructorId: { [Op.in]: clientOfInstructorIds },
+                visibility: 'CLIENTS',
               },
             ]
           : []),
@@ -158,7 +182,7 @@ export class SessionService {
         include: [
           {
             model: User,
-            as: 'organizer',
+            as: 'instructor',
             attributes: ['id', 'firstName', 'lastName', 'avatarId'],
           },
         ],
@@ -222,7 +246,7 @@ export class SessionService {
         include: [
           {
             model: User,
-            as: 'organizer',
+            as: 'instructor',
             attributes: ['id', 'firstName', 'lastName', 'avatarId'],
           },
         ],
@@ -255,7 +279,7 @@ export class SessionService {
       include: [
         {
           model: User,
-          as: 'organizer',
+          as: 'instructor',
           attributes: ['id', 'firstName', 'lastName', 'avatarId'],
         },
         {
@@ -280,7 +304,7 @@ export class SessionService {
   }
 
   /**
-   * Update a session (organizer only)
+   * Update a session (instructor only)
    */
   async update(
     sessionId: string,
@@ -295,9 +319,9 @@ export class SessionService {
       throw new NotFoundException('Session not found');
     }
 
-    if (session.organizerId !== userId) {
+    if (session.instructorId !== userId) {
       throw new ForbiddenException(
-        'Only the organizer can update this session',
+        'Only the instructor can update this session',
       );
     }
 
@@ -319,7 +343,7 @@ export class SessionService {
   }
 
   /**
-   * Delete a session (soft delete, organizer only)
+   * Delete a session (soft delete, instructor only)
    *
    * Notifies all registered participants via email.
    */
@@ -339,9 +363,9 @@ export class SessionService {
       throw new NotFoundException('Session not found');
     }
 
-    if (session.organizerId !== userId) {
+    if (session.instructorId !== userId) {
       throw new ForbiddenException(
-        'Only the organizer can delete this session',
+        'Only the instructor can delete this session',
       );
     }
 
@@ -378,13 +402,13 @@ export class SessionService {
       throw new NotFoundException('Session not found');
     }
 
-    if (original.organizerId !== userId) {
-      throw new ForbiddenException('Only the organizer can clone this session');
+    if (original.instructorId !== userId) {
+      throw new ForbiddenException('Only the instructor can clone this session');
     }
 
     const cloned = await this.sessionModel.create({
-      organizationId: original.organizationId,
-      organizerId: userId,
+      groupId: original.groupId,
+      instructorId: userId,
       title: original.title,
       description: original.description,
       sessionType: original.sessionType,
@@ -421,8 +445,8 @@ export class SessionService {
   ): Promise<{ dates: string[] }> {
     const session = await this.sessionModel.findByPk(sessionId);
     if (!session) throw new NotFoundException('Session not found');
-    if (session.organizerId !== userId)
-      throw new ForbiddenException('Only the organizer can preview recurrence');
+    if (session.instructorId !== userId)
+      throw new ForbiddenException('Only the instructor can preview recurrence');
     if (!session.isRecurring || !session.recurringRule)
       throw new BadRequestException('Session is not recurring or has no rule');
 
@@ -435,7 +459,7 @@ export class SessionService {
   /**
    * Generate upcoming session instances from a recurring template.
    * Creates new Session rows for each occurrence in the next N weeks (respecting endDate/endAfterOccurrences).
-   * Skips dates that already have a session (same organizer, same title, same scheduledAt date).
+   * Skips dates that already have a session (same instructor, same title, same scheduledAt date).
    */
   async generateUpcomingInstances(
     sessionId: string,
@@ -444,8 +468,8 @@ export class SessionService {
   ): Promise<{ created: number; sessions: Session[] }> {
     const template = await this.sessionModel.findByPk(sessionId);
     if (!template) throw new NotFoundException('Session not found');
-    if (template.organizerId !== userId)
-      throw new ForbiddenException('Only the organizer can generate instances');
+    if (template.instructorId !== userId)
+      throw new ForbiddenException('Only the instructor can generate instances');
     if (!template.isRecurring || !template.recurringRule)
       throw new BadRequestException('Session is not recurring or has no rule');
 
@@ -459,11 +483,11 @@ export class SessionService {
       false,
     );
 
-    // Find existing sessions for this template (same organizer, same title, same date)
+    // Find existing sessions for this template (same instructor, same title, same date)
     const existingStarts = new Set<string>();
     const existing = await this.sessionModel.findAll({
       where: {
-        organizerId: userId,
+        instructorId: userId,
         title: template.title,
         scheduledAt: {
           [Op.gte]: firstAt,
@@ -485,8 +509,8 @@ export class SessionService {
     const created: Session[] = [];
     for (const scheduledAt of toCreate) {
       const session = await this.sessionModel.create({
-        organizationId: template.organizationId,
-        organizerId: template.organizerId,
+        groupId: template.groupId,
+        instructorId: template.instructorId,
         title: template.title,
         description: template.description,
         sessionType: template.sessionType,
@@ -620,7 +644,7 @@ export class SessionService {
 
     await this.assertCanViewSession(session, userId);
 
-    if (session.organizerId === userId) {
+    if (session.instructorId === userId) {
       throw new BadRequestException('You cannot join your own session');
     }
 
@@ -649,9 +673,9 @@ export class SessionService {
     if (existing && existing.status === 'CANCELLED') {
       await existing.update({ status: 'REGISTERED', checkedInAt: null });
 
-      // Notify organizer
+      // Notify instructor
       // TODO: [JOB SYSTEM] Move to background job
-      this.notifyOrganizerOfJoinLeave(session, userId, 'joined').catch(
+      this.notifyInstructorOfJoinLeave(session, userId, 'joined').catch(
         () => {},
       );
 
@@ -664,9 +688,9 @@ export class SessionService {
       status: 'REGISTERED',
     });
 
-    // Notify organizer
+    // Notify instructor
     // TODO: [JOB SYSTEM] Move to background job
-    this.notifyOrganizerOfJoinLeave(session, userId, 'joined').catch(() => {});
+    this.notifyInstructorOfJoinLeave(session, userId, 'joined').catch(() => {});
 
     return participant;
   }
@@ -710,9 +734,9 @@ export class SessionService {
 
     await participant.update({ status: 'CANCELLED' });
 
-    // Notify organizer
+    // Notify instructor
     // TODO: [JOB SYSTEM] Move to background job
-    this.notifyOrganizerOfJoinLeave(session, userId, 'left').catch(() => {});
+    this.notifyInstructorOfJoinLeave(session, userId, 'left').catch(() => {});
   }
 
   /**
@@ -789,12 +813,12 @@ export class SessionService {
   }
 
   /**
-   * Update participant status (organizer only — e.g., check-in, mark attendance)
+   * Update participant status (instructor only — e.g., check-in, mark attendance)
    */
   async updateParticipantStatus(
     sessionId: string,
     participantUserId: string,
-    organizerUserId: string,
+    instructorUserId: string,
     dto: UpdateParticipantStatusDto,
   ): Promise<SessionParticipant> {
     const session = await this.sessionModel.findByPk(sessionId);
@@ -803,9 +827,9 @@ export class SessionService {
       throw new NotFoundException('Session not found');
     }
 
-    if (session.organizerId !== organizerUserId) {
+    if (session.instructorId !== instructorUserId) {
       throw new ForbiddenException(
-        'Only the organizer can update participant status',
+        'Only the instructor can update participant status',
       );
     }
 
@@ -872,22 +896,22 @@ export class SessionService {
   }
 
   /**
-   * Notify organizer when someone joins or leaves their session
+   * Notify instructor when someone joins or leaves their session
    * TODO: [JOB SYSTEM] Move to background job
    */
-  private async notifyOrganizerOfJoinLeave(
+  private async notifyInstructorOfJoinLeave(
     session: Session,
     participantUserId: string,
     action: 'joined' | 'left',
   ): Promise<void> {
-    const organizer = await User.findByPk(session.organizerId, {
+    const instructor = await User.findByPk(session.instructorId, {
       attributes: ['email', 'firstName'],
     });
     const participant = await User.findByPk(participantUserId, {
       attributes: ['firstName', 'lastName'],
     });
 
-    if (organizer && participant) {
+    if (instructor && participant) {
       // TODO: Create a dedicated join/leave email template
       this.logger.log(
         `${participant.firstName} ${participant.lastName} ${action} session "${session.title}"`,
@@ -907,19 +931,33 @@ export class SessionService {
     session: Session,
     userId: string,
   ): Promise<void> {
-    if (session.organizerId === userId) return;
+    if (session.instructorId === userId) return;
     if (session.visibility === 'PUBLIC') return;
 
-    if (session.visibility === 'MEMBERS' && session.organizationId) {
+    if (session.visibility === 'GROUP' && session.groupId) {
       const isMember = await this.memberModel.findOne({
         where: {
-          organizationId: session.organizationId,
+          groupId: session.groupId,
           userId: userId,
           leftAt: null,
         },
       });
 
       if (isMember) return;
+    }
+
+    // CLIENTS visibility: check if user is an active client of this instructor
+    if (session.visibility === 'CLIENTS') {
+      const isClient = await this.instructorClientModel.findOne({
+        where: {
+          instructorId: session.instructorId,
+          clientId: userId,
+          status: 'ACTIVE',
+        },
+        attributes: ['id'],
+      });
+
+      if (isClient) return;
     }
 
     const isParticipant = await this.participantModel.findOne({

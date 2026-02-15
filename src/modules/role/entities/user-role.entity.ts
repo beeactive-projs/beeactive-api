@@ -13,7 +13,7 @@ import { Role } from './role.entity';
  * UserRole Pivot Entity
  *
  * Links users to roles (many-to-many)
- * Supports organization-scoped roles
+ * Supports group-scoped roles
  */
 @Table({
   tableName: 'user_role',
@@ -47,7 +47,7 @@ export class UserRole extends Model {
     type: DataType.CHAR(36),
     allowNull: true,
   })
-  declare organizationId: string;
+  declare groupId: string;
 
   @Column({
     type: DataType.DATE,

@@ -35,10 +35,10 @@ export class UpdateSessionDto {
   sessionType?: string;
 
   @ApiPropertyOptional({
-    example: 'MEMBERS',
-    enum: ['PRIVATE', 'MEMBERS', 'PUBLIC'],
+    example: 'GROUP',
+    enum: ['PUBLIC', 'GROUP', 'CLIENTS', 'PRIVATE'],
   })
-  @IsEnum(['PRIVATE', 'MEMBERS', 'PUBLIC'])
+  @IsEnum(['PUBLIC', 'GROUP', 'CLIENTS', 'PRIVATE'])
   @IsOptional()
   visibility?: string;
 

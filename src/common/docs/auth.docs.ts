@@ -10,7 +10,7 @@ export const AuthDocs = {
   register: {
     summary: 'Register a new user',
     description:
-      'Create a new user account with email and password. Automatically assigns PARTICIPANT role.',
+      'Create a new user account with email and password. Automatically assigns USER role.',
     responses: [
       {
         status: 201,
@@ -23,7 +23,7 @@ export const AuthDocs = {
             email: 'user@example.com',
             firstName: 'John',
             lastName: 'Doe',
-            roles: ['PARTICIPANT'],
+            roles: ['USER'],
           },
         },
       },
@@ -49,7 +49,7 @@ export const AuthDocs = {
             email: 'user@example.com',
             firstName: 'John',
             lastName: 'Doe',
-            roles: ['PARTICIPANT', 'ORGANIZER'],
+            roles: ['USER', 'INSTRUCTOR'],
           },
         },
       },
@@ -163,7 +163,7 @@ export const AuthDocs = {
             firstName: 'John',
             lastName: 'Doe',
             isEmailVerified: true,
-            roles: ['PARTICIPANT'],
+            roles: ['USER'],
           },
         },
       },
@@ -190,7 +190,7 @@ export const AuthDocs = {
             firstName: 'John',
             lastName: 'Doe',
             isEmailVerified: true,
-            roles: ['PARTICIPANT'],
+            roles: ['USER'],
           },
         },
       },
@@ -200,6 +200,20 @@ export const AuthDocs = {
     ],
   } as ApiEndpointOptions,
 
-  // TODO: Implement these endpoints
-  // - logout: Invalidate refresh token (refresh_token table already exists)
+  logout: {
+    summary: 'Logout user',
+    description:
+      'Invalidate the provided refresh token. Client should discard both tokens after calling this.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Logged out successfully',
+        example: {
+          message: 'Logged out successfully',
+        },
+      },
+      ApiStandardResponses.Unauthorized,
+    ],
+  } as ApiEndpointOptions,
 };

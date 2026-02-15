@@ -74,15 +74,12 @@ if (process.env.MYSQL_PUBLIC_URL) {
 const ALL_MIGRATIONS = [
   '000_drop_existing_schema.sql',
   '001_create_core_tables.sql',
-  '002_create_organization_tables.sql',
+  '002_create_group_tables.sql',
   '003_create_session_tables.sql',
   '004_create_profile_tables.sql',
   '005_seed_roles_permissions.sql',
-  '006_seed_plans_features.sql',
-  '007_create_super_admin.sql',
-  '008_update_profiles_and_members.sql',
-  '009_add_email_verification_expires.sql',
-  '010_add_organization_discovery_fields.sql',
+  '006_create_super_admin.sql',
+  '007_create_client_tables.sql',
 ];
 
 async function runMigrations() {
@@ -212,7 +209,7 @@ async function runMigrations() {
       console.log('  All migrations completed successfully!');
       console.log('==========================================================\n');
 
-      if (migrations.includes('007_create_super_admin.sql')) {
+      if (migrations.includes('006_create_super_admin.sql')) {
         console.log('Super Admin Account:');
         console.log('  Email:    beeactivedev@gmail.com');
         console.log('  Password: BeeActive2026!Admin');

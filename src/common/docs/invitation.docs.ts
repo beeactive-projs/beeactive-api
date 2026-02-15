@@ -10,7 +10,7 @@ export const InvitationDocs = {
   create: {
     summary: 'Send an invitation',
     description:
-      'Invite someone to join your organization. Owner only. Returns an invitationLink for testing. Sends email when provider is configured.',
+      'Invite someone to join your group. Owner only. Returns an invitationLink for testing. Sends email when provider is configured.',
     auth: true,
     responses: [
       {
@@ -20,7 +20,7 @@ export const InvitationDocs = {
           invitation: {
             id: 'invitation-uuid',
             email: 'mike@trainer.com',
-            organizationId: 'org-uuid',
+            groupId: 'group-uuid',
             expiresAt: '2026-02-22T00:00:00.000Z',
           },
           invitationLink:
@@ -47,9 +47,9 @@ export const InvitationDocs = {
             {
               id: 'invitation-uuid',
               inviter: { firstName: 'Sarah', lastName: 'Johnson' },
-              organization: { name: "Sarah's Fitness Studio" },
-              role: { displayName: 'Participant' },
-              message: 'Join my fitness studio!',
+              group: { name: "Sarah's Fitness Group" },
+              role: { displayName: 'User' },
+              message: 'Join my fitness group!',
               expiresAt: '2026-02-22T00:00:00.000Z',
             },
           ],
@@ -70,7 +70,7 @@ export const InvitationDocs = {
   accept: {
     summary: 'Accept an invitation',
     description:
-      'Accept an invitation using its token. Adds you to the organization and assigns the role.',
+      'Accept an invitation using its token. Adds you to the group and assigns the role.',
     auth: true,
     responses: [
       {
@@ -78,7 +78,7 @@ export const InvitationDocs = {
         description: 'Invitation accepted',
         example: {
           message: 'Invitation accepted successfully',
-          organizationId: 'org-uuid',
+          groupId: 'group-uuid',
         },
       },
       {
@@ -109,7 +109,7 @@ export const InvitationDocs = {
   cancel: {
     summary: 'Cancel an invitation',
     description:
-      'Cancel a pending invitation. Org owner only. Cannot cancel already accepted invitations.',
+      'Cancel a pending invitation. Group owner only. Cannot cancel already accepted invitations.',
     auth: true,
     responses: [
       {
@@ -127,7 +127,7 @@ export const InvitationDocs = {
   resend: {
     summary: 'Resend invitation email',
     description:
-      'Resend the invitation email with a new token. Org owner only. Extends expiry by 7 days.',
+      'Resend the invitation email with a new token. Group owner only. Extends expiry by 7 days.',
     auth: true,
     responses: [
       {
@@ -142,21 +142,21 @@ export const InvitationDocs = {
     ],
   } as ApiEndpointOptions,
 
-  getOrganizationInvitations: {
-    summary: 'List organization invitations (paginated)',
+  getGroupInvitations: {
+    summary: 'List group invitations (paginated)',
     description:
-      'List all invitations sent for an organization. Requires org membership. Accepts ?page=1&limit=20 query params.',
+      'List all invitations sent for a group. Requires group membership. Accepts ?page=1&limit=20 query params.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Organization invitations listed',
+        description: 'Group invitations listed',
         example: {
           data: [
             {
               id: 'invitation-uuid',
               email: 'user@example.com',
-              role: { name: 'PARTICIPANT', displayName: 'Participant' },
+              role: { name: 'USER', displayName: 'User' },
               expiresAt: '2026-02-22T00:00:00.000Z',
               acceptedAt: null,
               declinedAt: null,

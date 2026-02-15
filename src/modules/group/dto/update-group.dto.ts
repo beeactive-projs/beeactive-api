@@ -4,23 +4,21 @@ import {
   IsBoolean,
   IsEnum,
   IsEmail,
+  IsArray,
   MaxLength,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  OrganizationType,
-  JoinPolicy,
-} from '../entities/organization.entity';
+import { JoinPolicy } from '../entities/group.entity';
 
-export class UpdateOrganizationDto {
-  @ApiPropertyOptional({ example: "John's Fitness Studio" })
+export class UpdateGroupDto {
+  @ApiPropertyOptional({ example: 'Morning HIIT Crew' })
   @IsString()
   @MaxLength(255)
   @IsOptional()
   name?: string;
 
   @ApiPropertyOptional({
-    example: 'Personal training and group HIIT sessions',
+    example: 'High-intensity interval training every weekday morning',
   })
   @IsString()
   @IsOptional()
@@ -38,17 +36,8 @@ export class UpdateOrganizationDto {
   logoUrl?: string;
 
   @ApiPropertyOptional({
-    enum: OrganizationType,
-    example: OrganizationType.FITNESS,
-    description: 'Organization category',
-  })
-  @IsEnum(OrganizationType)
-  @IsOptional()
-  type?: OrganizationType;
-
-  @ApiPropertyOptional({
     example: true,
-    description: 'Make this organization visible in public search',
+    description: 'Make this group visible in public search',
   })
   @IsBoolean()
   @IsOptional()
@@ -58,13 +47,23 @@ export class UpdateOrganizationDto {
     enum: JoinPolicy,
     example: JoinPolicy.OPEN,
     description:
-      'How new members join: OPEN (anyone), REQUEST (needs approval), INVITE_ONLY',
+      'How new members join: OPEN (anyone), APPROVAL (needs approval), INVITE_ONLY',
   })
   @IsEnum(JoinPolicy)
   @IsOptional()
   joinPolicy?: JoinPolicy;
 
-  @ApiPropertyOptional({ example: 'contact@fitnessstudio.com' })
+  @ApiPropertyOptional({
+    example: ['fitness', 'hiit', 'morning'],
+    description: 'Tags for categorization and search filtering',
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  tags?: string[];
+
+  @ApiPropertyOptional({ example: 'trainer@example.com' })
   @IsEmail()
   @IsOptional()
   contactEmail?: string;

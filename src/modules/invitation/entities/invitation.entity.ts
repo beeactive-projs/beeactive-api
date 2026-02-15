@@ -9,12 +9,12 @@ import {
 } from 'sequelize-typescript';
 import { User } from '../../user/entities/user.entity';
 import { Role } from '../../role/entities/role.entity';
-import { Organization } from '../../organization/entities/organization.entity';
+import { Group } from '../../group/entities/group.entity';
 
 /**
  * Invitation Entity
  *
- * Represents an invitation to join an organization.
+ * Represents an invitation to join a group.
  * The inviter sends a token (via link/email), the invitee uses it to join.
  *
  * Token is stored as plain text (single-use, expires in 7 days).
@@ -54,12 +54,12 @@ export class Invitation extends Model {
   })
   declare roleId: string;
 
-  @ForeignKey(() => Organization)
+  @ForeignKey(() => Group)
   @Column({
     type: DataType.CHAR(36),
     allowNull: true,
   })
-  declare organizationId: string;
+  declare groupId: string;
 
   @Column({
     type: DataType.STRING(255),
@@ -102,6 +102,6 @@ export class Invitation extends Model {
   @BelongsTo(() => Role)
   declare role: Role;
 
-  @BelongsTo(() => Organization)
-  declare organization: Organization;
+  @BelongsTo(() => Group)
+  declare group: Group;
 }

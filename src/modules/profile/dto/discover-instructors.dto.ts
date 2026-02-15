@@ -1,25 +1,15 @@
-import { IsOptional, IsString, IsEnum, IsNumber, Min, Max } from 'class-validator';
+import { IsOptional, IsString, IsNumber, Min, Max } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { OrganizationType } from '../entities/organization.entity';
 
-export class DiscoverOrganizationsDto {
+export class DiscoverInstructorsDto {
   @ApiPropertyOptional({
-    example: 'yoga studio',
-    description: 'Search by name or description',
+    example: 'yoga',
+    description: 'Search by name, display name, bio, or specialization',
   })
   @IsString()
   @IsOptional()
   search?: string;
-
-  @ApiPropertyOptional({
-    enum: OrganizationType,
-    example: OrganizationType.YOGA,
-    description: 'Filter by organization type',
-  })
-  @IsEnum(OrganizationType)
-  @IsOptional()
-  type?: OrganizationType;
 
   @ApiPropertyOptional({
     example: 'Bucharest',

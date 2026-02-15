@@ -2,13 +2,13 @@ import { IsOptional, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { UpdateUserDto } from '../../user/dto/update-user.dto';
-import { UpdateParticipantProfileDto } from './update-participant-profile.dto';
-import { UpdateOrganizerProfileDto } from './update-organizer-profile.dto';
+import { UpdateUserProfileDto } from './update-user-profile.dto';
+import { UpdateInstructorProfileDto } from './update-instructor-profile.dto';
 
 /**
  * Update Full Profile DTO
  *
- * Unified DTO for updating user + participant + organizer profiles in one call.
+ * Unified DTO for updating user + user profile + instructor profiles in one call.
  * All sections are optional — only provided sections are updated.
  */
 export class UpdateFullProfileDto {
@@ -22,20 +22,20 @@ export class UpdateFullProfileDto {
   user?: UpdateUserDto;
 
   @ApiPropertyOptional({
-    description: 'Participant profile fields (health, fitness data)',
-    type: UpdateParticipantProfileDto,
+    description: 'User profile fields (health, fitness data)',
+    type: UpdateUserProfileDto,
   })
   @ValidateNested()
-  @Type(() => UpdateParticipantProfileDto)
+  @Type(() => UpdateUserProfileDto)
   @IsOptional()
-  participant?: UpdateParticipantProfileDto;
+  userProfile?: UpdateUserProfileDto;
 
   @ApiPropertyOptional({
-    description: 'Organizer profile fields (bio, specializations, etc.)',
-    type: UpdateOrganizerProfileDto,
+    description: 'Instructor profile fields (bio, specializations, etc.)',
+    type: UpdateInstructorProfileDto,
   })
   @ValidateNested()
-  @Type(() => UpdateOrganizerProfileDto)
+  @Type(() => UpdateInstructorProfileDto)
   @IsOptional()
-  organizer?: UpdateOrganizerProfileDto;
+  instructor?: UpdateInstructorProfileDto;
 }

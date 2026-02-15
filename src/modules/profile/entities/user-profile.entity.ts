@@ -11,21 +11,21 @@ import {
 import { User } from '../../user/entities/user.entity';
 
 /**
- * Participant Profile Entity
+ * User Profile Entity
  *
- * Health & fitness data for participants/clients.
- * This data is PRIVATE by default — trainers can only see it
- * if the participant explicitly shares it (via organization_member.shared_health_info).
+ * Health & fitness data for users/clients.
+ * This data is PRIVATE by default — instructors can only see it
+ * if the user explicitly shares it (via group_member.shared_health_info).
  *
  * Created automatically when a user registers.
  * Fields are filled in progressively by the user.
  */
 @Table({
-  tableName: 'participant_profile',
+  tableName: 'user_profile',
   timestamps: true,
   underscored: true,
 })
-export class ParticipantProfile extends Model {
+export class UserProfile extends Model {
   @Column({
     type: DataType.CHAR(36),
     defaultValue: DataType.UUIDV4,

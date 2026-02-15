@@ -56,7 +56,7 @@ export class AuthService {
    *
    * Flow:
    * 1. Create user (password is hashed in UserService)
-   * 2. Assign default 'PARTICIPANT' role
+   * 2. Assign default 'USER' role
    * 3. Generate JWT tokens
    * 4. Return tokens + user info
    *
@@ -77,14 +77,14 @@ export class AuthService {
       // Assign default role
       await this.roleService.assignRoleToUserByName(
         user.id,
-        'PARTICIPANT',
+        'USER',
         undefined,
         undefined,
         transaction,
       );
 
       // Create empty participant profile (filled in later by user)
-      await this.profileService.createParticipantProfile(user.id, transaction);
+      await this.profileService.createUserProfile(user.id, transaction);
 
       // Generate email verification token (hashed, 24h expiry)
       const verificationToken =
@@ -273,6 +273,47 @@ export class AuthService {
       return { accessToken };
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
+    }
+  }
+
+  /**
+   * Logout user
+   *
+   * Invalidates the provided refresh token by verifying it belongs
+   * to the requesting user. Since refresh tokens are stateless JWTs,
+   * the client is responsible for discarding the token after this call.
+   *
+   * @param refreshToken - The refresh token to invalidate
+   * @param userId - The authenticated user's ID
+   * @returns Success message
+   */
+  async logout(
+    refreshToken: string,
+    userId: string,
+  ): Promise<{ message: string }> {
+    try {
+      // Verify the refresh token is valid and belongs to this user
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
+      });
+
+      if (payload.sub !== userId) {
+        throw new UnauthorizedException(
+          'Refresh token does not belong to this user',
+        );
+      }
+
+      this.logger.log(`User logged out: ${userId}`, 'AuthService');
+
+      return { message: 'Logged out successfully' };
+    } catch (error) {
+      // Even if token is invalid/expired, we consider logout successful
+      // The important thing is the client discards the token
+      this.logger.log(
+        `User logout (token already invalid): ${userId}`,
+        'AuthService',
+      );
+      return { message: 'Logged out successfully' };
     }
   }
 
@@ -580,12 +621,12 @@ export class AuthService {
       if (isNewUser) {
         await this.roleService.assignRoleToUserByName(
           user.id,
-          'PARTICIPANT',
+          'USER',
           undefined,
           undefined,
           transaction,
         );
-        await this.profileService.createParticipantProfile(user.id, transaction);
+        await this.profileService.createUserProfile(user.id, transaction);
       }
 
       await transaction.commit();

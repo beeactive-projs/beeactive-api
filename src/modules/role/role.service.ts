@@ -60,7 +60,7 @@ export class RoleService {
   async assignRoleToUser(
     userId: string,
     roleId: string,
-    organizationId?: string,
+    groupId?: string,
     expiresAt?: Date,
     transaction?: Transaction,
   ): Promise<UserRole> {
@@ -68,7 +68,7 @@ export class RoleService {
       where: {
         userId: userId,
         roleId: roleId,
-        organizationId: organizationId || null,
+        groupId: groupId || null,
       },
       transaction,
     });
@@ -81,7 +81,7 @@ export class RoleService {
       {
         userId: userId,
         roleId: roleId,
-        organizationId: organizationId,
+        groupId: groupId,
         expiresAt: expiresAt,
       },
       { transaction },
@@ -91,7 +91,7 @@ export class RoleService {
   async assignRoleToUserByName(
     userId: string,
     roleName: string,
-    organizationId?: string,
+    groupId?: string,
     expiresAt?: Date,
     transaction?: Transaction,
   ): Promise<UserRole> {
@@ -99,7 +99,7 @@ export class RoleService {
     return this.assignRoleToUser(
       userId,
       role.id,
-      organizationId,
+      groupId,
       expiresAt,
       transaction,
     );
@@ -108,24 +108,24 @@ export class RoleService {
   async removeRoleFromUser(
     userId: string,
     roleId: string,
-    organizationId?: string,
+    groupId?: string,
   ): Promise<boolean> {
     const deleted = await this.userRoleModel.destroy({
       where: {
         userId: userId,
         roleId: roleId,
-        organizationId: organizationId || null,
+        groupId: groupId || null,
       },
     });
 
     return deleted > 0;
   }
 
-  async getUserRoles(userId: string, organizationId?: string): Promise<Role[]> {
+  async getUserRoles(userId: string, groupId?: string): Promise<Role[]> {
     const where: any = { userId: userId };
 
-    if (organizationId !== undefined) {
-      where.organizationId = organizationId;
+    if (groupId !== undefined) {
+      where.groupId = groupId;
     }
 
     const userRoles = await this.userRoleModel.findAll({
@@ -143,9 +143,9 @@ export class RoleService {
 
   async getUserPermissions(
     userId: string,
-    organizationId?: string,
+    groupId?: string,
   ): Promise<Permission[]> {
-    const roles = await this.getUserRoles(userId, organizationId);
+    const roles = await this.getUserRoles(userId, groupId);
 
     const permissionsMap = new Map<string, Permission>();
 
@@ -167,7 +167,7 @@ export class RoleService {
   async userHasRole(
     userId: string,
     roleName: string,
-    organizationId?: string,
+    groupId?: string,
   ): Promise<boolean> {
     const role = await this.findByName(roleName);
 
@@ -176,8 +176,8 @@ export class RoleService {
       roleId: role.id,
     };
 
-    if (organizationId !== undefined) {
-      where.organizationId = organizationId;
+    if (groupId !== undefined) {
+      where.groupId = groupId;
     }
 
     const userRole = await this.userRoleModel.findOne({ where });
@@ -188,7 +188,7 @@ export class RoleService {
   async userHasAnyRole(
     userId: string,
     roleNames: string[],
-    organizationId?: string,
+    groupId?: string,
   ): Promise<boolean> {
     const roles = await this.roleModel.findAll({
       where: { name: roleNames },
@@ -201,8 +201,8 @@ export class RoleService {
       roleId: roleIds,
     };
 
-    if (organizationId !== undefined) {
-      where.organizationId = organizationId;
+    if (groupId !== undefined) {
+      where.groupId = groupId;
     }
 
     const count = await this.userRoleModel.count({ where });
@@ -213,27 +213,27 @@ export class RoleService {
   async userHasPermission(
     userId: string,
     permissionName: string,
-    organizationId?: string,
+    groupId?: string,
   ): Promise<boolean> {
-    const permissions = await this.getUserPermissions(userId, organizationId);
+    const permissions = await this.getUserPermissions(userId, groupId);
     return permissions.some((p) => p.name === permissionName);
   }
 
   async userHasAnyPermission(
     userId: string,
     permissionNames: string[],
-    organizationId?: string,
+    groupId?: string,
   ): Promise<boolean> {
-    const permissions = await this.getUserPermissions(userId, organizationId);
+    const permissions = await this.getUserPermissions(userId, groupId);
     return permissions.some((p) => permissionNames.includes(p.name));
   }
 
   async userHasAllPermissions(
     userId: string,
     permissionNames: string[],
-    organizationId?: string,
+    groupId?: string,
   ): Promise<boolean> {
-    const permissions = await this.getUserPermissions(userId, organizationId);
+    const permissions = await this.getUserPermissions(userId, groupId);
     const userPermissionNames = permissions.map((p) => p.name);
 
     return permissionNames.every((name) => userPermissionNames.includes(name));

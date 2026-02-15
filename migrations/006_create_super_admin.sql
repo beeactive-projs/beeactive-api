@@ -1,5 +1,5 @@
 -- =========================================================
--- Migration 007: Create Super Admin User
+-- Migration 006: Create Super Admin User
 -- =========================================================
 -- Creates the initial super admin account
 --
@@ -7,7 +7,7 @@
 -- Email: beeactivedev@gmail.com
 -- Password: BeeActive2026!Admin
 --
--- ⚠️ IMPORTANT: Change this password immediately after first login!
+-- IMPORTANT: Change this password immediately after first login!
 -- =========================================================
 
 -- --------------------------------------------------------
@@ -26,6 +26,7 @@ INSERT INTO `user` (
   `is_active`,
   `is_email_verified`,
   `email_verification_token`,
+  `email_verification_expires`,
   `password_reset_token`,
   `password_reset_expires`,
   `failed_login_attempts`,
@@ -35,7 +36,7 @@ INSERT INTO `user` (
   `updated_at`,
   `deleted_at`
 ) VALUES (
-  'aaaaaaaa-0000-0000-0000-000000000001',  -- Fixed UUID for super admin
+  'aaaaaaaa-0000-0000-0000-000000000001',
   'beeactivedev@gmail.com',
   '$2b$12$PLj53tJHNArlkV/GLtXI5uwri/TrGNjzJIkdQcTHI4fbhgahzfqjC',  -- BeeActive2026!Admin
   'BeeActive',
@@ -46,6 +47,7 @@ INSERT INTO `user` (
   'Europe/Bucharest',
   1,        -- Active
   1,        -- Email verified (super admin is pre-verified)
+  NULL,
   NULL,
   NULL,
   NULL,
@@ -64,41 +66,18 @@ INSERT INTO `user_role` (
   `id`,
   `user_id`,
   `role_id`,
-  `organization_id`,
+  `group_id`,
   `assigned_at`,
   `expires_at`
 ) VALUES (
   UUID(),
   'aaaaaaaa-0000-0000-0000-000000000001',
   '7261bd94-006c-11f1-b74f-0242ac110002',  -- SUPER_ADMIN role ID
-  NULL,  -- Global role, not organization-specific
+  NULL,  -- Global role, not group-specific
   NOW(),
   NULL   -- Never expires
 );
 
 -- =========================================================
 -- Super Admin Created Successfully
--- =========================================================
---
--- You can now login with:
--- Email: beeactivedev@gmail.com
--- Password: BeeActive2026!Admin
---
--- NEXT STEPS:
--- 1. Login to the application
--- 2. Go to profile settings
--- 3. Change the password immediately!
--- 4. Update email if needed
--- 5. Add your personal information
---
--- Security Note:
--- - The password meets strong password requirements:
---   ✓ 8+ characters
---   ✓ Uppercase letters
---   ✓ Lowercase letters
---   ✓ Numbers
---   ✓ Special characters
--- - Password is hashed with bcrypt (12 rounds)
--- - Account is pre-verified (is_email_verified = 1)
--- - Has full SUPER_ADMIN permissions
 -- =========================================================

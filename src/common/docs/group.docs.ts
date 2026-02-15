@@ -1,33 +1,33 @@
 /**
- * API Documentation for Organization endpoints
- * Centralized location for all organization-related Swagger documentation
+ * API Documentation for Group endpoints
+ * Centralized location for all group-related Swagger documentation
  */
 
 import { ApiEndpointOptions } from '../decorators/api-response.decorator';
 import { ApiStandardResponses } from './standard-responses';
 
-export const OrganizationDocs = {
-  // ── Discovery (public) ──────────────────────────────
+export const GroupDocs = {
+  // -- Discovery (public) --
 
-  discoverOrganizations: {
-    summary: 'Discover public organizations',
+  discoverGroups: {
+    summary: 'Discover public groups',
     description:
-      'Browse and search public organizations. No authentication required. ' +
-      'Supports filtering by type (FITNESS, YOGA, DANCE, etc.), city, country, and free-text search. ' +
+      'Browse and search public groups. No authentication required. ' +
+      'Supports filtering by tags, city, country, and free-text search on name/description. ' +
       'Results sorted by member count (most popular first).',
     auth: false,
     responses: [
       {
         status: 200,
-        description: 'Organizations found',
+        description: 'Groups found',
         example: {
           data: [
             {
               id: '550e8400-e29b-41d4-a716-446655440000',
-              name: "John's Fitness Studio",
-              slug: 'johns-fitness-studio',
-              description: 'Personal training and group HIIT sessions',
-              type: 'FITNESS',
+              name: 'Morning HIIT Crew',
+              slug: 'morning-hiit-crew',
+              description: 'High-intensity interval training every weekday morning',
+              tags: ['fitness', 'hiit', 'morning'],
               joinPolicy: 'OPEN',
               city: 'Bucharest',
               country: 'RO',
@@ -48,27 +48,27 @@ export const OrganizationDocs = {
   } as ApiEndpointOptions,
 
   getPublicProfile: {
-    summary: 'Get public organization profile',
+    summary: 'Get public group profile',
     description:
-      'Returns the public profile of an organization including trainer info, ' +
+      'Returns the public profile of a group including instructor info, ' +
       'specializations, and upcoming sessions. No authentication required. ' +
-      'Only works for public organizations.',
+      'Only works for public groups.',
     auth: false,
     responses: [
       {
         status: 200,
         description: 'Public profile retrieved',
         example: {
-          organization: {
+          group: {
             id: '550e8400-e29b-41d4-a716-446655440000',
-            name: "John's Fitness Studio",
-            slug: 'johns-fitness-studio',
-            type: 'FITNESS',
+            name: 'Morning HIIT Crew',
+            slug: 'morning-hiit-crew',
+            tags: ['fitness', 'hiit'],
             joinPolicy: 'OPEN',
             city: 'Bucharest',
             memberCount: 42,
           },
-          trainer: {
+          instructor: {
             firstName: 'John',
             lastName: 'Doe',
             displayName: 'Coach John',
@@ -93,16 +93,16 @@ export const OrganizationDocs = {
   } as ApiEndpointOptions,
 
   selfJoin: {
-    summary: 'Join an organization',
+    summary: 'Join a group',
     description:
-      'Self-join a public organization. Only works if the organization is public and its joinPolicy is OPEN. ' +
-      'For INVITE_ONLY organizations, the user needs an invitation link.',
+      'Self-join a public group. Only works if the group is public and its joinPolicy is OPEN. ' +
+      'For INVITE_ONLY groups, the user needs an invitation or join link.',
     auth: true,
     responses: [
       {
         status: 200,
         description: 'Joined successfully',
-        example: { message: 'You have joined the organization' },
+        example: { message: 'You have joined the group' },
       },
       {
         status: 400,
@@ -111,31 +111,31 @@ export const OrganizationDocs = {
       {
         status: 403,
         description:
-          'Organization is not public or join policy requires invitation/approval',
+          'Group is not public or join policy requires invitation/approval',
       },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.NotFound,
     ],
   } as ApiEndpointOptions,
 
-  // ── CRUD (authenticated) ────────────────────────────
+  // -- CRUD (authenticated) --
 
   create: {
-    summary: 'Create a new organization',
+    summary: 'Create a new group',
     description:
-      'Create a new organization. Requires ORGANIZER role. Creator becomes the owner. ' +
-      'You can set type, isPublic, joinPolicy, and contact/location info.',
+      'Create a new group. Requires INSTRUCTOR role. Creator becomes the owner. ' +
+      'You can set tags, isPublic, joinPolicy, and contact/location info.',
     auth: true,
     responses: [
       {
         status: 201,
-        description: 'Organization created successfully',
+        description: 'Group created successfully',
         example: {
           id: '550e8400-e29b-41d4-a716-446655440000',
-          name: "John's Fitness Studio",
-          slug: 'johns-fitness-studio',
-          description: 'Personal training and group sessions',
-          type: 'FITNESS',
+          name: 'Morning HIIT Crew',
+          slug: 'morning-hiit-crew',
+          description: 'High-intensity interval training every weekday morning',
+          tags: ['fitness', 'hiit'],
           isPublic: true,
           joinPolicy: 'OPEN',
           timezone: 'Europe/Bucharest',
@@ -148,20 +148,20 @@ export const OrganizationDocs = {
     ],
   } as ApiEndpointOptions,
 
-  getMyOrganizations: {
-    summary: 'List my organizations',
-    description: 'Returns all organizations the authenticated user belongs to.',
+  getMyGroups: {
+    summary: 'List my groups',
+    description: 'Returns all groups the authenticated user belongs to.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Organizations listed',
+        description: 'Groups listed',
         example: [
           {
             id: '550e8400-e29b-41d4-a716-446655440000',
-            name: "John's Fitness Studio",
-            slug: 'johns-fitness-studio',
-            type: 'FITNESS',
+            name: 'Morning HIIT Crew',
+            slug: 'morning-hiit-crew',
+            tags: ['fitness', 'hiit'],
           },
         ],
       },
@@ -170,13 +170,13 @@ export const OrganizationDocs = {
   } as ApiEndpointOptions,
 
   getById: {
-    summary: 'Get organization by ID',
-    description: 'Returns organization details. User must be a member.',
+    summary: 'Get group by ID',
+    description: 'Returns group details. User must be a member.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Organization details retrieved',
+        description: 'Group details retrieved',
       },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,
@@ -185,15 +185,15 @@ export const OrganizationDocs = {
   } as ApiEndpointOptions,
 
   update: {
-    summary: 'Update organization',
+    summary: 'Update group',
     description:
-      'Update organization details. Owner only. If name changes, slug is auto-regenerated. ' +
-      'You can also update type, isPublic, joinPolicy, contact info, and location.',
+      'Update group details. Owner only. If name changes, slug is auto-regenerated. ' +
+      'You can also update tags, isPublic, joinPolicy, contact info, and location.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Organization updated',
+        description: 'Group updated',
       },
       ApiStandardResponses.BadRequest,
       ApiStandardResponses.Unauthorized,
@@ -203,9 +203,10 @@ export const OrganizationDocs = {
   } as ApiEndpointOptions,
 
   getMembers: {
-    summary: 'List organization members (paginated)',
+    summary: 'List group members (paginated)',
     description:
-      'Returns paginated members list. Accepts ?page=1&limit=20 query params. If you are the owner AND a member has sharedHealthInfo=true, their health data is included.',
+      'Returns paginated members list with an isClient flag indicating whether each member ' +
+      'is a client of the group instructor. Accepts ?page=1&limit=20 query params.',
     auth: true,
     responses: [
       {
@@ -220,10 +221,8 @@ export const OrganizationDocs = {
               lastName: 'Doe',
               isOwner: false,
               sharedHealthInfo: true,
-              healthData: {
-                fitnessLevel: 'INTERMEDIATE',
-                goals: ['weight_loss'],
-              },
+              isClient: true,
+              joinedAt: '2026-01-15T10:00:00.000Z',
             },
           ],
           meta: {
@@ -244,7 +243,7 @@ export const OrganizationDocs = {
   updateMyMembership: {
     summary: 'Update my membership settings',
     description:
-      'Update your own membership in this organization (e.g., share/hide health data, set nickname).',
+      'Update your own membership in this group (e.g., share/hide health data, set nickname).',
     auth: true,
     responses: [
       {
@@ -261,16 +260,16 @@ export const OrganizationDocs = {
     ],
   } as ApiEndpointOptions,
 
-  leaveOrganization: {
-    summary: 'Leave organization',
+  leaveGroup: {
+    summary: 'Leave group',
     description:
-      'Voluntarily leave an organization. Owners cannot leave — they must delete the org or transfer ownership.',
+      'Voluntarily leave a group. Owners cannot leave -- they must delete the group or transfer ownership.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Left organization',
-        example: { message: 'You have left the organization' },
+        description: 'Left group',
+        example: { message: 'You have left the group' },
       },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,
@@ -281,7 +280,7 @@ export const OrganizationDocs = {
   removeMember: {
     summary: 'Remove a member',
     description:
-      'Remove a member from the organization. Owner only. Cannot remove the owner.',
+      'Remove a member from the group. Owner only. Cannot remove the owner.',
     auth: true,
     responses: [
       {
@@ -295,19 +294,83 @@ export const OrganizationDocs = {
     ],
   } as ApiEndpointOptions,
 
-  deleteOrganization: {
-    summary: 'Delete organization',
+  deleteGroup: {
+    summary: 'Delete group',
     description:
-      'Soft-delete an organization. Owner only. All members are effectively removed.',
+      'Soft-delete a group. Owner only. All members are effectively removed.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Organization deleted',
-        example: { message: 'Organization deleted successfully' },
+        description: 'Group deleted',
+        example: { message: 'Group deleted successfully' },
       },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  // -- Join link management --
+
+  generateJoinLink: {
+    summary: 'Generate join link',
+    description:
+      'Generate a secure join link for the group. INSTRUCTOR role + owner only. ' +
+      'The token expires in 7 days by default. Share the returned token in a URL ' +
+      'like /groups/join/:token.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Join link generated',
+        example: {
+          message: 'Join link generated successfully',
+          token: 'a1b2c3d4e5f6...',
+          expiresAt: '2026-02-22T12:00:00.000Z',
+        },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  revokeJoinLink: {
+    summary: 'Revoke join link',
+    description:
+      'Revoke the current join link for the group. INSTRUCTOR role + owner only. ' +
+      'After revoking, any previously shared links become invalid.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Join link revoked',
+        example: { message: 'Join link revoked successfully' },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  joinViaLink: {
+    summary: 'Join group via invite link',
+    description:
+      'Join a group using a shared invite link token. The token must be valid and not expired. ' +
+      'Any authenticated user can use a valid link.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Joined successfully',
+        example: { message: 'You have joined the group' },
+      },
+      {
+        status: 400,
+        description: 'Token expired or already a member',
+      },
+      ApiStandardResponses.Unauthorized,
       ApiStandardResponses.NotFound,
     ],
   } as ApiEndpointOptions,

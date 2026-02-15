@@ -8,16 +8,16 @@ import { ApiStandardResponses } from './standard-responses';
 
 export const ProfileDocs = {
   discoverTrainers: {
-    summary: 'Discover trainers',
+    summary: 'Discover instructors',
     description:
-      'Browse and search public trainer profiles. No authentication required. ' +
+      'Browse and search public instructor profiles. No authentication required. ' +
       'Supports search by name/bio/specialization and filtering by city and country. ' +
       'Results sorted by years of experience (most experienced first).',
     auth: false,
     responses: [
       {
         status: 200,
-        description: 'Trainers found',
+        description: 'Instructors found',
         example: {
           data: [
             {
@@ -45,6 +45,35 @@ export const ProfileDocs = {
     ],
   } as ApiEndpointOptions,
 
+  getInstructorPublicProfile: {
+    summary: 'Get public instructor profile',
+    description:
+      'Returns a specific instructor\'s public profile by user ID. ' +
+      'Only returns data if the instructor has set isPublic to true. ' +
+      'No authentication required.',
+    auth: false,
+    responses: [
+      {
+        status: 200,
+        description: 'Instructor public profile retrieved',
+        example: {
+          id: 'profile-uuid',
+          userId: 'user-uuid',
+          firstName: 'John',
+          lastName: 'Doe',
+          displayName: 'Coach John',
+          bio: 'Certified HIIT and strength trainer',
+          specializations: ['hiit', 'strength'],
+          yearsOfExperience: 8,
+          isAcceptingClients: true,
+          city: 'Bucharest',
+          country: 'RO',
+        },
+      },
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
   getProfileOverview: {
     summary: 'Get full profile overview',
     description:
@@ -61,13 +90,13 @@ export const ProfileDocs = {
             firstName: 'John',
             lastName: 'Doe',
           },
-          roles: ['PARTICIPANT'],
-          hasOrganizerProfile: false,
-          participantProfile: {
+          roles: ['USER'],
+          hasInstructorProfile: false,
+          userProfile: {
             fitnessLevel: 'INTERMEDIATE',
             goals: ['weight_loss'],
           },
-          organizerProfile: null,
+          instructorProfile: null,
         },
       },
       ApiStandardResponses.Unauthorized,
@@ -75,13 +104,13 @@ export const ProfileDocs = {
   } as ApiEndpointOptions,
 
   getParticipantProfile: {
-    summary: 'Get participant profile',
-    description: "Returns the authenticated user's participant profile data.",
+    summary: 'Get user profile',
+    description: "Returns the authenticated user's profile data.",
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Participant profile retrieved',
+        description: 'User profile retrieved',
         example: {
           id: '550e8400-e29b-41d4-a716-446655440000',
           fitnessLevel: 'INTERMEDIATE',
@@ -98,14 +127,14 @@ export const ProfileDocs = {
   } as ApiEndpointOptions,
 
   updateParticipantProfile: {
-    summary: 'Update participant profile',
+    summary: 'Update user profile',
     description:
       'Update health & fitness data. All fields are optional — fill them progressively.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Participant profile updated',
+        description: 'User profile updated',
       },
       ApiStandardResponses.BadRequest,
       ApiStandardResponses.Unauthorized,
@@ -114,13 +143,13 @@ export const ProfileDocs = {
   } as ApiEndpointOptions,
 
   getOrganizerProfile: {
-    summary: 'Get organizer profile',
-    description: "Returns the authenticated user's organizer/trainer profile.",
+    summary: 'Get instructor profile',
+    description: "Returns the authenticated user's instructor profile.",
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Organizer profile retrieved',
+        description: 'Instructor profile retrieved',
         example: {
           id: '550e8400-e29b-41d4-a716-446655440000',
           displayName: 'Coach John',
@@ -135,14 +164,14 @@ export const ProfileDocs = {
   } as ApiEndpointOptions,
 
   updateOrganizerProfile: {
-    summary: 'Update organizer profile',
+    summary: 'Update instructor profile',
     description:
       'Update professional data. All fields optional — fill progressively.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Organizer profile updated',
+        description: 'Instructor profile updated',
       },
       ApiStandardResponses.BadRequest,
       ApiStandardResponses.Unauthorized,
@@ -153,7 +182,7 @@ export const ProfileDocs = {
   updateFullProfile: {
     summary: 'Update full profile (unified)',
     description:
-      'Update user + participant + organizer profiles in a single API call. Only provided sections are updated. Pass { user: {...}, participant: {...}, organizer: {...} }.',
+      'Update user + user profile + instructor profiles in a single API call. Only provided sections are updated. Pass { user: {...}, userProfile: {...}, instructor: {...} }.',
     auth: true,
     responses: [
       {
@@ -166,21 +195,21 @@ export const ProfileDocs = {
   } as ApiEndpointOptions,
 
   createOrganizerProfile: {
-    summary: 'Activate organizer profile',
+    summary: 'Activate instructor profile',
     description:
-      'Creates an organizer profile and assigns the ORGANIZER role. This is the "I want to organize activities" action.',
+      'Creates an instructor profile and assigns the INSTRUCTOR role. This is the "I want to be an instructor" action.',
     auth: true,
     responses: [
       {
         status: 201,
-        description: 'Organizer profile created and ORGANIZER role assigned',
+        description: 'Instructor profile created and INSTRUCTOR role assigned',
         example: {
           id: '550e8400-e29b-41d4-a716-446655440000',
           displayName: 'Coach John',
           userId: '550e8400-e29b-41d4-a716-446655440001',
         },
       },
-      { status: 409, description: 'Organizer profile already exists' },
+      { status: 409, description: 'Instructor profile already exists' },
       ApiStandardResponses.Unauthorized,
     ],
   } as ApiEndpointOptions,

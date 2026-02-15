@@ -5,14 +5,15 @@ import { SessionParticipant } from './entities/session-participant.entity';
 import { SessionController } from './session.controller';
 import { SessionService } from './session.service';
 import { RoleModule } from '../role/role.module';
-import { OrganizationMember } from '../organization/entities/organization-member.entity';
+import { GroupMember } from '../group/entities/group-member.entity';
+import { InstructorClient } from '../client/entities/instructor-client.entity';
 import { EmailService } from '../../common/services/email.service';
 
 /**
  * Session Module
  *
  * Manages training sessions and participant registrations.
- * Depends on OrganizationMember entity for visibility checks.
+ * Depends on GroupMember entity for visibility checks.
  *
  * TODO: [JOB SYSTEM] When Bull/Redis is configured, add:
  * - SessionReminderJob: Send reminders X hours before session
@@ -24,7 +25,8 @@ import { EmailService } from '../../common/services/email.service';
     SequelizeModule.forFeature([
       Session,
       SessionParticipant,
-      OrganizationMember,
+      GroupMember,
+      InstructorClient,
     ]),
     RoleModule,
   ],

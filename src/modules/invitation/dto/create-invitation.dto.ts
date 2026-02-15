@@ -18,22 +18,22 @@ export class CreateInvitationDto {
 
   @ApiProperty({
     example: '550e8400-e29b-41d4-a716-446655440000',
-    description: 'Organization ID to invite the person to',
+    description: 'Group ID to invite the person to',
   })
   @IsString()
   @IsNotEmpty()
-  organizationId: string;
+  groupId: string;
 
   @ApiPropertyOptional({
-    example: 'PARTICIPANT',
-    description: 'Role to assign (default: PARTICIPANT)',
+    example: 'USER',
+    description: 'Role to assign (default: USER)',
   })
   @IsString()
   @IsOptional()
   roleName?: string;
 
   @ApiPropertyOptional({
-    example: 'Join my fitness studio!',
+    example: 'Join my fitness group!',
     description: 'Personal message to include with the invitation',
   })
   @IsString()

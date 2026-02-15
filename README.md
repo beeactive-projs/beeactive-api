@@ -11,7 +11,7 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 
 | Document | Description |
 |----------|-------------|
-| **[USER-FLOWS.md](./USER-FLOWS.md)** | All user flows (auth, profile, organizations, invitations, sessions, discovery), recurrence rules, and status of fixes. Use it to understand API behaviour and for frontend integration. |
+| **[USER-FLOWS.md](./USER-FLOWS.md)** | All user flows (auth, profile, groups, invitations, sessions, clients, discovery), recurrence rules, and visibility model. Use it to understand API behaviour and for frontend integration. |
 | **[DEPLOY.md](./DEPLOY.md)** | How migrations run on deploy, how to set the start command (e.g. `npm run railway:start`), and what to do if migrations did not run on the server. |
 | **Swagger /api/docs** | Interactive API reference (endpoints, request/response schemas). |
 
@@ -61,7 +61,7 @@ All database tables and columns use `snake_case`:
 
 ```sql
 -- Tables
-user, organization, session_participant, organizer_profile
+user, group, session_participant, instructor_profile, user_profile, instructor_client
 
 -- Columns
 first_name, last_name, created_at, is_active, shared_health_info
@@ -100,7 +100,7 @@ All API responses return `camelCase` keys:
 | SQL migrations | `snake_case` | `ALTER TABLE user ADD COLUMN last_login_at` |
 | Sequelize model properties | `camelCase` | `firstName`, `createdAt` |
 | Sequelize queries | `camelCase` (model property names) | `where: { isActive: true }` |
-| DTO properties | `camelCase` | `firstName`, `organizationId` |
+| DTO properties | `camelCase` | `firstName`, `groupId` |
 | API request bodies | `camelCase` | `{ "firstName": "John" }` |
 | API responses | `camelCase` | `{ "firstName": "John" }` |
 | Swagger examples | `camelCase` | `firstName`, `createdAt` |
@@ -127,13 +127,14 @@ src/
 │   ├── env.validation.ts      # Environment variable validation (Joi)
 │   └── jwt.config.ts          # JWT config
 ├── modules/
-│   ├── auth/                  # Authentication (register, login, refresh, password reset)
+│   ├── auth/                  # Authentication (register, login, refresh, password reset, logout)
+│   ├── client/                # Instructor-client relationships
+│   ├── group/                 # Groups, members, join links, discovery
 │   ├── health/                # Health check endpoint
-│   ├── invitation/            # Organization invitations
-│   ├── organization/          # Organizations, members, health data sharing
-│   ├── profile/               # Participant & organizer profiles
+│   ├── invitation/            # Group invitations
+│   ├── profile/               # User & instructor profiles
 │   ├── role/                  # RBAC (roles & permissions)
-│   ├── session/               # Training sessions
+│   ├── session/               # Training sessions (with visibility rules)
 │   └── user/                  # User management
 ├── app.module.ts              # Root module
 └── main.ts                    # Application entry point
@@ -147,9 +148,9 @@ All list endpoints support pagination via query parameters:
 
 ```
 GET /sessions?page=1&limit=20
-GET /organizations/:id/members?page=2&limit=10
+GET /groups/:id/members?page=2&limit=10
+GET /clients?page=1&limit=20&status=ACTIVE
 GET /invitations/pending?page=1&limit=50
-GET /invitations/organization/:id?page=1&limit=20
 ```
 
 | Parameter | Default | Min | Max | Description |
@@ -180,7 +181,7 @@ All paginated endpoints return a standard response shape:
 The API includes an `EmailService` foundation with methods for:
 - Password reset emails
 - Email verification
-- Organization invitation emails
+- Group invitation emails
 - Welcome emails
 
 Currently, emails are **logged to console** instead of sent. To activate real sending, install a provider SDK and replace the `send()` method in `src/common/services/email.service.ts`:
@@ -223,8 +224,8 @@ RESEND_API_KEY=re_xxxxx
 
 ## RBAC System
 
-5 roles: `SUPER_ADMIN`, `ADMIN`, `ORGANIZER`, `PARTICIPANT`, `GUEST`  
-18 granular permissions with role-permission mapping via junction table.
+5 roles: `SUPER_ADMIN`, `ADMIN`, `SUPPORT`, `INSTRUCTOR`, `USER`
+Granular permissions with role-permission mapping via junction table.
 
 ---
 

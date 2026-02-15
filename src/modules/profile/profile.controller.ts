@@ -4,6 +4,7 @@ import {
   Post,
   Patch,
   Body,
+  Param,
   Query,
   UseGuards,
   Request,
@@ -11,11 +12,11 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { ProfileService } from './profile.service';
-import { UpdateParticipantProfileDto } from './dto/update-participant-profile.dto';
-import { CreateOrganizerProfileDto } from './dto/create-organizer-profile.dto';
-import { UpdateOrganizerProfileDto } from './dto/update-organizer-profile.dto';
+import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { CreateInstructorProfileDto } from './dto/create-instructor-profile.dto';
+import { UpdateInstructorProfileDto } from './dto/update-instructor-profile.dto';
 import { UpdateFullProfileDto } from './dto/update-full-profile.dto';
-import { DiscoverTrainersDto } from './dto/discover-trainers.dto';
+import { DiscoverInstructorsDto } from './dto/discover-instructors.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { ProfileDocs } from '../../common/docs/profile.docs';
 
@@ -25,16 +26,16 @@ import { ProfileDocs } from '../../common/docs/profile.docs';
  * Manages user profiles:
  *
  * Public (no auth):
- * - GET    /profile/trainers/discover → Browse/search public trainers
+ * - GET    /profile/instructors/discover → Browse/search public instructors
  *
  * Authenticated:
  * - GET    /profile/me              → Full profile overview (roles + both profiles)
  * - PATCH  /profile/me              → Unified profile update
- * - GET    /profile/participant      → Get participant profile
- * - PATCH  /profile/participant      → Update participant profile
- * - POST   /profile/organizer        → Activate organizer profile ("I want to organize")
- * - GET    /profile/organizer        → Get organizer profile
- * - PATCH  /profile/organizer        → Update organizer profile
+ * - GET    /profile/user-profile    → Get user profile
+ * - PATCH  /profile/user-profile    → Update user profile
+ * - POST   /profile/instructor      → Activate instructor profile ("I want to instruct")
+ * - GET    /profile/instructor      → Get instructor profile
+ * - PATCH  /profile/instructor      → Update instructor profile
  */
 @ApiTags('Profiles')
 @Controller('profile')
@@ -42,13 +43,19 @@ export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 
   // =====================================================
-  // TRAINER DISCOVERY (public — no auth required)
+  // INSTRUCTOR DISCOVERY (public — no auth required)
   // =====================================================
 
-  @Get('trainers/discover')
+  @Get('instructors/discover')
   @ApiEndpoint(ProfileDocs.discoverTrainers)
-  async discoverTrainers(@Query() dto: DiscoverTrainersDto) {
-    return this.profileService.discoverTrainers(dto);
+  async discoverInstructors(@Query() dto: DiscoverInstructorsDto) {
+    return this.profileService.discoverInstructors(dto);
+  }
+
+  @Get('instructors/:id')
+  @ApiEndpoint(ProfileDocs.getInstructorPublicProfile)
+  async getInstructorPublicProfile(@Param('id') id: string) {
+    return this.profileService.getInstructorPublicProfile(id);
   }
 
   // =====================================================
@@ -65,7 +72,7 @@ export class ProfileController {
   /**
    * Unified profile update
    *
-   * Update user + participant + organizer profiles in a single API call.
+   * Update user + user profile + instructor profiles in a single API call.
    * Only provided sections are updated.
    */
   @Patch('me')
@@ -82,63 +89,63 @@ export class ProfileController {
   }
 
   // =====================================================
-  // PARTICIPANT PROFILE
+  // USER PROFILE
   // =====================================================
 
-  @Get('participant')
+  @Get('user-profile')
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(ProfileDocs.getParticipantProfile)
-  async getParticipantProfile(@Request() req) {
-    return this.profileService.getParticipantProfile(req.user.id);
+  async getUserProfile(@Request() req) {
+    return this.profileService.getUserProfile(req.user.id);
   }
 
-  @Patch('participant')
+  @Patch('user-profile')
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({
     ...ProfileDocs.updateParticipantProfile,
-    body: UpdateParticipantProfileDto,
+    body: UpdateUserProfileDto,
   })
-  async updateParticipantProfile(
+  async updateUserProfile(
     @Request() req,
-    @Body() dto: UpdateParticipantProfileDto,
+    @Body() dto: UpdateUserProfileDto,
   ) {
-    return this.profileService.updateParticipantProfile(req.user.id, dto);
+    return this.profileService.updateUserProfile(req.user.id, dto);
   }
 
   // =====================================================
-  // ORGANIZER PROFILE
+  // INSTRUCTOR PROFILE
   // =====================================================
 
-  @Post('organizer')
+  @Post('instructor')
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({
     ...ProfileDocs.createOrganizerProfile,
-    body: CreateOrganizerProfileDto,
+    body: CreateInstructorProfileDto,
   })
-  async createOrganizerProfile(
+  async createInstructorProfile(
     @Request() req,
-    @Body() dto: CreateOrganizerProfileDto,
+    @Body() dto: CreateInstructorProfileDto,
   ) {
-    return this.profileService.createOrganizerProfile(req.user.id, dto);
+    return this.profileService.createInstructorProfile(req.user.id, dto);
   }
 
-  @Get('organizer')
+  @Get('instructor')
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(ProfileDocs.getOrganizerProfile)
-  async getOrganizerProfile(@Request() req) {
-    return this.profileService.getOrganizerProfile(req.user.id);
+  async getInstructorProfile(@Request() req) {
+    return this.profileService.getInstructorProfile(req.user.id);
   }
 
-  @Patch('organizer')
+  @Patch('instructor')
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({
     ...ProfileDocs.updateOrganizerProfile,
-    body: UpdateOrganizerProfileDto,
+    body: UpdateInstructorProfileDto,
   })
-  async updateOrganizerProfile(
+  async updateInstructorProfile(
     @Request() req,
-    @Body() dto: UpdateOrganizerProfileDto,
+    @Body() dto: UpdateInstructorProfileDto,
   ) {
-    return this.profileService.updateOrganizerProfile(req.user.id, dto);
+    return this.profileService.updateInstructorProfile(req.user.id, dto);
   }
 }

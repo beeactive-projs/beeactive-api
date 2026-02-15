@@ -11,32 +11,32 @@ import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { Invitation } from './entities/invitation.entity';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
-import { OrganizationService } from '../organization/organization.service';
+import { GroupService } from '../group/group.service';
 import { RoleService } from '../role/role.service';
 import { CryptoService, EmailService } from '../../common/services';
 import { User } from '../user/entities/user.entity';
-import { Organization } from '../organization/entities/organization.entity';
+import { Group } from '../group/entities/group.entity';
 import { Role } from '../role/entities/role.entity';
-import { OrganizationMember } from '../organization/entities/organization-member.entity';
+import { GroupMember } from '../group/entities/group-member.entity';
 
 /**
  * Invitation Service
  *
- * Manages invitations to join organizations.
+ * Manages invitations to join groups.
  *
  * Flow:
- * 1. Trainer sends invitation → token generated (hashed) + email sent via Resend
+ * 1. Instructor sends invitation → token generated (hashed) + email sent
  * 2. Invitee clicks link → token validated
- * 3. If valid + email matches → invitee added as org member + role assigned
+ * 3. If valid + email matches → invitee added as group member + role assigned
  */
 @Injectable()
 export class InvitationService {
   constructor(
     @InjectModel(Invitation)
     private invitationModel: typeof Invitation,
-    @InjectModel(OrganizationMember)
-    private memberModel: typeof OrganizationMember,
-    private organizationService: OrganizationService,
+    @InjectModel(GroupMember)
+    private memberModel: typeof GroupMember,
+    private groupService: GroupService,
     private roleService: RoleService,
     private cryptoService: CryptoService,
     private emailService: EmailService,
@@ -54,16 +54,16 @@ export class InvitationService {
     inviterId: string,
     dto: CreateInvitationDto,
   ): Promise<{ invitation: Invitation; invitationLink?: string }> {
-    // Verify inviter is the OWNER of the organization
-    const org = await this.organizationService.assertOwnerAndGet(
-      dto.organizationId,
+    // Verify inviter is the OWNER of the group
+    const group = await this.groupService.assertOwnerAndGet(
+      dto.groupId,
       inviterId,
     );
 
     // Check if the invited email is already a member
     const existingMember = await this.memberModel.findOne({
       where: {
-        organizationId: dto.organizationId,
+        groupId: dto.groupId,
         leftAt: null,
       },
       include: [
@@ -77,19 +77,19 @@ export class InvitationService {
 
     if (existingMember) {
       throw new BadRequestException(
-        'This user is already a member of the organization',
+        'This user is already a member of the group',
       );
     }
 
     // Find the role to assign
-    const roleName = dto.roleName || 'PARTICIPANT';
+    const roleName = dto.roleName || 'USER';
     const role = await this.roleService.findByName(roleName);
 
     // Check for existing pending invitation
     const existing = await this.invitationModel.findOne({
       where: {
         email: dto.email,
-        organizationId: dto.organizationId,
+        groupId: dto.groupId,
         acceptedAt: null,
         declinedAt: null,
       },
@@ -115,13 +115,13 @@ export class InvitationService {
     });
     const inviterName = inviter
       ? `${inviter.firstName} ${inviter.lastName}`
-      : 'Organization Owner';
+      : 'Group Owner';
 
     const invitation = await this.invitationModel.create({
       inviterId: inviterId,
       email: dto.email,
       roleId: role.id,
-      organizationId: dto.organizationId,
+      groupId: dto.groupId,
       token: hashedToken, // Store HASHED token
       message: dto.message,
       expiresAt: expiresAt,
@@ -132,12 +132,12 @@ export class InvitationService {
       this.configService.get('FRONTEND_URL') || 'http://localhost:4200';
     const invitationLink = `${frontendUrl}/accept-invitation?token=${plainToken}`;
 
-    // Send invitation email via Resend
-    this.emailService.sendInvitationEmail(dto.email, plainToken, inviterName, org.name, dto.message).catch((err: Error) =>
+    // Send invitation email
+    this.emailService.sendInvitationEmail(dto.email, plainToken, inviterName, group.name, dto.message).catch((err: Error) =>
       this.logger.error(`Failed to send invitation email: ${err.message}`, 'InvitationService'),
     );
 
-    this.logger.log(`Invitation sent to ${dto.email} for org ${org.name}`, 'InvitationService');
+    this.logger.log(`Invitation sent to ${dto.email} for group ${group.name}`, 'InvitationService');
 
     // In dev, return the plain token link for testing
     const isProduction = this.configService.get('NODE_ENV') === 'production';
@@ -152,18 +152,18 @@ export class InvitationService {
    * Accept an invitation
    *
    * Validates the token (by hashing and comparing), checks email match,
-   * adds user to organization, assigns role.
+   * adds user to group, assigns role.
    */
   async accept(
     plainToken: string,
     userId: string,
     userEmail: string,
-  ): Promise<{ message: string; organizationId: string }> {
+  ): Promise<{ message: string; groupId: string }> {
     const hashedToken = this.cryptoService.hashToken(plainToken);
 
     const invitation = await this.invitationModel.findOne({
       where: { token: hashedToken },
-      include: [Organization, Role],
+      include: [Group, Role],
     });
 
     if (!invitation) {
@@ -189,23 +189,22 @@ export class InvitationService {
       );
     }
 
-    // Add user to organization
-    await this.organizationService.addMember(invitation.organizationId, userId);
+    // Add user to group
+    await this.groupService.addMember(invitation.groupId, userId);
 
-    // Assign role (org-scoped)
-    await this.roleService.assignRoleToUser(userId, invitation.roleId, invitation.organizationId);
+    // Assign role (group-scoped)
+    await this.roleService.assignRoleToUser(userId, invitation.roleId, invitation.groupId);
 
     // Mark as accepted
     await invitation.update({ acceptedAt: new Date() });
 
     this.logger.log(
-      `Invitation accepted: user ${userId} joined org ${invitation.organizationId}`,
+      `Invitation accepted: user ${userId} joined group ${invitation.groupId}`,
       'InvitationService',
     );
 
     // Notify the inviter that the invitation was accepted
     // TODO: [JOB SYSTEM] Move to background job when Redis/Bull is configured
-    // TODO: Create a dedicated "invitation accepted" email template
     const inviterUser = await User.findByPk(invitation.inviterId, { attributes: ['email', 'firstName'] });
     if (inviterUser) {
       this.emailService.sendWelcomeEmail(inviterUser.email, inviterUser.firstName).catch(() => {});
@@ -213,14 +212,20 @@ export class InvitationService {
 
     return {
       message: 'Invitation accepted successfully',
-      organizationId: invitation.organizationId,
+      groupId: invitation.groupId,
     };
   }
 
   /**
    * Decline an invitation
+   *
+   * Requires the declining user's email to match the invitation email,
+   * preventing unauthorized users from declining someone else's invitation.
    */
-  async decline(plainToken: string): Promise<{ message: string }> {
+  async decline(
+    plainToken: string,
+    userEmail: string,
+  ): Promise<{ message: string }> {
     const hashedToken = this.cryptoService.hashToken(plainToken);
 
     const invitation = await this.invitationModel.findOne({
@@ -232,7 +237,16 @@ export class InvitationService {
     }
 
     if (invitation.acceptedAt || invitation.declinedAt) {
-      throw new BadRequestException('Invitation has already been responded to');
+      throw new BadRequestException(
+        'Invitation has already been responded to',
+      );
+    }
+
+    // Verify the declining user's email matches the invitation
+    if (invitation.email.toLowerCase() !== userEmail.toLowerCase()) {
+      throw new ForbiddenException(
+        'This invitation was sent to a different email address',
+      );
     }
 
     await invitation.update({ declinedAt: new Date() });
@@ -241,7 +255,7 @@ export class InvitationService {
   }
 
   /**
-   * Cancel an invitation (org owner)
+   * Cancel an invitation (group owner)
    */
   async cancel(
     invitationId: string,
@@ -253,9 +267,9 @@ export class InvitationService {
       throw new NotFoundException('Invitation not found');
     }
 
-    // Verify the user is the org owner
-    await this.organizationService.assertOwnerAndGet(
-      invitation.organizationId,
+    // Verify the user is the group owner
+    await this.groupService.assertOwnerAndGet(
+      invitation.groupId,
       userId,
     );
 
@@ -277,7 +291,7 @@ export class InvitationService {
   }
 
   /**
-   * Resend an invitation email (org owner)
+   * Resend an invitation email (group owner)
    *
    * Generates a new token and sends a new email. Old token is invalidated.
    */
@@ -286,16 +300,16 @@ export class InvitationService {
     userId: string,
   ): Promise<{ message: string; invitationLink?: string }> {
     const invitation = await this.invitationModel.findByPk(invitationId, {
-      include: [Organization],
+      include: [Group],
     });
 
     if (!invitation) {
       throw new NotFoundException('Invitation not found');
     }
 
-    // Verify the user is the org owner
-    await this.organizationService.assertOwnerAndGet(
-      invitation.organizationId,
+    // Verify the user is the group owner
+    await this.groupService.assertOwnerAndGet(
+      invitation.groupId,
       userId,
     );
 
@@ -326,10 +340,10 @@ export class InvitationService {
     });
     const inviterName = inviter
       ? `${inviter.firstName} ${inviter.lastName}`
-      : 'Organization Owner';
+      : 'Group Owner';
 
     // Send email
-    this.emailService.sendInvitationEmail(invitation.email, plainToken, inviterName, invitation.organization.name, invitation.message).catch((err: Error) =>
+    this.emailService.sendInvitationEmail(invitation.email, plainToken, inviterName, invitation.group.name, invitation.message).catch((err: Error) =>
       this.logger.error(`Failed to resend invitation email: ${err.message}`, 'InvitationService'),
     );
 
@@ -369,7 +383,7 @@ export class InvitationService {
             attributes: ['id', 'firstName', 'lastName', 'avatarId'],
           },
           {
-            model: Organization,
+            model: Group,
             attributes: ['id', 'name', 'slug'],
           },
           {
@@ -398,22 +412,22 @@ export class InvitationService {
   }
 
   /**
-   * List invitations sent by the org owner
+   * List invitations for a group
    */
-  async getOrganizationInvitations(
-    organizationId: string,
+  async getGroupInvitations(
+    groupId: string,
     userId: string,
     page: number = 1,
     limit: number = 20,
   ) {
-    // Verify user has access to this org
-    await this.organizationService.getById(organizationId, userId);
+    // Verify user is the group owner (only owners should see all invitations)
+    await this.groupService.assertOwnerAndGet(groupId, userId);
 
     const offset = (page - 1) * limit;
 
     const { rows: data, count: totalItems } =
       await this.invitationModel.findAndCountAll({
-        where: { organizationId: organizationId },
+        where: { groupId: groupId },
         include: [
           {
             model: Role,

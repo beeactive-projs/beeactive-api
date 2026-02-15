@@ -16,9 +16,10 @@ import { AuthModule } from './modules/auth/auth.module';
 import { RoleModule } from './modules/role/role.module';
 import { HealthModule } from './modules/health/health.module';
 import { ProfileModule } from './modules/profile/profile.module';
-import { OrganizationModule } from './modules/organization/organization.module';
+import { GroupModule } from './modules/group/group.module';
 import { SessionModule } from './modules/session/session.module';
 import { InvitationModule } from './modules/invitation/invitation.module';
+import { ClientModule } from './modules/client/client.module';
 import { CamelCaseInterceptor } from './common/interceptors/camel-case.interceptor';
 
 /**
@@ -98,10 +99,11 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     UserModule, // User management
     AuthModule, // Authentication
     RoleModule, // RBAC (Roles & Permissions)
-    ProfileModule, // Participant & Organizer profiles
-    OrganizationModule, // Organizations (studios, gyms)
+    ProfileModule, // User & Instructor profiles
+    GroupModule, // Groups (fitness groups, training crews)
     SessionModule, // Training sessions
     InvitationModule, // Invitation management
+    ClientModule, // Instructor-Client relationships
   ],
 
   controllers: [],

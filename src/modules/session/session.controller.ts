@@ -29,18 +29,18 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
  * Session Controller
  *
  * Training session management:
- * - POST   /sessions                              → Create session (ORGANIZER)
+ * - POST   /sessions                              → Create session (INSTRUCTOR)
  * - GET    /sessions                              → List my visible sessions
  * - GET    /sessions/discover                     → Discover public sessions
  * - GET    /sessions/:id                          → Get session details
- * - PATCH  /sessions/:id                          → Update session (organizer only)
- * - DELETE /sessions/:id                          → Delete session (organizer only)
+ * - PATCH  /sessions/:id                          → Update session (instructor only)
+ * - DELETE /sessions/:id                          → Delete session (instructor only)
  * - POST   /sessions/:id/clone                    → Clone/duplicate a session
  * - POST   /sessions/:id/join                     → Join session (participant)
  * - POST   /sessions/:id/leave                    → Leave session (participant)
  * - POST   /sessions/:id/confirm                  → Confirm registration
  * - POST   /sessions/:id/checkin                  → Self check-in
- * - PATCH  /sessions/:id/participants/:userId     → Update participant status (organizer)
+ * - PATCH  /sessions/:id/participants/:userId     → Update participant status (instructor)
  */
 @ApiTags('Sessions')
 @Controller('sessions')
@@ -54,7 +54,7 @@ export class SessionController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles('ORGANIZER', 'ADMIN', 'SUPER_ADMIN')
+  @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint({ ...SessionDocs.create, body: CreateSessionDto })
   async create(@Request() req, @Body() dto: CreateSessionDto) {
     return this.sessionService.create(req.user.id, dto);
@@ -105,7 +105,7 @@ export class SessionController {
 
   @Post(':id/clone')
   @UseGuards(RolesGuard)
-  @Roles('ORGANIZER', 'ADMIN', 'SUPER_ADMIN')
+  @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint({ ...SessionDocs.cloneSession, body: CloneSessionDto })
   async cloneSession(
     @Param('id') id: string,
@@ -117,7 +117,7 @@ export class SessionController {
 
   @Get(':id/recurrence-preview')
   @UseGuards(RolesGuard)
-  @Roles('ORGANIZER', 'ADMIN', 'SUPER_ADMIN')
+  @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint(SessionDocs.recurrencePreview)
   async getRecurrencePreview(
     @Param('id') id: string,
@@ -132,7 +132,7 @@ export class SessionController {
 
   @Post(':id/generate-instances')
   @UseGuards(RolesGuard)
-  @Roles('ORGANIZER', 'ADMIN', 'SUPER_ADMIN')
+  @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint({ ...SessionDocs.generateInstances, body: GenerateInstancesDto })
   async generateInstances(
     @Param('id') id: string,

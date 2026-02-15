@@ -24,7 +24,7 @@ class CertificationDto {
   year: number;
 }
 
-export class UpdateOrganizerProfileDto {
+export class UpdateInstructorProfileDto {
   @ApiPropertyOptional({
     example: 'Coach John',
     description: 'Professional display name',

@@ -1,15 +1,32 @@
-import { IsOptional, IsString, IsNumber, Min, Max } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsArray,
+  IsNumber,
+  Min,
+  Max,
+} from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
-export class DiscoverTrainersDto {
+export class DiscoverGroupsDto {
   @ApiPropertyOptional({
-    example: 'yoga',
-    description: 'Search by name, display name, bio, or specialization',
+    example: 'morning yoga',
+    description: 'Search by name or description',
   })
   @IsString()
   @IsOptional()
   search?: string;
+
+  @ApiPropertyOptional({
+    example: ['fitness', 'yoga'],
+    description: 'Filter by tags (groups must contain ALL specified tags)',
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  tags?: string[];
 
   @ApiPropertyOptional({
     example: 'Bucharest',

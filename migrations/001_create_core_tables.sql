@@ -2,7 +2,6 @@
 -- Migration 001: Create Core Tables (User, Role, Permission)
 -- =========================================================
 -- Creates the foundation tables for authentication and RBAC
--- Includes all security improvements
 -- =========================================================
 
 -- --------------------------------------------------------
@@ -11,7 +10,7 @@
 -- --------------------------------------------------------
 CREATE TABLE `user` (
   `id` CHAR(36) NOT NULL,
-  `email` VARCHAR(255) NOT NULL,  -- ✅ SECURITY: NOT NULL (required)
+  `email` VARCHAR(255) NOT NULL,
   `password_hash` VARCHAR(255) DEFAULT NULL,
   `first_name` VARCHAR(100) NOT NULL,
   `last_name` VARCHAR(100) NOT NULL,
@@ -24,12 +23,13 @@ CREATE TABLE `user` (
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
   `is_email_verified` TINYINT(1) NOT NULL DEFAULT 0,
 
-  -- ✅ SECURITY: Hashed token storage (SHA-256)
+  -- Security: Hashed token storage (SHA-256)
   `email_verification_token` VARCHAR(255) DEFAULT NULL COMMENT 'SHA-256 hash of verification token',
+  `email_verification_expires` DATETIME DEFAULT NULL COMMENT 'Email verification token expiration',
   `password_reset_token` VARCHAR(255) DEFAULT NULL COMMENT 'SHA-256 hash of reset token',
   `password_reset_expires` DATETIME DEFAULT NULL,
 
-  -- ✅ SECURITY: Account lockout fields
+  -- Security: Account lockout fields
   `failed_login_attempts` INT NOT NULL DEFAULT 0 COMMENT 'Failed login counter',
   `locked_until` DATETIME DEFAULT NULL COMMENT 'Account locked until this time',
 
@@ -98,22 +98,22 @@ CREATE TABLE `user_role` (
   `id` CHAR(36) NOT NULL,
   `user_id` CHAR(36) NOT NULL,
   `role_id` CHAR(36) NOT NULL,
-  `organization_id` CHAR(36) DEFAULT NULL COMMENT 'Scope role to organization (optional)',
+  `group_id` CHAR(36) DEFAULT NULL COMMENT 'Scope role to group (optional)',
   `assigned_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `expires_at` DATETIME DEFAULT NULL COMMENT 'Temporary role expiration',
 
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_user_role_org` (`user_id`, `role_id`, `organization_id`),
+  UNIQUE KEY `uk_user_role_group` (`user_id`, `role_id`, `group_id`),
   KEY `idx_user_role_user` (`user_id`),
   KEY `idx_user_role_role` (`role_id`),
-  KEY `idx_user_role_org` (`organization_id`),
+  KEY `idx_user_role_group` (`group_id`),
   KEY `idx_user_role_expires` (`expires_at`),
 
   CONSTRAINT `fk_user_role_user` FOREIGN KEY (`user_id`)
     REFERENCES `user` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_user_role_role` FOREIGN KEY (`role_id`)
     REFERENCES `role` (`id`) ON DELETE CASCADE
-  -- Note: organization FK added in later migration
+  -- Note: group FK added in migration 002 after group table exists
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='User role assignments';
 
@@ -141,7 +141,7 @@ COMMENT='Permission assignments to roles';
 
 -- --------------------------------------------------------
 -- Table: refresh_token
--- ✅ SECURITY: Refresh token storage for JWT renewal
+-- Refresh token storage for JWT renewal and logout
 -- --------------------------------------------------------
 CREATE TABLE `refresh_token` (
   `id` CHAR(36) NOT NULL,

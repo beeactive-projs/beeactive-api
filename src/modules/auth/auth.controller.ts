@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Body, Query, Res } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Res, UseGuards, Request } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
@@ -22,6 +23,7 @@ import { AuthDocs } from '../../common/docs/auth.docs';
  * - POST /auth/register → Create new account
  * - POST /auth/login → Login existing user
  * - POST /auth/refresh → Get new access token
+ * - POST /auth/logout → Invalidate refresh token
  * - POST /auth/forgot-password → Request password reset
  * - POST /auth/reset-password → Reset password with token
  *
@@ -36,7 +38,7 @@ export class AuthController {
   /**
    * Register a new user
    *
-   * Creates account, assigns PARTICIPANT role, returns JWT tokens.
+   * Creates account, assigns USER role, returns JWT tokens.
    * Rate limit: 3 requests per hour (prevents spam account creation)
    */
   @Post('register')
@@ -71,6 +73,20 @@ export class AuthController {
   @ApiEndpoint({ ...AuthDocs.refreshToken, body: RefreshTokenDto })
   async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshAccessToken(refreshTokenDto.refreshToken);
+  }
+
+  /**
+   * Logout user
+   *
+   * Invalidates the provided refresh token.
+   * Rate limit: 10 requests per 15 minutes
+   */
+  @Post('logout')
+  @UseGuards(AuthGuard('jwt'))
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
+  @ApiEndpoint({ ...AuthDocs.logout, body: RefreshTokenDto })
+  async logout(@Body() refreshTokenDto: RefreshTokenDto, @Request() req) {
+    return this.authService.logout(refreshTokenDto.refreshToken, req.user.id);
   }
 
   /**

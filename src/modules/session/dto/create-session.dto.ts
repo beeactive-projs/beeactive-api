@@ -18,11 +18,11 @@ import { RecurringRuleDto } from './recurring-rule.dto';
 export class CreateSessionDto {
   @ApiPropertyOptional({
     example: '550e8400-e29b-41d4-a716-446655440000',
-    description: 'Organization ID (optional — session can exist without org)',
+    description: 'Group ID (optional — session can exist without a group)',
   })
   @IsString()
   @IsOptional()
-  organizationId?: string;
+  groupId?: string;
 
   @ApiProperty({ example: 'Morning Yoga Flow' })
   @IsString()
@@ -44,11 +44,11 @@ export class CreateSessionDto {
   sessionType: string;
 
   @ApiPropertyOptional({
-    example: 'MEMBERS',
-    enum: ['PRIVATE', 'MEMBERS', 'PUBLIC'],
-    description: 'Who can see this session (default: MEMBERS)',
+    example: 'GROUP',
+    enum: ['PUBLIC', 'GROUP', 'CLIENTS', 'PRIVATE'],
+    description: 'Who can see this session (default: GROUP)',
   })
-  @IsEnum(['PRIVATE', 'MEMBERS', 'PUBLIC'])
+  @IsEnum(['PUBLIC', 'GROUP', 'CLIENTS', 'PRIVATE'])
   @IsOptional()
   visibility?: string;
 

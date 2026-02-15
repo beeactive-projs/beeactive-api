@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
-export class UpdateParticipantProfileDto {
+export class UpdateUserProfileDto {
   @ApiPropertyOptional({
     example: '1990-05-15',
     description: 'Date of birth (YYYY-MM-DD)',

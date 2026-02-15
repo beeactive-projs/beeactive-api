@@ -8,13 +8,13 @@ import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, Transaction } from 'sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { ParticipantProfile } from './entities/participant-profile.entity';
-import { OrganizerProfile } from './entities/organizer-profile.entity';
-import { UpdateParticipantProfileDto } from './dto/update-participant-profile.dto';
-import { CreateOrganizerProfileDto } from './dto/create-organizer-profile.dto';
-import { UpdateOrganizerProfileDto } from './dto/update-organizer-profile.dto';
+import { UserProfile } from './entities/user-profile.entity';
+import { InstructorProfile } from './entities/instructor-profile.entity';
+import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { CreateInstructorProfileDto } from './dto/create-instructor-profile.dto';
+import { UpdateInstructorProfileDto } from './dto/update-instructor-profile.dto';
 import { UpdateFullProfileDto } from './dto/update-full-profile.dto';
-import { DiscoverTrainersDto } from './dto/discover-trainers.dto';
+import { DiscoverInstructorsDto } from './dto/discover-instructors.dto';
 import { RoleService } from '../role/role.service';
 import { UserService } from '../user/user.service';
 import { User } from '../user/entities/user.entity';
@@ -22,20 +22,20 @@ import { User } from '../user/entities/user.entity';
 /**
  * Profile Service
  *
- * Manages participant and organizer profiles.
+ * Manages user and instructor profiles.
  *
  * Key concepts:
- * - Participant profile is created automatically at registration
- * - Organizer profile is created when user activates "organize activities"
- * - A user can have BOTH profiles (trainer who also joins other classes)
+ * - User profile is created automatically at registration
+ * - Instructor profile is created when user activates "instruct activities"
+ * - A user can have BOTH profiles (instructor who also joins other classes)
  */
 @Injectable()
 export class ProfileService {
   constructor(
-    @InjectModel(ParticipantProfile)
-    private participantProfileModel: typeof ParticipantProfile,
-    @InjectModel(OrganizerProfile)
-    private organizerProfileModel: typeof OrganizerProfile,
+    @InjectModel(UserProfile)
+    private userProfileModel: typeof UserProfile,
+    @InjectModel(InstructorProfile)
+    private instructorProfileModel: typeof InstructorProfile,
     private roleService: RoleService,
     private userService: UserService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
@@ -43,48 +43,48 @@ export class ProfileService {
   ) {}
 
   // =====================================================
-  // PARTICIPANT PROFILE
+  // USER PROFILE
   // =====================================================
 
   /**
-   * Create empty participant profile (called during registration)
+   * Create empty user profile (called during registration)
    */
-  async createParticipantProfile(
+  async createUserProfile(
     userId: string,
     transaction?: Transaction,
-  ): Promise<ParticipantProfile> {
-    return this.participantProfileModel.create(
+  ): Promise<UserProfile> {
+    return this.userProfileModel.create(
       { userId: userId },
       { transaction },
     );
   }
 
   /**
-   * Get participant profile for the authenticated user
+   * Get user profile for the authenticated user
    */
-  async getParticipantProfile(
+  async getUserProfile(
     userId: string,
-  ): Promise<ParticipantProfile | null> {
-    return this.participantProfileModel.findOne({
+  ): Promise<UserProfile | null> {
+    return this.userProfileModel.findOne({
       where: { userId: userId },
     });
   }
 
   /**
-   * Update participant profile
+   * Update user profile
    *
    * All fields are optional — user fills them progressively.
    */
-  async updateParticipantProfile(
+  async updateUserProfile(
     userId: string,
-    dto: UpdateParticipantProfileDto,
-  ): Promise<ParticipantProfile> {
-    const profile = await this.participantProfileModel.findOne({
+    dto: UpdateUserProfileDto,
+  ): Promise<UserProfile> {
+    const profile = await this.userProfileModel.findOne({
       where: { userId: userId },
     });
 
     if (!profile) {
-      throw new NotFoundException('Participant profile not found');
+      throw new NotFoundException('User profile not found');
     }
 
     await profile.update(dto);
@@ -92,39 +92,39 @@ export class ProfileService {
   }
 
   // =====================================================
-  // ORGANIZER PROFILE
+  // INSTRUCTOR PROFILE
   // =====================================================
 
   /**
-   * Create organizer profile and assign ORGANIZER role
+   * Create instructor profile and assign INSTRUCTOR role
    *
-   * This is the "I want to organize activities" action.
-   * Creates the profile AND adds the ORGANIZER role to the user.
+   * This is the "I want to instruct activities" action.
+   * Creates the profile AND adds the INSTRUCTOR role to the user.
    */
-  async createOrganizerProfile(
+  async createInstructorProfile(
     userId: string,
-    dto: CreateOrganizerProfileDto,
-  ): Promise<OrganizerProfile> {
-    // Check if already has organizer profile
-    const existing = await this.organizerProfileModel.findOne({
+    dto: CreateInstructorProfileDto,
+  ): Promise<InstructorProfile> {
+    // Check if already has instructor profile
+    const existing = await this.instructorProfileModel.findOne({
       where: { userId: userId },
     });
 
     if (existing) {
-      throw new ConflictException('Organizer profile already exists');
+      throw new ConflictException('Instructor profile already exists');
     }
 
     // Create the profile
-    const profile = await this.organizerProfileModel.create({
+    const profile = await this.instructorProfileModel.create({
       userId: userId,
       displayName: dto.displayName || null,
     });
 
-    // Assign ORGANIZER role (global, not org-scoped yet)
-    await this.roleService.assignRoleToUserByName(userId, 'ORGANIZER');
+    // Assign INSTRUCTOR role (global, not group-scoped yet)
+    await this.roleService.assignRoleToUserByName(userId, 'INSTRUCTOR');
 
     this.logger.log(
-      `User ${userId} activated organizer profile`,
+      `User ${userId} activated instructor profile`,
       'ProfileService',
     );
 
@@ -132,28 +132,28 @@ export class ProfileService {
   }
 
   /**
-   * Get organizer profile for the authenticated user
+   * Get instructor profile for the authenticated user
    */
-  async getOrganizerProfile(userId: string): Promise<OrganizerProfile | null> {
-    return this.organizerProfileModel.findOne({
+  async getInstructorProfile(userId: string): Promise<InstructorProfile | null> {
+    return this.instructorProfileModel.findOne({
       where: { userId: userId },
     });
   }
 
   /**
-   * Update organizer profile
+   * Update instructor profile
    */
-  async updateOrganizerProfile(
+  async updateInstructorProfile(
     userId: string,
-    dto: UpdateOrganizerProfileDto,
-  ): Promise<OrganizerProfile> {
-    const profile = await this.organizerProfileModel.findOne({
+    dto: UpdateInstructorProfileDto,
+  ): Promise<InstructorProfile> {
+    const profile = await this.instructorProfileModel.findOne({
       where: { userId: userId },
     });
 
     if (!profile) {
       throw new NotFoundException(
-        'Organizer profile not found. Activate it first via POST /profile/organizer',
+        'Instructor profile not found. Activate it first via POST /profile/instructor',
       );
     }
 
@@ -166,7 +166,7 @@ export class ProfileService {
   // =====================================================
 
   /**
-   * Update full profile (user + participant + organizer) in one call
+   * Update full profile (user + user profile + instructor) in one call
    *
    * Only provided sections are updated. If a section is omitted, it's skipped.
    */
@@ -178,21 +178,21 @@ export class ProfileService {
       results.user = await this.userService.updateUser(userId, dto.user);
     }
 
-    // Update participant profile
-    if (dto.participant && Object.keys(dto.participant).length > 0) {
-      results.participant = await this.updateParticipantProfile(
+    // Update user profile
+    if (dto.userProfile && Object.keys(dto.userProfile).length > 0) {
+      results.userProfile = await this.updateUserProfile(
         userId,
-        dto.participant,
+        dto.userProfile,
       );
     }
 
-    // Update organizer profile (only if it exists)
-    if (dto.organizer && Object.keys(dto.organizer).length > 0) {
-      const orgProfile = await this.getOrganizerProfile(userId);
-      if (orgProfile) {
-        results.organizer = await this.updateOrganizerProfile(
+    // Update instructor profile (only if it exists)
+    if (dto.instructor && Object.keys(dto.instructor).length > 0) {
+      const instProfile = await this.getInstructorProfile(userId);
+      if (instProfile) {
+        results.instructor = await this.updateInstructorProfile(
           userId,
-          dto.organizer,
+          dto.instructor,
         );
       }
     }
@@ -206,17 +206,17 @@ export class ProfileService {
   }
 
   // =====================================================
-  // TRAINER DISCOVERY (public)
+  // INSTRUCTOR DISCOVERY (public)
   // =====================================================
 
   /**
-   * Discover public organizer/trainer profiles
+   * Discover public instructor profiles
    *
-   * Returns paginated list of trainers who have set isPublic=true.
+   * Returns paginated list of instructors who have set isPublic=true.
    * Supports search by name/bio/specialization and filtering by city/country.
    * Sorted by years of experience (most experienced first).
    */
-  async discoverTrainers(dto: DiscoverTrainersDto) {
+  async discoverInstructors(dto: DiscoverInstructorsDto) {
     const page = dto.page || 1;
     const limit = dto.limit || 20;
     const offset = (page - 1) * limit;
@@ -233,32 +233,26 @@ export class ProfileService {
       where.locationCountry = dto.country;
     }
 
-    // Search across displayName, bio
+    // Search across displayName, bio, firstName, lastName using cross-table OR
     if (dto.search) {
       where[Op.or] = [
         { displayName: { [Op.like]: `%${dto.search}%` } },
         { bio: { [Op.like]: `%${dto.search}%` } },
+        { '$user.first_name$': { [Op.like]: `%${dto.search}%` } },
+        { '$user.last_name$': { [Op.like]: `%${dto.search}%` } },
       ];
     }
 
     const { rows: profiles, count: totalItems } =
-      await this.organizerProfileModel.findAndCountAll({
+      await this.instructorProfileModel.findAndCountAll({
         where,
         include: [
           {
             model: User,
             attributes: ['id', 'firstName', 'lastName', 'avatarId'],
-            where: dto.search
-              ? {
-                  [Op.or]: [
-                    { firstName: { [Op.like]: `%${dto.search}%` } },
-                    { lastName: { [Op.like]: `%${dto.search}%` } },
-                  ],
-                }
-              : undefined,
-            required: !dto.search, // If searching, allow profiles without user match
           },
         ],
+        subQuery: false,
         attributes: [
           'id',
           'userId',
@@ -308,6 +302,49 @@ export class ProfileService {
     };
   }
 
+  /**
+   * Get a public instructor profile by user ID
+   *
+   * Returns the instructor's public profile if isPublic is true.
+   * Used when a user clicks on an instructor from the discover list.
+   */
+  async getInstructorPublicProfile(instructorUserId: string) {
+    const profile = await this.instructorProfileModel.findOne({
+      where: { userId: instructorUserId, isPublic: true },
+      include: [
+        {
+          model: User,
+          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+        },
+      ],
+    });
+
+    if (!profile) {
+      throw new NotFoundException(
+        'Instructor profile not found or is not public',
+      );
+    }
+
+    return {
+      id: profile.id,
+      userId: profile.userId,
+      firstName: profile.user?.firstName,
+      lastName: profile.user?.lastName,
+      avatarId: profile.user?.avatarId,
+      displayName: profile.displayName,
+      bio: profile.bio,
+      specializations: profile.specializations,
+      certifications: profile.certifications,
+      yearsOfExperience: profile.yearsOfExperience,
+      isAcceptingClients: profile.isAcceptingClients,
+      city: profile.locationCity,
+      country: profile.locationCountry,
+      socialLinks: profile.showSocialLinks ? profile.socialLinks : null,
+      showEmail: profile.showEmail,
+      showPhone: profile.showPhone,
+    };
+  }
+
   // =====================================================
   // PROFILE OVERVIEW
   // =====================================================
@@ -319,9 +356,9 @@ export class ProfileService {
    * The frontend uses this to know what UI to show.
    */
   async getProfileOverview(user: User) {
-    const [participantProfile, organizerProfile, roles] = await Promise.all([
-      this.getParticipantProfile(user.id),
-      this.getOrganizerProfile(user.id),
+    const [userProfile, instructorProfile, roles] = await Promise.all([
+      this.getUserProfile(user.id),
+      this.getInstructorProfile(user.id),
       this.roleService.getUserRoles(user.id),
     ]);
 
@@ -339,32 +376,32 @@ export class ProfileService {
         createdAt: user.createdAt,
       },
       roles: roles.map((r) => r.name),
-      hasOrganizerProfile: !!organizerProfile,
-      participantProfile: participantProfile
+      hasInstructorProfile: !!instructorProfile,
+      userProfile: userProfile
         ? {
-            dateOfBirth: participantProfile.dateOfBirth,
-            gender: participantProfile.gender,
-            heightCm: participantProfile.heightCm,
-            weightKg: participantProfile.weightKg,
-            fitnessLevel: participantProfile.fitnessLevel,
-            goals: participantProfile.goals,
-            medicalConditions: participantProfile.medicalConditions,
-            emergencyContactName: participantProfile.emergencyContactName,
-            emergencyContactPhone: participantProfile.emergencyContactPhone,
-            notes: participantProfile.notes,
+            dateOfBirth: userProfile.dateOfBirth,
+            gender: userProfile.gender,
+            heightCm: userProfile.heightCm,
+            weightKg: userProfile.weightKg,
+            fitnessLevel: userProfile.fitnessLevel,
+            goals: userProfile.goals,
+            medicalConditions: userProfile.medicalConditions,
+            emergencyContactName: userProfile.emergencyContactName,
+            emergencyContactPhone: userProfile.emergencyContactPhone,
+            notes: userProfile.notes,
           }
         : null,
-      organizerProfile: organizerProfile
+      instructorProfile: instructorProfile
         ? {
-            displayName: organizerProfile.displayName,
-            bio: organizerProfile.bio,
-            specializations: organizerProfile.specializations,
-            certifications: organizerProfile.certifications,
-            yearsOfExperience: organizerProfile.yearsOfExperience,
-            isAcceptingClients: organizerProfile.isAcceptingClients,
-            socialLinks: organizerProfile.socialLinks,
-            locationCity: organizerProfile.locationCity,
-            locationCountry: organizerProfile.locationCountry,
+            displayName: instructorProfile.displayName,
+            bio: instructorProfile.bio,
+            specializations: instructorProfile.specializations,
+            certifications: instructorProfile.certifications,
+            yearsOfExperience: instructorProfile.yearsOfExperience,
+            isAcceptingClients: instructorProfile.isAcceptingClients,
+            socialLinks: instructorProfile.socialLinks,
+            locationCity: instructorProfile.locationCity,
+            locationCountry: instructorProfile.locationCountry,
           }
         : null,
     };

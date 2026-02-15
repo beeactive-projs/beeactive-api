@@ -11,19 +11,20 @@ import {
   DeletedAt,
 } from 'sequelize-typescript';
 import { User } from '../../user/entities/user.entity';
-import { Organization } from '../../organization/entities/organization.entity';
+import { Group } from '../../group/entities/group.entity';
 import { SessionParticipant } from './session-participant.entity';
 
 /**
  * Session Entity
  *
  * Represents a training session (class, workshop, one-on-one).
- * Created by an organizer, optionally linked to an organization.
+ * Created by an instructor, optionally linked to a group.
  *
  * Visibility controls who can see the session:
- * - PRIVATE: Only the organizer + specifically invited participants
- * - MEMBERS: All members of the organization
- * - PUBLIC: Anyone (for future discovery/marketplace)
+ * - PUBLIC: Anyone can view
+ * - GROUP: Must be a member of session.groupId
+ * - CLIENTS: Must be a client of session.instructorId
+ * - PRIVATE: Only the instructor can view
  */
 @Table({
   tableName: 'session',
@@ -39,19 +40,19 @@ export class Session extends Model {
   })
   declare id: string;
 
-  @ForeignKey(() => Organization)
+  @ForeignKey(() => Group)
   @Column({
     type: DataType.CHAR(36),
     allowNull: true,
   })
-  declare organizationId: string;
+  declare groupId: string;
 
   @ForeignKey(() => User)
   @Column({
     type: DataType.CHAR(36),
     allowNull: false,
   })
-  declare organizerId: string;
+  declare instructorId: string;
 
   @Column({
     type: DataType.STRING(255),
@@ -72,8 +73,8 @@ export class Session extends Model {
   declare sessionType: string;
 
   @Column({
-    type: DataType.ENUM('PRIVATE', 'MEMBERS', 'PUBLIC'),
-    defaultValue: 'MEMBERS',
+    type: DataType.ENUM('PUBLIC', 'GROUP', 'CLIENTS', 'PRIVATE'),
+    defaultValue: 'GROUP',
   })
   declare visibility: string;
 
@@ -153,11 +154,11 @@ export class Session extends Model {
   declare deletedAt: Date;
 
   // Relationships
-  @BelongsTo(() => User, 'organizerId')
-  declare organizer: User;
+  @BelongsTo(() => User, 'instructorId')
+  declare instructor: User;
 
-  @BelongsTo(() => Organization)
-  declare organization: Organization;
+  @BelongsTo(() => Group)
+  declare group: Group;
 
   @HasMany(() => SessionParticipant)
   declare participants: SessionParticipant[];
