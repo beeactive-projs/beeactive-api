@@ -124,7 +124,9 @@ export class SessionController {
     @Request() req,
     @Query('weeks') weeks?: string,
   ) {
-    const numWeeks = weeks ? Math.min(52, Math.max(1, parseInt(weeks, 10) || 12)) : 12;
+    const numWeeks = weeks
+      ? Math.min(52, Math.max(1, parseInt(weeks, 10) || 12))
+      : 12;
     return this.sessionService.getRecurrencePreview(id, req.user.id, numWeeks);
   }
 

@@ -119,11 +119,7 @@ export class SessionService {
   /**
    * Get sessions visible to the user (paginated, deduplicated)
    */
-  async getMySessions(
-    userId: string,
-    page: number = 1,
-    limit: number = 20,
-  ) {
+  async getMySessions(userId: string, page: number = 1, limit: number = 20) {
     const memberships = await this.memberModel.findAll({
       where: { userId: userId, leftAt: null },
       attributes: ['organizationId'],
@@ -383,9 +379,7 @@ export class SessionService {
     }
 
     if (original.organizerId !== userId) {
-      throw new ForbiddenException(
-        'Only the organizer can clone this session',
-      );
+      throw new ForbiddenException('Only the organizer can clone this session');
     }
 
     const cloned = await this.sessionModel.create({
@@ -426,8 +420,7 @@ export class SessionService {
     weeks: number = 12,
   ): Promise<{ dates: string[] }> {
     const session = await this.sessionModel.findByPk(sessionId);
-    if (!session)
-      throw new NotFoundException('Session not found');
+    if (!session) throw new NotFoundException('Session not found');
     if (session.organizerId !== userId)
       throw new ForbiddenException('Only the organizer can preview recurrence');
     if (!session.isRecurring || !session.recurringRule)
@@ -450,8 +443,7 @@ export class SessionService {
     weeks: number = 12,
   ): Promise<{ created: number; sessions: Session[] }> {
     const template = await this.sessionModel.findByPk(sessionId);
-    if (!template)
-      throw new NotFoundException('Session not found');
+    if (!template) throw new NotFoundException('Session not found');
     if (template.organizerId !== userId)
       throw new ForbiddenException('Only the organizer can generate instances');
     if (!template.isRecurring || !template.recurringRule)
@@ -460,7 +452,12 @@ export class SessionService {
     const rule = template.recurringRule as RecurringRule;
     const firstAt = new Date(template.scheduledAt);
     // Exclude the first occurrence (it's the template itself)
-    const occurrenceDates = this.computeOccurrenceDates(firstAt, rule, weeks, false);
+    const occurrenceDates = this.computeOccurrenceDates(
+      firstAt,
+      rule,
+      weeks,
+      false,
+    );
 
     // Find existing sessions for this template (same organizer, same title, same date)
     const existingStarts = new Set<string>();
@@ -470,12 +467,16 @@ export class SessionService {
         title: template.title,
         scheduledAt: {
           [Op.gte]: firstAt,
-          [Op.lte]: new Date(firstAt.getTime() + weeks * 7 * 24 * 60 * 60 * 1000),
+          [Op.lte]: new Date(
+            firstAt.getTime() + weeks * 7 * 24 * 60 * 60 * 1000,
+          ),
         },
       },
       attributes: ['scheduledAt'],
     });
-    existing.forEach((s) => existingStarts.add(new Date(s.scheduledAt).toISOString()));
+    existing.forEach((s) =>
+      existingStarts.add(new Date(s.scheduledAt).toISOString()),
+    );
 
     const toCreate = occurrenceDates.filter(
       (d) => !existingStarts.has(d.toISOString()),
@@ -542,9 +543,12 @@ export class SessionService {
     };
 
     if (rule.frequency === 'DAILY') {
-      let d = new Date(firstAt);
+      const d = new Date(firstAt);
       if (!includeFirst) d.setDate(d.getDate() + interval);
-      while (results.length < maxWeeks * 7 && (!endAfter || results.length < endAfter)) {
+      while (
+        results.length < maxWeeks * 7 &&
+        (!endAfter || results.length < endAfter)
+      ) {
         if (endDate && d > endDate) break;
         push(new Date(d.getTime()));
         d.setDate(d.getDate() + interval);
@@ -553,9 +557,12 @@ export class SessionService {
     }
 
     if (rule.frequency === 'MONTHLY') {
-      let d = new Date(firstAt);
+      const d = new Date(firstAt);
       if (!includeFirst) d.setMonth(d.getMonth() + interval);
-      while (results.length < maxWeeks * 4 && (!endAfter || results.length < endAfter)) {
+      while (
+        results.length < maxWeeks * 4 &&
+        (!endAfter || results.length < endAfter)
+      ) {
         if (endDate && d > endDate) break;
         push(new Date(d.getTime()));
         d.setMonth(d.getMonth() + interval);
@@ -564,7 +571,9 @@ export class SessionService {
     }
 
     // WEEKLY: daysOfWeek 0=Sun .. 6=Sat
-    const daysOfWeek = rule.daysOfWeek?.length ? rule.daysOfWeek : [firstAt.getDay()];
+    const daysOfWeek = rule.daysOfWeek?.length
+      ? rule.daysOfWeek
+      : [firstAt.getDay()];
     const weekStart = new Date(firstAt);
     weekStart.setHours(0, 0, 0, 0);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
@@ -657,9 +666,7 @@ export class SessionService {
 
     // Notify organizer
     // TODO: [JOB SYSTEM] Move to background job
-    this.notifyOrganizerOfJoinLeave(session, userId, 'joined').catch(
-      () => {},
-    );
+    this.notifyOrganizerOfJoinLeave(session, userId, 'joined').catch(() => {});
 
     return participant;
   }
@@ -692,8 +699,7 @@ export class SessionService {
     const now = new Date();
     const sessionStart = new Date(session.scheduledAt);
     const cutoffTime = new Date(
-      sessionStart.getTime() -
-        this.CANCELLATION_CUTOFF_HOURS * 60 * 60 * 1000,
+      sessionStart.getTime() - this.CANCELLATION_CUTOFF_HOURS * 60 * 60 * 1000,
     );
 
     if (now > cutoffTime) {
@@ -759,20 +765,14 @@ export class SessionService {
     });
 
     if (!participant) {
-      throw new NotFoundException(
-        'You are not registered for this session',
-      );
+      throw new NotFoundException('You are not registered for this session');
     }
 
     // Allow check-in 15 minutes before to 30 minutes after session start
     const now = new Date();
     const sessionStart = new Date(session.scheduledAt);
-    const earliestCheckIn = new Date(
-      sessionStart.getTime() - 15 * 60 * 1000,
-    );
-    const latestCheckIn = new Date(
-      sessionStart.getTime() + 30 * 60 * 1000,
-    );
+    const earliestCheckIn = new Date(sessionStart.getTime() - 15 * 60 * 1000);
+    const latestCheckIn = new Date(sessionStart.getTime() + 30 * 60 * 1000);
 
     if (now < earliestCheckIn || now > latestCheckIn) {
       throw new BadRequestException(
@@ -832,10 +832,7 @@ export class SessionService {
     // TODO: [JOB SYSTEM] Move to background job queue
     if (oldStatus !== dto.status && participant.user) {
       this.emailService
-        .sendWelcomeEmail(
-          participant.user.email,
-          participant.user.firstName,
-        )
+        .sendWelcomeEmail(participant.user.email, participant.user.firstName)
         .catch(() => {}); // Best effort notification
     }
 
@@ -863,10 +860,7 @@ export class SessionService {
       if (participant.user?.email) {
         // TODO: Create a dedicated cancellation email template
         this.emailService
-          .sendWelcomeEmail(
-            participant.user.email,
-            participant.user.firstName,
-          )
+          .sendWelcomeEmail(participant.user.email, participant.user.firstName)
           .catch(() => {});
       }
     }

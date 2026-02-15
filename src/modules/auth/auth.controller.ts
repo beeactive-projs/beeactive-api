@@ -10,6 +10,8 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { GoogleAuthDto } from './dto/google-auth.dto';
+import { FacebookAuthDto } from './dto/facebook-auth.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { AuthDocs } from '../../common/docs/auth.docs';
 
@@ -146,5 +148,31 @@ export class AuthController {
     @Body() resendVerificationDto: ResendVerificationDto,
   ) {
     return this.authService.resendVerification(resendVerificationDto);
+  }
+
+  /**
+   * Sign in with Google (token flow)
+   *
+   * Frontend obtains ID token from Google Sign-In, sends it here.
+   * Returns same JWT + user shape as login/register.
+   */
+  @Post('google')
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
+  @ApiEndpoint({ ...AuthDocs.google, body: GoogleAuthDto })
+  async google(@Body() dto: GoogleAuthDto) {
+    return this.authService.registerWithGoogle(dto.idToken);
+  }
+
+  /**
+   * Sign in with Facebook (token flow)
+   *
+   * Frontend obtains access token from Facebook Login SDK, sends it here.
+   * Returns same JWT + user shape as login/register.
+   */
+  @Post('facebook')
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
+  @ApiEndpoint({ ...AuthDocs.facebook, body: FacebookAuthDto })
+  async facebook(@Body() dto: FacebookAuthDto) {
+    return this.authService.registerWithFacebook(dto.accessToken);
   }
 }

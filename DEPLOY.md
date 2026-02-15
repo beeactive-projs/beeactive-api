@@ -117,6 +117,60 @@ After that, set the deploy start command to `npm run railway:start` and redeploy
 
 ---
 
+## Production already has schema but `_migrations` is empty
+
+If your production database was created earlier (e.g. by running all migrations once without `--safe`, or by another process) and the **`_migrations`** table is missing or empty, then on deploy the runner thinks no migrations have run and tries to run **001–008** again. Those fail with errors like:
+
+- `Table 'user' already exists`
+- `Duplicate column name 'gender'`
+- `Duplicate entry ... for key 'role.PRIMARY'`
+
+**Fix: run the bootstrap once so only 009 and 010 run on the next deploy.**
+
+### Step 1: Mark 001–008 as already run
+
+Run the bootstrap SQL **once** against your **production** database. It creates `_migrations` (if needed) and inserts the names of migrations 001–008 so the runner will skip them.
+
+**Option A – Railway MySQL console**
+
+1. In Railway, open your **MySQL** service.
+2. Use the **Query** / **Data** tab or connect with a MySQL client using the production connection URL.
+3. Execute the contents of **`migrations/bootstrap_migrations_for_existing_db.sql`** (create `_migrations`, then the eight `INSERT IGNORE` rows).
+
+**Option B – Railway CLI (no MySQL client needed)**
+
+From your project directory (with Railway CLI installed and project linked):
+
+```bash
+railway run node migrations/bootstrap-migrations.js
+```
+
+This uses the same DB connection as your app (Railway injects `MYSQL_PUBLIC_URL`). It creates `_migrations` if needed and inserts 001–008. Then redeploy.
+
+**Option C – From your machine with MySQL client**
+
+```bash
+# With MYSQL_PUBLIC_URL or connection details in env:
+mysql -h YOUR_HOST -P 3306 -u YOUR_USER -p YOUR_DATABASE < migrations/bootstrap_migrations_for_existing_db.sql
+```
+
+Or with a URL:
+
+```bash
+mysql "mysql://user:pass@host:port/railway" < migrations/bootstrap_migrations_for_existing_db.sql
+```
+
+### Step 2: Redeploy
+
+Trigger a new deploy (push a commit or “Redeploy” in Railway). The start command will run `node migrations/run.js --safe`, which will:
+
+- See 001–008 in `_migrations` and skip them.
+- Run **009** and **010** only.
+
+After that, future migrations (011, 012, …) will also run automatically on deploy.
+
+---
+
 ## Summary
 
 | Item | What to do |
@@ -124,3 +178,4 @@ After that, set the deploy start command to `npm run railway:start` and redeploy
 | **Migrations run on deploy** | Use start command: `npm run railway:start`. Commit `railway.toml` so Railway uses it. |
 | **Verify after deploy** | Check deploy logs for migration lines; or check `_migrations` table / new columns in DB. |
 | **Migrations never ran on server** | Run once: `node migrations/run.js --from 009` (with prod env). Then set start command and redeploy. |
+| **Schema exists but _migrations empty** | Run once: `migrations/bootstrap_migrations_for_existing_db.sql` on production DB, then redeploy so only 009+ run. |

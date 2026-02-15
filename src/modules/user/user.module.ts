@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { User } from './entities/user.entity';
+import { SocialAccount } from './entities/social-account.entity';
 import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { CryptoService } from '../../common/services';
@@ -19,7 +20,7 @@ import { CryptoService } from '../../common/services';
  */
 @Module({
   imports: [
-    SequelizeModule.forFeature([User]), // Register User model with Sequelize
+    SequelizeModule.forFeature([User, SocialAccount]),
   ],
   controllers: [UserController],
   providers: [

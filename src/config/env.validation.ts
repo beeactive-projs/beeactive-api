@@ -56,4 +56,10 @@ export const envValidationSchema = Joi.object({
   // Email sender configuration
   EMAIL_FROM: Joi.string().email().optional(),
   EMAIL_FROM_NAME: Joi.string().optional(),
+
+  // OAuth (optional – required only when using social login)
+  GOOGLE_CLIENT_ID: Joi.string().optional(),
+  GOOGLE_CLIENT_SECRET: Joi.string().optional(),
+  FACEBOOK_APP_ID: Joi.string().optional(),
+  FACEBOOK_APP_SECRET: Joi.string().optional(),
 });

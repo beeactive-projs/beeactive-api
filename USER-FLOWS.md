@@ -2,7 +2,7 @@
 
 This document describes **all user flows** (registration, login, profile, organizations, invitations, sessions, discovery), the **recurring sessions** rule format and endpoints, and the **status** of known issues. Use it as the single source of truth for understanding API behaviour and for frontend integration.
 
-- **Flows 1–5:** Auth (register, login, password reset, refresh, email verification).
+- **Flows 1–5:** Auth (register, login, **Google/Facebook OAuth**, password reset, refresh, email verification).
 - **Flows 6–7:** Profile (participant/organizer, unified update, organizer activation).
 - **Flow 8:** Organizations (CRUD, members, leave, delete, discovery, public profile, self-join).
 - **Flow 9:** Invitations (send, accept/decline, cancel, resend).
@@ -163,6 +163,56 @@ Return { new accessToken }
 |-------|----------|--------|
 | No refresh token rotation | Medium | ⏳ Future |
 | No token family tracking (theft detection) | Medium | ⏳ Future |
+
+---
+
+## Flow 2b: Sign in with Google (OAuth)
+
+**Status:** ✅ Implemented
+
+Token-based flow: frontend obtains Google ID token (e.g. Google Sign-In / One Tap), sends it to the API. No redirect to the backend.
+
+```
+Frontend (e.g. Angular at http://localhost:4200):
+  ├─ User clicks "Sign in with Google"
+  ├─ Google Sign-In / One Tap returns ID token (JWT)
+  │
+  ▼
+POST /auth/google [Public, Rate: 10/15min]
+  Body: { "idToken": "<Google ID token>" }
+  │
+  ├─ Verify ID token with GOOGLE_CLIENT_ID (google-auth-library)
+  ├─ Extract sub (provider user id), email, given_name, family_name
+  ├─ Find or create user:
+  │   ├─ If social_account exists for (GOOGLE, provider_user_id) → return that user
+  │   ├─ If user exists by email → link new social_account, return user
+  │   └─ Else → create user (no password, isEmailVerified=true), create social_account, assign PARTICIPANT, create ParticipantProfile
+  │
+  ▼
+Return { accessToken, refreshToken, user } (same shape as login/register)
+```
+
+**Requirements:** `GOOGLE_CLIENT_ID` in env. Frontend must use the same Client ID and run on an authorized JavaScript origin (e.g. http://localhost:4200).
+
+---
+
+## Flow 2c: Sign in with Facebook (OAuth)
+
+**Status:** ✅ Implemented (requires `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET` in env)
+
+Same token-based pattern as Google: frontend sends Facebook access token; API verifies it and finds or creates user.
+
+```
+POST /auth/facebook [Public, Rate: 10/15min]
+  Body: { "accessToken": "<Facebook access token>" }
+  │
+  ├─ Verify token via Graph API debug_token
+  ├─ Fetch profile (id, email, first_name, last_name)
+  ├─ Find or create user (same logic as Google)
+  │
+  ▼
+Return { accessToken, refreshToken, user }
+```
 
 ---
 

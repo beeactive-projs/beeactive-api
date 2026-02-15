@@ -82,6 +82,8 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 - **POST /auth/register** — Create account (auto-assigned PARTICIPANT role)
 - Verify email via link (GET /auth/verify-email in dev, frontend in prod)
 - **POST /auth/login** — Get JWT access + refresh tokens
+- **POST /auth/google** — Sign in with Google (body: `{ "idToken": "<Google ID token>" }`). Creates or links account, returns same JWT + user as login.
+- **POST /auth/facebook** — Sign in with Facebook (body: `{ "accessToken": "<Facebook access token>" }`). Requires `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET` in env.
 
 ### 2. Complete Your Profile
 - **GET /profile/me** — See your full profile overview

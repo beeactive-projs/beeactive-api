@@ -3,10 +3,21 @@ import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/sequelize';
 import { Transaction } from 'sequelize';
 import { User } from './entities/user.entity';
+import {
+  SocialAccount,
+  SocialProvider,
+} from './entities/social-account.entity';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CryptoService } from '../../common/services';
+
+export interface OAuthProfile {
+  providerUserId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}
 
 /**
  * User Service
@@ -26,6 +37,8 @@ export class UserService {
   constructor(
     @InjectModel(User)
     private userModel: typeof User,
+    @InjectModel(SocialAccount)
+    private socialAccountModel: typeof SocialAccount,
     private configService: ConfigService,
     private cryptoService: CryptoService,
   ) {}
@@ -95,6 +108,85 @@ export class UserService {
   }
 
   /**
+   * Find or create user from OAuth provider (Google, Facebook).
+   * - If social account exists: return linked user.
+   * - If user exists by email: link social account (account linking), return user.
+   * - Otherwise: create user (no password) + social account, return user.
+   *
+   * @param provider - GOOGLE | FACEBOOK | APPLE
+   * @param profile - Email, name, provider user id
+   * @param transaction - Optional transaction
+   * @returns { user, isNewUser } - isNewUser true only when user was just created
+   */
+  async findOrCreateFromOAuth(
+    provider: SocialProvider,
+    profile: OAuthProfile,
+    transaction?: Transaction,
+  ): Promise<{ user: User; isNewUser: boolean }> {
+    // 1. Already linked?
+    const existingSocial = await this.socialAccountModel.findOne({
+      where: { provider, providerUserId: profile.providerUserId },
+      include: [{ model: User, as: 'user' }],
+      transaction,
+    });
+    if (existingSocial?.user) {
+      return { user: existingSocial.user as User, isNewUser: false };
+    }
+
+    // 2. User exists by email? Link social account.
+    const existingUser = await this.findByEmail(profile.email);
+    if (existingUser) {
+      await this.socialAccountModel.create(
+        {
+          userId: existingUser.id,
+          provider,
+          providerUserId: profile.providerUserId,
+          providerEmail: profile.email,
+        },
+        { transaction },
+      );
+      return { user: existingUser, isNewUser: false };
+    }
+
+    // 3. Create new user + social account
+    const user = await this.createFromOAuth(profile, transaction);
+    await this.socialAccountModel.create(
+      {
+        userId: user.id,
+        provider,
+        providerUserId: profile.providerUserId,
+        providerEmail: profile.email,
+      },
+      { transaction },
+    );
+    return { user, isNewUser: true };
+  }
+
+  /**
+   * Create user from OAuth profile (no password).
+   * OAuth users are treated as email-verified.
+   */
+  async createFromOAuth(
+    profile: OAuthProfile,
+    transaction?: Transaction,
+  ): Promise<User> {
+    const existingUser = await this.findByEmail(profile.email);
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+    return this.userModel.create(
+      {
+        email: profile.email,
+        passwordHash: null,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        isEmailVerified: true,
+      },
+      { transaction },
+    );
+  }
+
+  /**
    * Update user profile fields
    *
    * @param userId - User's UUID
@@ -141,6 +233,7 @@ export class UserService {
    * @returns True if password matches
    */
   async validatePassword(user: User, password: string): Promise<boolean> {
+    if (!user.passwordHash) return false; // OAuth-only user has no password
     return bcrypt.compare(password, user.passwordHash);
   }
 

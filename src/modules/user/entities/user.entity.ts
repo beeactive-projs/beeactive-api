@@ -7,9 +7,11 @@ import {
   UpdatedAt,
   DeletedAt,
   BelongsToMany,
+  HasMany,
 } from 'sequelize-typescript';
 import { Role } from '../../role/entities/role.entity';
 import { UserRole } from '../../role/entities/user-role.entity';
+import { SocialAccount } from './social-account.entity';
 
 /**
  * User Entity
@@ -159,4 +161,7 @@ export class User extends Model {
   // Relationships
   @BelongsToMany(() => Role, () => UserRole)
   declare roles: Role[];
+
+  @HasMany(() => SocialAccount)
+  declare socialAccounts: SocialAccount[];
 }

@@ -75,6 +75,36 @@
       "_type": "request"
     },
     {
+      "_id": "req_auth_google",
+      "parentId": "fld_auth",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/auth/google",
+      "name": "Sign in with Google",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"idToken\": \"PASTE_GOOGLE_ID_TOKEN_FROM_FRONTEND\"\n}"
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "_type": "request"
+    },
+    {
+      "_id": "req_auth_facebook",
+      "parentId": "fld_auth",
+      "modified": 1708300000000,
+      "created": 1708300000000,
+      "url": "{{ _.base_url }}/auth/facebook",
+      "name": "Sign in with Facebook",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"accessToken\": \"PASTE_FACEBOOK_ACCESS_TOKEN_FROM_FRONTEND\"\n}"
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "_type": "request"
+    },
+    {
       "_id": "req_refresh",
       "parentId": "fld_auth",
       "modified": 1708300000000,

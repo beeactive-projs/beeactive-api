@@ -146,6 +146,60 @@ export const AuthDocs = {
     ],
   } as ApiEndpointOptions,
 
+  google: {
+    summary: 'Sign in with Google',
+    description:
+      'Authenticate with Google ID token (from frontend Google Sign-In). Creates account if new, or logs in and links account. Returns same JWT + user shape as login.',
+    responses: [
+      {
+        status: 200,
+        description: 'Successfully authenticated',
+        example: {
+          accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          user: {
+            id: '550e8400-e29b-41d4-a716-446655440000',
+            email: 'user@gmail.com',
+            firstName: 'John',
+            lastName: 'Doe',
+            isEmailVerified: true,
+            roles: ['PARTICIPANT'],
+          },
+        },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.TooManyRequests,
+    ],
+  } as ApiEndpointOptions,
+
+  facebook: {
+    summary: 'Sign in with Facebook',
+    description:
+      'Authenticate with Facebook access token (from frontend Facebook Login). Creates account if new, or logs in and links account. Returns same JWT + user shape as login.',
+    responses: [
+      {
+        status: 200,
+        description: 'Successfully authenticated',
+        example: {
+          accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          user: {
+            id: '550e8400-e29b-41d4-a716-446655440000',
+            email: 'user@example.com',
+            firstName: 'John',
+            lastName: 'Doe',
+            isEmailVerified: true,
+            roles: ['PARTICIPANT'],
+          },
+        },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.TooManyRequests,
+    ],
+  } as ApiEndpointOptions,
+
   // TODO: Implement these endpoints
   // - logout: Invalidate refresh token (refresh_token table already exists)
 };

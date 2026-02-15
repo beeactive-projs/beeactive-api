@@ -8,6 +8,7 @@ import type { LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { OAuth2Client } from 'google-auth-library';
 import { UserService } from '../user/user.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -442,5 +443,176 @@ export class AuthService {
     return {
       message: 'Password successfully reset. You can now log in.',
     };
+  }
+
+  /**
+   * Register or login with Google (token flow).
+   * Verifies the ID token, then finds or creates user and returns JWT.
+   */
+  async registerWithGoogle(idToken: string) {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!clientId) {
+      throw new BadRequestException('Google Sign-In is not configured');
+    }
+
+    const client = new OAuth2Client(clientId);
+    let payload: { sub: string; email?: string; given_name?: string; family_name?: string } | null;
+    try {
+      const ticket = await client.verifyIdToken({ idToken, audience: clientId });
+      payload = ticket.getPayload() ?? null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.warn(
+        `Google ID token verification failed: ${message}`,
+        'AuthService',
+      );
+      throw new UnauthorizedException('Invalid Google ID token');
+    }
+
+    if (!payload?.sub) {
+      throw new UnauthorizedException('Invalid Google ID token');
+    }
+
+    const email = payload.email?.trim();
+    if (!email) {
+      throw new BadRequestException(
+        'Google account has no email; email is required to sign in.',
+      );
+    }
+
+    const profile = {
+      providerUserId: payload.sub,
+      email,
+      firstName: payload.given_name?.trim() || 'User',
+      lastName: payload.family_name?.trim() || '',
+    };
+
+    return this.handleOAuthSignIn('GOOGLE', profile);
+  }
+
+  /**
+   * Register or login with Facebook (token flow).
+   * Verifies the access token and fetches profile, then finds or creates user and returns JWT.
+   */
+  async registerWithFacebook(accessToken: string) {
+    const appId = this.configService.get<string>('FACEBOOK_APP_ID');
+    const appSecret = this.configService.get<string>('FACEBOOK_APP_SECRET');
+    if (!appId || !appSecret) {
+      throw new BadRequestException('Facebook Sign-In is not configured');
+    }
+
+    const appAccessToken = `${appId}|${appSecret}`;
+
+    // Verify token and get user id
+    const debugUrl = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appAccessToken)}`;
+    let debugRes: Response;
+    try {
+      debugRes = await fetch(debugUrl);
+    } catch (err) {
+      this.logger.warn(`Facebook debug_token request failed: ${err}`);
+      throw new UnauthorizedException('Invalid Facebook token');
+    }
+
+    const debugData = (await debugRes.json()) as {
+      data?: { valid?: boolean; user_id?: string };
+    };
+    if (!debugData?.data?.valid || !debugData.data.user_id) {
+      throw new UnauthorizedException('Invalid Facebook access token');
+    }
+
+    const userId = debugData.data.user_id;
+
+    // Get profile (id, email, first_name, last_name)
+    const meUrl = `https://graph.facebook.com/me?fields=id,email,first_name,last_name&access_token=${encodeURIComponent(accessToken)}`;
+    let meRes: Response;
+    try {
+      meRes = await fetch(meUrl);
+    } catch (err) {
+      this.logger.warn(`Facebook me request failed: ${err}`);
+      throw new UnauthorizedException('Invalid Facebook token');
+    }
+
+    const me = (await meRes.json()) as {
+      id?: string;
+      email?: string;
+      first_name?: string;
+      last_name?: string;
+      error?: { message: string };
+    };
+    if (me.error || !me.id) {
+      throw new UnauthorizedException(
+        me.error?.message || 'Could not load Facebook profile',
+      );
+    }
+
+    const email = me.email?.trim();
+    if (!email) {
+      throw new BadRequestException(
+        'Facebook account has no email or permission; email is required to sign in.',
+      );
+    }
+
+    const profile = {
+      providerUserId: me.id,
+      email,
+      firstName: me.first_name?.trim() || 'User',
+      lastName: me.last_name?.trim() || '',
+    };
+
+    return this.handleOAuthSignIn('FACEBOOK', profile);
+  }
+
+  /**
+   * Shared OAuth flow: find or create user, assign role/profile if new, return JWT + user.
+   */
+  private async handleOAuthSignIn(
+    provider: 'GOOGLE' | 'FACEBOOK',
+    profile: { providerUserId: string; email: string; firstName: string; lastName: string },
+  ) {
+    const transaction = await this.sequelize.transaction();
+    try {
+      const { user, isNewUser } = await this.userService.findOrCreateFromOAuth(
+        provider,
+        profile,
+        transaction,
+      );
+
+      if (isNewUser) {
+        await this.roleService.assignRoleToUserByName(
+          user.id,
+          'PARTICIPANT',
+          undefined,
+          undefined,
+          transaction,
+        );
+        await this.profileService.createParticipantProfile(user.id, transaction);
+      }
+
+      await transaction.commit();
+
+      const tokens = this.generateTokens(user.id, user.email);
+      const roles = await this.roleService.getUserRoles(user.id);
+      const roleNames = roles.map((r) => r.name);
+
+      this.logger.log(
+        `User signed in with ${provider}: ${user.email}`,
+        'AuthService',
+      );
+
+      return {
+        ...tokens,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          isEmailVerified: user.isEmailVerified,
+          roles: roleNames,
+        },
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   }
 }
