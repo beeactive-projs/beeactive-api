@@ -79,7 +79,7 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 ## User Journey Flow
 
 ### 1. Registration & Login
-- **POST /auth/register** — Create account (auto-assigned PARTICIPANT role)
+- **POST /auth/register** — Create account (auto-assigned USER role)
 - Verify email via link (GET /auth/verify-email in dev, frontend in prod)
 - **POST /auth/login** — Get JWT access + refresh tokens
 - **POST /auth/google** — Sign in with Google. Body: idToken (Google ID token from frontend). Creates or links account, returns same JWT + user as login.
@@ -87,25 +87,25 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 
 ### 2. Complete Your Profile
 - **GET /profile/me** — See your full profile overview
-- **PATCH /profile/me** — Update user + participant + organizer in one call
-- **PATCH /profile/participant** — Update health & fitness data
+- **PATCH /profile/me** — Update user + user profile + instructor in one call
+- **PATCH /profile/user-profile** — Update health & fitness data
 
-### 3. Become an Organizer
-- **POST /profile/organizer** — Activate organizer profile (gets ORGANIZER role)
-- **PATCH /profile/organizer** — Fill in professional details (bio, specializations)
+### 3. Become an Instructor
+- **POST /profile/instructor** — Activate instructor profile (gets INSTRUCTOR role)
+- **PATCH /profile/instructor** — Fill in professional details (bio, specializations)
 
-### 4. Create an Organization
-- **POST /organizations** — Create your fitness studio/gym (requires ORGANIZER role)
-- You become the OWNER with org-scoped ORGANIZER role
-- **PATCH /organizations/:id** — Update details (slug auto-regenerates on name change)
+### 4. Create a Group
+- **POST /groups** — Create your fitness group (requires INSTRUCTOR role)
+- You become the OWNER of the group
+- **PATCH /groups/:id** — Update details (slug auto-regenerates on name change)
 
 ### 5. Invite Members
 - **POST /invitations** — Send invitation to someone's email
 - They receive an email and can accept/decline
-- **POST /invitations/:token/accept** — Invitee accepts and joins the org
+- **POST /invitations/:token/accept** — Invitee accepts and joins the group
 
 ### 6. Create & Manage Sessions
-- **POST /sessions** — Create training sessions (linked to your org). Supports recurring: set \`isRecurring\` and \`recurringRule\` (frequency, daysOfWeek, endDate). See USER-FLOWS.md § Flow 10 for the full rule format.
+- **POST /sessions** — Create training sessions (linked to your group). Supports recurring: set \`isRecurring\` and \`recurringRule\` (frequency, daysOfWeek, endDate). See USER-FLOWS.md § Flow 10 for the full rule format.
 - **GET /sessions/:id/recurrence-preview?weeks=12** — Preview upcoming occurrence dates (for calendar UI)
 - **POST /sessions/:id/generate-instances** — Create session rows for the next N weeks from a recurring template
 - **GET /sessions/discover** — Browse public sessions
@@ -121,10 +121,11 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 
 ## Features
 - JWT-based auth with refresh tokens
-- Role-based access (PARTICIPANT, ORGANIZER, ADMIN)
+- Role-based access (USER, INSTRUCTOR, ADMIN)
 - Email via Resend (verification, password reset, invitations)
-- Session management with visibility rules (PRIVATE, MEMBERS, PUBLIC)
-- Organization management with membership & health data sharing
+- Session management with visibility rules (PRIVATE, GROUP, CLIENTS, PUBLIC)
+- Group management with membership & health data sharing
+- Instructor-client relationships
 - Cancellation policies and self check-in
 - Rate limiting on sensitive endpoints
 
@@ -154,8 +155,9 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
     )
     .addTag('Authentication', 'User registration, login, and password management')
     .addTag('Users', 'User account management')
-    .addTag('Profiles', 'Participant & organizer profiles')
-    .addTag('Organizations', 'Organization management and membership')
+    .addTag('Profiles', 'User & instructor profiles')
+    .addTag('Groups', 'Group management and membership')
+    .addTag('Clients', 'Instructor-client relationships')
     .addTag('Sessions', 'Training session management')
     .addTag('Invitations', 'Invitation management')
     .addTag('Health', 'Application health checks')

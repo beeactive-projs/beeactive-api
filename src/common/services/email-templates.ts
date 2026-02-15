@@ -236,7 +236,7 @@ export function passwordResetTemplate(resetLink: string): string {
 
 export function invitationTemplate(
   inviterName: string,
-  organizationName: string,
+  groupName: string,
   acceptLink: string,
   message?: string,
 ): string {
@@ -255,12 +255,12 @@ export function invitationTemplate(
   const content = `
     ${heading("You're Invited!")}
     ${subheading(`${inviterName} wants you to join their team`)}
-    ${paragraph(`<strong>${inviterName}</strong> has invited you to join <strong>${organizationName}</strong> on BeeActive — a fitness platform for trainers and participants.`)}
+    ${paragraph(`<strong>${inviterName}</strong> has invited you to join <strong>${groupName}</strong> on BeeActive — a fitness platform for instructors and clients.`)}
     ${messageBlock}
     ${primaryButton('Accept Invitation', acceptLink)}
     ${divider()}
     <p style="margin:0 0 16px;font-size:14px;color:${COLORS.textBody};line-height:1.5;">
-      By accepting, you'll be added as a member of <strong>${organizationName}</strong> and can start joining training sessions.
+      By accepting, you'll be added as a member of <strong>${groupName}</strong> and can start joining training sessions.
     </p>
     ${expiryNote('This invitation expires in <strong>7 days</strong>.')}
     ${securityNote("If you don't know the person who sent this, you can safely ignore this email.")}
@@ -268,14 +268,14 @@ export function invitationTemplate(
 
   return baseLayout(
     content,
-    `${inviterName} invited you to join ${organizationName}`,
+    `${inviterName} invited you to join ${groupName}`,
   );
 }
 
 export function sessionCancelledTemplate(
   participantName: string,
   sessionTitle: string,
-  organizerName: string,
+  instructorName: string,
   scheduledAt: string,
 ): string {
   const content = `
@@ -286,13 +286,13 @@ export function sessionCancelledTemplate(
       <tr>
         <td style="background-color:#fef2f2;border-radius:8px;padding:20px;border-left:4px solid #ef4444;">
           <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#991b1b;">${sessionTitle}</p>
-          <p style="margin:0 0 4px;font-size:14px;color:#7f1d1d;">Organized by ${organizerName}</p>
+          <p style="margin:0 0 4px;font-size:14px;color:#7f1d1d;">Instructor: ${instructorName}</p>
           <p style="margin:0;font-size:14px;color:#7f1d1d;">Scheduled: ${scheduledAt}</p>
         </td>
       </tr>
     </table>
 
-    ${paragraph(`Hi ${participantName}, the organizer has cancelled this session. We apologize for any inconvenience.`)}
+    ${paragraph(`Hi ${participantName}, the instructor has cancelled this session. We apologize for any inconvenience.`)}
     ${divider()}
     ${paragraph('You can browse other available sessions on the platform.')}
   `;
@@ -303,7 +303,7 @@ export function sessionCancelledTemplate(
 export function sessionReminderTemplate(
   participantName: string,
   sessionTitle: string,
-  organizerName: string,
+  instructorName: string,
   scheduledAt: string,
   location: string,
 ): string {
@@ -319,7 +319,7 @@ export function sessionReminderTemplate(
           <table role="presentation" cellpadding="0" cellspacing="0">
             ${featureItem('&#128197;', `<strong>When:</strong> ${scheduledAt}`)}
             ${featureItem('&#128205;', `<strong>Where:</strong> ${location}`)}
-            ${featureItem('&#128100;', `<strong>Organizer:</strong> ${organizerName}`)}
+            ${featureItem('&#128100;', `<strong>Instructor:</strong> ${instructorName}`)}
           </table>
         </td>
       </tr>

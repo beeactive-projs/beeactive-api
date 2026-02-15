@@ -90,15 +90,12 @@ FAILED=0
 
 run_migration "000_drop_existing_schema.sql" || FAILED=1
 run_migration "001_create_core_tables.sql" || FAILED=1
-run_migration "002_create_organization_tables.sql" || FAILED=1
+run_migration "002_create_group_tables.sql" || FAILED=1
 run_migration "003_create_session_tables.sql" || FAILED=1
 run_migration "004_create_profile_tables.sql" || FAILED=1
 run_migration "005_seed_roles_permissions.sql" || FAILED=1
-run_migration "006_seed_plans_features.sql" || FAILED=1
-run_migration "007_create_super_admin.sql" || FAILED=1
-run_migration "008_update_profiles_and_members.sql" || FAILED=1
-run_migration "009_add_email_verification_expires.sql" || FAILED=1
-run_migration "010_add_organization_discovery_fields.sql" || FAILED=1
+run_migration "006_create_super_admin.sql" || FAILED=1
+run_migration "007_create_client_tables.sql" || FAILED=1
 
 echo ""
 echo -e "${BLUE}==========================================================${NC}"

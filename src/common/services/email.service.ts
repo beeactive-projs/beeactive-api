@@ -123,21 +123,21 @@ export class EmailService {
   // =====================================================
 
   /**
-   * Send organization invitation email
+   * Send group invitation email
    */
   async sendInvitationEmail(
     email: string,
     invitationToken: string,
     inviterName: string,
-    organizationName: string,
+    groupName: string,
     message?: string,
   ): Promise<void> {
     const acceptLink = `${this.frontendUrl}/accept-invitation?token=${invitationToken}`;
 
-    const subject = `You're invited to join ${organizationName} on BeeActive`;
+    const subject = `You're invited to join ${groupName} on BeeActive`;
     const html = invitationTemplate(
       inviterName,
-      organizationName,
+      groupName,
       acceptLink,
       message,
     );
@@ -156,7 +156,7 @@ export class EmailService {
     email: string,
     participantName: string,
     sessionTitle: string,
-    organizerName: string,
+    instructorName: string,
     scheduledAt: Date,
   ): Promise<void> {
     const formattedDate = scheduledAt.toLocaleDateString('en-US', {
@@ -172,7 +172,7 @@ export class EmailService {
     const html = sessionCancelledTemplate(
       participantName,
       sessionTitle,
-      organizerName,
+      instructorName,
       formattedDate,
     );
 

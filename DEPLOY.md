@@ -11,9 +11,9 @@ After deploying, you can verify that migrations ran:
 1. **Railway** – In the deploy logs you should see output from the migration runner before the app starts, e.g.:
    ```
    Running: 009_add_email_verification_expires.sql... OK
-   Running: 010_add_organization_discovery_fields.sql... OK
+   Running: 010_add_group_discovery_fields.sql... OK
    ```
-2. **Database** – If you have access to the production DB, check that the `_migrations` table contains the latest migration names (e.g. `010_add_organization_discovery_fields.sql`). New columns/tables from 009 and 010 should exist.
+2. **Database** – If you have access to the production DB, check that the `_migrations` table contains the latest migration names (e.g. `010_add_group_discovery_fields.sql`). New columns/tables from 009 and 010 should exist.
 
 If you do **not** see migration output in the logs and new columns are missing, the start command is likely not running migrations. See below.
 

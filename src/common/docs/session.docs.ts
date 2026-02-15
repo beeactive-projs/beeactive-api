@@ -152,7 +152,7 @@ export const SessionDocs = {
     summary: 'Generate upcoming instances',
     description:
       'For a recurring session, creates new Session rows for each occurrence in the next N weeks (body: { weeks?: 12 }). ' +
-      'Respects recurringRule endDate and endAfterOccurrences. Skips dates that already have a session (same organizer + title + time). ' +
+      'Respects recurringRule endDate and endAfterOccurrences. Skips dates that already have a session (same instructor + title + time). ' +
       'Returns { created: number, sessions: Session[] }. Instructor only.',
     auth: true,
     responses: [

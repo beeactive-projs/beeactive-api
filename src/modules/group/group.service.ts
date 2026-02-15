@@ -565,7 +565,7 @@ export class GroupService {
       ],
     });
 
-    // Get instructor's organizer profile (if public)
+    // Get instructor's profile (if public)
     let instructorProfile: any = null;
     if (ownerMembership) {
       const orgProfile = await InstructorProfile.findOne({

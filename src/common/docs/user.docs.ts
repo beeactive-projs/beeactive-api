@@ -26,7 +26,7 @@ export const UserDocs = {
           timezone: 'Europe/Bucharest',
           isActive: true,
           isEmailVerified: false,
-          roles: ['PARTICIPANT', 'ORGANIZER'],
+          roles: ['USER', 'INSTRUCTOR'],
           createdAt: '2024-01-15T10:30:00.000Z',
         },
       },

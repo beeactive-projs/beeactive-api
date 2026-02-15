@@ -4,7 +4,7 @@ import { ApiProperty } from '@nestjs/swagger';
 /**
  * Update Participant Status DTO
  *
- * Used by the organizer to change a participant's status
+ * Used by the instructor to change a participant's status
  * (e.g., mark as ATTENDED, NO_SHOW).
  */
 export class UpdateParticipantStatusDto {

@@ -5,7 +5,7 @@ import { SetMetadata } from '@nestjs/common';
  * Roles Decorator
  *
  * Usage:
- * @Roles('ORGANIZER', 'ADMIN')
+ * @Roles('INSTRUCTOR', 'ADMIN')
  *
  * User needs ANY of these roles to access the route
  */

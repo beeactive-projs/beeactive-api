@@ -16,7 +16,7 @@ import { UserRole } from './user-role.entity';
 /**
  * Role Entity
  *
- * System roles: SUPER_ADMIN, ADMIN, SUPPORT, ORGANIZER, PARTICIPANT
+ * System roles: SUPER_ADMIN, ADMIN, SUPPORT, INSTRUCTOR, USER
  * Already seeded in database
  */
 @Table({

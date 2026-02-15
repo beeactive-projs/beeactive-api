@@ -83,8 +83,8 @@ echo Running: 001_create_core_tables.sql
 mysql -h%DB_HOST% -u%DB_USER% -p%DB_PASS% %DB_NAME% < 001_create_core_tables.sql
 IF %ERRORLEVEL% NEQ 0 SET FAILED=1
 
-echo Running: 002_create_organization_tables.sql
-mysql -h%DB_HOST% -u%DB_USER% -p%DB_PASS% %DB_NAME% < 002_create_organization_tables.sql
+echo Running: 002_create_group_tables.sql
+mysql -h%DB_HOST% -u%DB_USER% -p%DB_PASS% %DB_NAME% < 002_create_group_tables.sql
 IF %ERRORLEVEL% NEQ 0 SET FAILED=1
 
 echo Running: 003_create_session_tables.sql
@@ -99,16 +99,12 @@ echo Running: 005_seed_roles_permissions.sql
 mysql -h%DB_HOST% -u%DB_USER% -p%DB_PASS% %DB_NAME% < 005_seed_roles_permissions.sql
 IF %ERRORLEVEL% NEQ 0 SET FAILED=1
 
-echo Running: 006_seed_plans_features.sql
-mysql -h%DB_HOST% -u%DB_USER% -p%DB_PASS% %DB_NAME% < 006_seed_plans_features.sql
+echo Running: 006_create_super_admin.sql
+mysql -h%DB_HOST% -u%DB_USER% -p%DB_PASS% %DB_NAME% < 006_create_super_admin.sql
 IF %ERRORLEVEL% NEQ 0 SET FAILED=1
 
-echo Running: 007_create_super_admin.sql
-mysql -h%DB_HOST% -u%DB_USER% -p%DB_PASS% %DB_NAME% < 007_create_super_admin.sql
-IF %ERRORLEVEL% NEQ 0 SET FAILED=1
-
-echo Running: 008_update_profiles_and_members.sql
-mysql -h%DB_HOST% -u%DB_USER% -p%DB_PASS% %DB_NAME% < 008_update_profiles_and_members.sql
+echo Running: 007_create_client_tables.sql
+mysql -h%DB_HOST% -u%DB_USER% -p%DB_PASS% %DB_NAME% < 007_create_client_tables.sql
 IF %ERRORLEVEL% NEQ 0 SET FAILED=1
 
 echo.
