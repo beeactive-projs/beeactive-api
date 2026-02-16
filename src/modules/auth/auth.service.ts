@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { OAuth2Client } from 'google-auth-library';
+import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -20,6 +21,22 @@ import { RoleService } from '../role/role.service';
 import { ProfileService } from '../profile/profile.service';
 import { Sequelize } from 'sequelize-typescript';
 import { EmailService } from '../../common/services/email.service';
+
+/** Return type of generateTokens; used for typing buildAuthResponse and responses */
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+/** User shape returned by login/register (no secrets, with roles) */
+export interface AuthUserResponse {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  isEmailVerified: boolean;
+  roles: string[];
+}
 
 /**
  * Auth Service
@@ -115,17 +132,7 @@ export class AuthService {
           ),
         );
 
-      return {
-        ...tokens,
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          isEmailVerified: false,
-          roles: roleNames,
-        },
-      };
+      return this.buildAuthResponse(user, tokens, roleNames);
     } catch (error) {
       // Rollback transaction on error
       await transaction.rollback();
@@ -199,6 +206,14 @@ export class AuthService {
 
     this.logger.log(`User logged in: ${user.email}`, 'AuthService');
 
+    return this.buildAuthResponse(user, tokens, roleNames);
+  }
+
+  private buildAuthResponse(
+    user: User,
+    tokens: AuthTokens,
+    roleNames: string[],
+  ): AuthTokens & { user: AuthUserResponse } {
     return {
       ...tokens,
       user: {
@@ -222,7 +237,7 @@ export class AuthService {
    * @param email - User's email
    * @returns Object with accessToken and refreshToken
    */
-  private generateTokens(userId: string, email: string) {
+  private generateTokens(userId: string, email: string): AuthTokens {
     const payload = { sub: userId, email };
 
     // Access token (short-lived)
@@ -272,6 +287,7 @@ export class AuthService {
 
       return { accessToken };
     } catch (error) {
+      this.logger.error(`Invalid refresh token: ${error}`, 'AuthService');
       throw new UnauthorizedException('Invalid refresh token');
     }
   }

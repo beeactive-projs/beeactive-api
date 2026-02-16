@@ -133,11 +133,25 @@ export class InvitationService {
     const invitationLink = `${frontendUrl}/accept-invitation?token=${plainToken}`;
 
     // Send invitation email
-    this.emailService.sendInvitationEmail(dto.email, plainToken, inviterName, group.name, dto.message).catch((err: Error) =>
-      this.logger.error(`Failed to send invitation email: ${err.message}`, 'InvitationService'),
-    );
+    this.emailService
+      .sendInvitationEmail(
+        dto.email,
+        plainToken,
+        inviterName,
+        group.name,
+        dto.message,
+      )
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to send invitation email: ${err.message}`,
+          'InvitationService',
+        ),
+      );
 
-    this.logger.log(`Invitation sent to ${dto.email} for group ${group.name}`, 'InvitationService');
+    this.logger.log(
+      `Invitation sent to ${dto.email} for group ${group.name}`,
+      'InvitationService',
+    );
 
     // In dev, return the plain token link for testing
     const isProduction = this.configService.get('NODE_ENV') === 'production';
@@ -193,7 +207,11 @@ export class InvitationService {
     await this.groupService.addMember(invitation.groupId, userId);
 
     // Assign role (group-scoped)
-    await this.roleService.assignRoleToUser(userId, invitation.roleId, invitation.groupId);
+    await this.roleService.assignRoleToUser(
+      userId,
+      invitation.roleId,
+      invitation.groupId,
+    );
 
     // Mark as accepted
     await invitation.update({ acceptedAt: new Date() });
@@ -205,9 +223,13 @@ export class InvitationService {
 
     // Notify the inviter that the invitation was accepted
     // TODO: [JOB SYSTEM] Move to background job when Redis/Bull is configured
-    const inviterUser = await User.findByPk(invitation.inviterId, { attributes: ['email', 'firstName'] });
+    const inviterUser = await User.findByPk(invitation.inviterId, {
+      attributes: ['email', 'firstName'],
+    });
     if (inviterUser) {
-      this.emailService.sendWelcomeEmail(inviterUser.email, inviterUser.firstName).catch(() => {});
+      this.emailService
+        .sendWelcomeEmail(inviterUser.email, inviterUser.firstName)
+        .catch(() => {});
     }
 
     return {
@@ -237,9 +259,7 @@ export class InvitationService {
     }
 
     if (invitation.acceptedAt || invitation.declinedAt) {
-      throw new BadRequestException(
-        'Invitation has already been responded to',
-      );
+      throw new BadRequestException('Invitation has already been responded to');
     }
 
     // Verify the declining user's email matches the invitation
@@ -268,10 +288,7 @@ export class InvitationService {
     }
 
     // Verify the user is the group owner
-    await this.groupService.assertOwnerAndGet(
-      invitation.groupId,
-      userId,
-    );
+    await this.groupService.assertOwnerAndGet(invitation.groupId, userId);
 
     if (invitation.acceptedAt) {
       throw new BadRequestException(
@@ -308,10 +325,7 @@ export class InvitationService {
     }
 
     // Verify the user is the group owner
-    await this.groupService.assertOwnerAndGet(
-      invitation.groupId,
-      userId,
-    );
+    await this.groupService.assertOwnerAndGet(invitation.groupId, userId);
 
     if (invitation.acceptedAt) {
       throw new BadRequestException(
@@ -343,15 +357,30 @@ export class InvitationService {
       : 'Group Owner';
 
     // Send email
-    this.emailService.sendInvitationEmail(invitation.email, plainToken, inviterName, invitation.group.name, invitation.message).catch((err: Error) =>
-      this.logger.error(`Failed to resend invitation email: ${err.message}`, 'InvitationService'),
-    );
+    this.emailService
+      .sendInvitationEmail(
+        invitation.email,
+        plainToken,
+        inviterName,
+        invitation.group.name,
+        invitation.message,
+      )
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to resend invitation email: ${err.message}`,
+          'InvitationService',
+        ),
+      );
 
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:4200';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:4200';
     const invitationLink = `${frontendUrl}/accept-invitation?token=${plainToken}`;
     const isProduction = this.configService.get('NODE_ENV') === 'production';
 
-    this.logger.log(`Invitation ${invitationId} resent to ${invitation.email}`, 'InvitationService');
+    this.logger.log(
+      `Invitation ${invitationId} resent to ${invitation.email}`,
+      'InvitationService',
+    );
 
     return {
       message: 'Invitation resent',

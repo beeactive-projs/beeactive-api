@@ -27,7 +27,10 @@ import { GroupMember } from '../group/entities/group-member.entity';
 import { Group } from '../group/entities/group.entity';
 import { RoleService } from '../role/role.service';
 import { EmailService } from '../../common/services/email.service';
-import { buildPaginatedResponse, PaginatedResponse } from '../../common/dto/pagination.dto';
+import {
+  buildPaginatedResponse,
+  PaginatedResponse,
+} from '../../common/dto/pagination.dto';
 
 /**
  * Client Service
@@ -100,7 +103,7 @@ export class ClientService {
     // Fetch group memberships for these clients (only groups owned by this instructor)
     const clientIds = rows.map((r) => r.clientId);
 
-    let groupMembershipsMap: Record<string, any[]> = {};
+    const groupMembershipsMap: Record<string, any[]> = {};
 
     if (clientIds.length > 0) {
       try {
@@ -177,13 +180,22 @@ export class ClientService {
     if (instructorIds.length > 0) {
       const profiles = await this.instructorProfileModel.findAll({
         where: { userId: { [Op.in]: instructorIds } },
-        attributes: ['userId', 'displayName', 'specializations', 'bio', 'locationCity', 'locationCountry'],
+        attributes: [
+          'userId',
+          'displayName',
+          'specializations',
+          'bio',
+          'locationCity',
+          'locationCountry',
+        ],
       });
 
-      const profileMap = new Map(profiles.map((p) => [p.getDataValue('userId'), p]));
+      const profileMap = new Map(
+        profiles.map((p) => [p.getDataValue('userId'), p]),
+      );
 
       return relationships.map((rel) => {
-        const plain = rel.toJSON() as any;
+        const plain = rel.toJSON();
         const profile = profileMap.get(rel.instructorId);
         plain.instructorProfile = profile ? profile.toJSON() : null;
         return plain;
@@ -214,9 +226,14 @@ export class ClientService {
     message?: string,
   ): Promise<ClientRequest> {
     // Verify the sender has the INSTRUCTOR role
-    const hasInstructorRole = await this.roleService.userHasRole(instructorId, 'INSTRUCTOR');
+    const hasInstructorRole = await this.roleService.userHasRole(
+      instructorId,
+      'INSTRUCTOR',
+    );
     if (!hasInstructorRole) {
-      throw new ForbiddenException('You must have the INSTRUCTOR role to invite clients');
+      throw new ForbiddenException(
+        'You must have the INSTRUCTOR role to invite clients',
+      );
     }
 
     // Verify target user exists
@@ -255,6 +272,7 @@ export class ClientService {
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
 
+      console.log('neffff');
       const request = await this.clientRequestModel.create(
         {
           fromUserId: instructorId,
@@ -262,10 +280,13 @@ export class ClientService {
           type: ClientRequestType.INSTRUCTOR_TO_CLIENT,
           message: message || null,
           status: ClientRequestStatus.PENDING,
+          createdAt: new Date(),
           expiresAt,
         },
         { transaction },
       );
+      console.log('ASDD');
+      console.log('request', request);
 
       return request;
     });
@@ -324,7 +345,10 @@ export class ClientService {
     }
 
     // Verify the target has the INSTRUCTOR role
-    const hasInstructorRole = await this.roleService.userHasRole(instructorId, 'INSTRUCTOR');
+    const hasInstructorRole = await this.roleService.userHasRole(
+      instructorId,
+      'INSTRUCTOR',
+    );
     if (!hasInstructorRole) {
       throw new BadRequestException('The specified user is not an instructor');
     }
@@ -336,7 +360,9 @@ export class ClientService {
     });
 
     if (profile && !profile.getDataValue('isAcceptingClients')) {
-      throw new BadRequestException('This instructor is not currently accepting new clients');
+      throw new BadRequestException(
+        'This instructor is not currently accepting new clients',
+      );
     }
 
     // Check no existing active relationship

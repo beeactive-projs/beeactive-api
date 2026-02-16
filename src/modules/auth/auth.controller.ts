@@ -1,9 +1,21 @@
-import { Controller, Post, Get, Body, Query, Res, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Query,
+  Res,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import type { Response } from 'express';
+import type { Request as ExpressRequest, Response } from 'express';
 import { AuthService } from './auth.service';
+
+/** Request on JWT-protected routes; user is set by AuthGuard('jwt') */
+type AuthenticatedRequest = ExpressRequest & { user: { id: string } };
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -85,7 +97,10 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   @Throttle({ default: { limit: 10, ttl: 900000 } })
   @ApiEndpoint({ ...AuthDocs.logout, body: RefreshTokenDto })
-  async logout(@Body() refreshTokenDto: RefreshTokenDto, @Request() req) {
+  async logout(
+    @Body() refreshTokenDto: RefreshTokenDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
     return this.authService.logout(refreshTokenDto.refreshToken, req.user.id);
   }
 
