@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Get Facebook access token – BeeActive API test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.25rem; }
+    #button { margin: 1rem 0; }
+    #token { background: #f5f5f5; padding: 1rem; border-radius: 8px; word-break: break-all; font-size: 12px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+    .hint { color: #666; font-size: 0.9rem; margin-top: 1rem; }
+    .copy { margin-top: 0.5rem; padding: 0.5rem 1rem; cursor: pointer; background: #1976d2; color: white; border: none; border-radius: 6px; }
+    .copy:hover { background: #1565c0; }
+    .fb-btn { padding: 0.5rem 1rem; cursor: pointer; background: #1877f2; color: white; border: none; border-radius: 6px; font-size: 1rem; }
+    .fb-btn:hover { background: #166fe5; }
+    .fb-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>Get Facebook access token for BeeActive API</h1>
+  <p>Click the button below, sign in with Facebook, then either <strong>Send to API</strong> (creates/finds user in DB and returns your app JWT) or copy the token for Insomnia: <strong>POST http://localhost:3000/auth/facebook</strong> with body <code>{"accessToken": "&lt;token&gt;"}</code></p>
+  <div id="button"><button type="button" class="fb-btn" id="fbLoginBtn" disabled>Loading Facebook…</button></div>
+  <div id="token"></div>
+  <div style="margin-top: 0.5rem;">
+    <button type="button" class="copy" id="copyBtn" style="display: none;">Copy token</button>
+    <button type="button" id="sendApiBtn" style="display: none; margin-left: 0.5rem; padding: 0.5rem 1rem; cursor: pointer; background: #2e7d32; color: white; border: none; border-radius: 6px;">Send to API</button>
+  </div>
+  <div id="apiResult" style="margin-top: 1rem; display: none; background: #e8f5e9; padding: 1rem; border-radius: 8px; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow-y: auto;"></div>
+  <div id="apiError" style="margin-top: 0.5rem; display: none; background: #ffebee; padding: 1rem; border-radius: 8px; font-size: 12px; color: #c62828;"></div>
+  <p class="hint" id="hint">1) In this file, set <code>FB_APP_ID</code> to your Facebook App ID (Meta for Developers → Your app → Settings → Basic). 2) In the Facebook app: Products → Facebook Login → Settings → add <code>http://localhost:4200</code> to Valid OAuth Redirect URIs. 3) Serve: <code>npx serve -p 4200 .</code> then open <a href="http://localhost:4200/facebook-token-test.html">http://localhost:4200/facebook-token-test.html</a></p>
+
+  <script>
+    // Replace with your Facebook App ID (from Meta for Developers → Your app → Settings → Basic)
+    var FB_APP_ID = '888056193830836';
+    var API_BASE = 'http://localhost:3000';
+
+    function onTokenReceived(accessToken) {
+      document.getElementById('token').textContent = accessToken;
+      document.getElementById('copyBtn').style.display = 'inline-block';
+      document.getElementById('sendApiBtn').style.display = 'inline-block';
+      document.getElementById('apiResult').style.display = 'none';
+      document.getElementById('apiError').style.display = 'none';
+      window.lastAccessToken = accessToken;
+    }
+
+    function doFacebookLogin() {
+      if (!window.FB) {
+        document.getElementById('apiError').style.display = 'block';
+        document.getElementById('apiError').textContent = 'Facebook SDK not loaded yet.';
+        return;
+      }
+      if (FB_APP_ID === 'YOUR_FACEBOOK_APP_ID') {
+        document.getElementById('apiError').style.display = 'block';
+        document.getElementById('apiError').textContent = 'Replace FB_APP_ID in the page with your Facebook App ID.';
+        return;
+      }
+      document.getElementById('apiError').style.display = 'none';
+      window.FB.login(function (response) {
+        if (response.authResponse && response.authResponse.accessToken) {
+          onTokenReceived(response.authResponse.accessToken);
+        } else if (response.status === 'unknown') {
+          document.getElementById('apiError').style.display = 'block';
+          document.getElementById('apiError').textContent = 'You did not complete sign in or closed the popup.';
+        } else {
+          document.getElementById('apiError').style.display = 'block';
+          document.getElementById('apiError').textContent = 'Facebook login failed or was cancelled.';
+        }
+      }, { scope: 'public_profile,email' });
+    }
+
+    window.fbAsyncInit = function () {
+      FB.init({
+        appId: FB_APP_ID,
+        cookie: true,
+        xfbml: false,
+        version: 'v18.0',
+      });
+      document.getElementById('fbLoginBtn').textContent = 'Sign in with Facebook';
+      document.getElementById('fbLoginBtn').disabled = FB_APP_ID === 'YOUR_FACEBOOK_APP_ID';
+    };
+
+    document.getElementById('fbLoginBtn').onclick = doFacebookLogin;
+
+    document.getElementById('copyBtn').onclick = function () {
+      if (!window.lastAccessToken) return;
+      navigator.clipboard.writeText(window.lastAccessToken).then(function () {
+        this.textContent = 'Copied!';
+        var btn = this;
+        setTimeout(function () { btn.textContent = 'Copy token'; }, 1500);
+      }.bind(this));
+    };
+
+    document.getElementById('sendApiBtn').onclick = function () {
+      if (!window.lastAccessToken) return;
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      document.getElementById('apiResult').style.display = 'none';
+      document.getElementById('apiError').style.display = 'none';
+      fetch(API_BASE + '/auth/facebook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: window.lastAccessToken }),
+      })
+        .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+        .then(function (result) {
+          document.getElementById('apiResult').style.display = 'block';
+          document.getElementById('apiResult').textContent = JSON.stringify(result.data, null, 2);
+          if (!result.ok) document.getElementById('apiError').style.display = 'block';
+          document.getElementById('apiError').textContent = result.ok ? '' : (result.data.message || 'Request failed');
+        })
+        .catch(function (err) {
+          document.getElementById('apiError').style.display = 'block';
+          document.getElementById('apiError').textContent = 'Error: ' + err.message;
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Send to API';
+        });
+    };
+  </script>
+  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+</body>
+</html>

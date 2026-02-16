@@ -71,7 +71,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const roles = await this.roleService.getUserRoles(user?.id);
     const roleNames = roles.map((role) => role.name);
 
-    // Attach roles to user object for guards and controllers
     return {
       ...user.get({ plain: true }),
       roles: roleNames,

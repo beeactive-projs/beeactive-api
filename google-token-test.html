@@ -16,10 +16,15 @@
 </head>
 <body>
   <h1>Get Google ID token for BeeActive API</h1>
-  <p>Click the button below, sign in with Google, then copy the token and use it in Insomnia: <strong>POST http://localhost:3800/auth/google</strong> with body <code>{"idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6ImM4MTZkMzM3YjgzNjVhMDZhODUxYWQ4MDAxNmMxNzEwOTk0OTI2MDkiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiIxMTk0MjUzOTkzMzQtMjlsM2VxMm1vMTYydDB2bGg4cWZvcWdpMmNnMGRqZnAuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiIxMTk0MjUzOTkzMzQtMjlsM2VxMm1vMTYydDB2bGg4cWZvcWdpMmNnMGRqZnAuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMDQ2NTY5NDgyNjgzMzUyMzYzMDciLCJlbWFpbCI6ImlvbnV0LmJ1dG5hcnU5NUBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmJmIjoxNzcxMTY4ODY0LCJuYW1lIjoiQnV0bmFydSBJb251dCIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NJbEdKWlU5MVJUWVhSRndMcHhnaS1ISEZYUGJkYlFEcnJab2lFMklLOWNqY1luRjNYRD1zOTYtYyIsImdpdmVuX25hbWUiOiJCdXRuYXJ1IiwiZmFtaWx5X25hbWUiOiJJb251dCIsImlhdCI6MTc3MTE2OTE2NCwiZXhwIjoxNzcxMTcyNzY0LCJqdGkiOiIyZjJlZWMxMWM1ZDg0NWE1YmY1ZDQ2Mzg5NDM1MDFmZGRhNjUwMTU0In0.nu-_kRS-1otK5UyXPNsOT4hK4Rb62gEY70syAMpTcqY4jP4r76Mztnp90cZFSYNnN9m7CazTM6XuQKnF0EBHmsX9LyBIRUJXq0UiZ923PsPD0DgxHFSYGdj_JhnPSQY8-LvbvZehcaSStKsb7cXF4EoKKcw8CARx8Fzci71IZALjrnaUmRVbP06-9M1_eKnEnXfzMy2GdLPLI1eg_t_C9v8f9DbogwtImHwc3EW769ruFUNe8tktS5861VmkiMIjhili9MtPGBOQ_zY8bfcBYVNHTXTHpyQYe7p9Rjh7wZM6isrrdGhlhPStezS6lpZ7L7b_D5p3ihSGB6QE2al0_w"}</code></p>
+  <p>Click the button below, sign in with Google, then either <strong>Send to API</strong> (creates/finds user in DB and returns your app JWT) or copy the token for Insomnia: <strong>POST http://localhost:3000/auth/google</strong> with body <code>{"idToken": "&lt;token&gt;"}</code></p>
   <div id="button"></div>
   <div id="token"></div>
-  <button type="button" class="copy" id="copyBtn" style="display: none;">Copy token</button>
+  <div style="margin-top: 0.5rem;">
+    <button type="button" class="copy" id="copyBtn" style="display: none;">Copy token</button>
+    <button type="button" id="sendApiBtn" style="display: none; margin-left: 0.5rem; padding: 0.5rem 1rem; cursor: pointer; background: #2e7d32; color: white; border: none; border-radius: 6px;">Send to API</button>
+  </div>
+  <div id="apiResult" style="margin-top: 1rem; display: none; background: #e8f5e9; padding: 1rem; border-radius: 8px; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow-y: auto;"></div>
+  <div id="apiError" style="margin-top: 0.5rem; display: none; background: #ffebee; padding: 1rem; border-radius: 8px; font-size: 12px; color: #c62828;"></div>
   <p class="hint">This page must be served from http://localhost:4200 (run: npx serve -p 4200 . from project root).</p>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -27,10 +32,15 @@
     var CLIENT_ID = '119425399334-29l3eq2mo162t0vlh8qfoqgi2cg0djfp.apps.googleusercontent.com';
     document.querySelector('.hint').innerHTML = 'This page must be served from http://localhost:4200. Run from project root: <code>npx serve -p 4200 .</code> Then open <a href="http://localhost:4200/google-token-test.html">http://localhost:4200/google-token-test.html</a>';
 
+    var API_BASE = 'http://localhost:3000';
+
     function handleCredentialResponse(response) {
       var token = response.credential;
       document.getElementById('token').textContent = token;
       document.getElementById('copyBtn').style.display = 'inline-block';
+      document.getElementById('sendApiBtn').style.display = 'inline-block';
+      document.getElementById('apiResult').style.display = 'none';
+      document.getElementById('apiError').style.display = 'none';
       window.lastIdToken = token;
     }
 
@@ -53,6 +63,35 @@
         var btn = this;
         setTimeout(function () { btn.textContent = 'Copy token'; }, 1500);
       }.bind(this));
+    };
+
+    document.getElementById('sendApiBtn').onclick = function () {
+      if (!window.lastIdToken) return;
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      document.getElementById('apiResult').style.display = 'none';
+      document.getElementById('apiError').style.display = 'none';
+      fetch(API_BASE + '/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: window.lastIdToken }),
+      })
+        .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+        .then(function (result) {
+          document.getElementById('apiResult').style.display = 'block';
+          document.getElementById('apiResult').textContent = JSON.stringify(result.data, null, 2);
+          if (!result.ok) document.getElementById('apiError').style.display = 'block';
+          document.getElementById('apiError').textContent = result.ok ? '' : (result.data.message || 'Request failed');
+        })
+        .catch(function (err) {
+          document.getElementById('apiError').style.display = 'block';
+          document.getElementById('apiError').textContent = 'Error: ' + err.message;
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Send to API';
+        });
     };
   </script>
 </body>

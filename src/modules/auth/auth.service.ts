@@ -388,9 +388,7 @@ export class AuthService {
     );
 
     if (!user) {
-      throw new BadRequestException(
-        'Invalid or expired verification token',
-      );
+      throw new BadRequestException('Invalid or expired verification token');
     }
 
     if (user.isEmailVerified) {
@@ -497,9 +495,17 @@ export class AuthService {
     }
 
     const client = new OAuth2Client(clientId);
-    let payload: { sub: string; email?: string; given_name?: string; family_name?: string } | null;
+    let payload: {
+      sub: string;
+      email?: string;
+      given_name?: string;
+      family_name?: string;
+    } | null;
     try {
-      const ticket = await client.verifyIdToken({ idToken, audience: clientId });
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: clientId,
+      });
       payload = ticket.getPayload() ?? null;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -608,7 +614,12 @@ export class AuthService {
    */
   private async handleOAuthSignIn(
     provider: 'GOOGLE' | 'FACEBOOK',
-    profile: { providerUserId: string; email: string; firstName: string; lastName: string },
+    profile: {
+      providerUserId: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+    },
   ) {
     const transaction = await this.sequelize.transaction();
     try {

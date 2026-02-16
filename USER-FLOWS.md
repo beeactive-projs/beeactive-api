@@ -111,11 +111,20 @@ Return { accessToken, refreshToken, user } (same shape as login/register)
 
 **Requirements:** `GOOGLE_CLIENT_ID` in env. Frontend must use the same Client ID and run on an authorized JavaScript origin.
 
+**Frontend (e.g. Angular) after receiving the Google ID token:**
+
+1. **Call the API:** `POST /auth/google` with body `{ "idToken": "<Google ID token>" }`.
+2. **Store the response:** Save `accessToken` (and optionally `refreshToken`) in your auth service (e.g. in memory or secure storage). Use the same approach as for email/password login.
+3. **Use the token:** Send `Authorization: Bearer <accessToken>` on all subsequent API requests.
+4. **Use the user object:** The response includes `user` (id, email, firstName, lastName, isEmailVerified, roles)—use it for UI and permissions.
+
+**Sign up vs login:** The same endpoint and flow work for both. The API finds or creates the user; first-time users get a new account, returning users get the existing one. No separate “Google sign up” vs “Google login” call.
+
 ---
 
 ## Flow 2c: Sign in with Facebook (OAuth)
 
-Same token-based pattern as Google: frontend sends Facebook access token; API verifies it and finds or creates user.
+Same token-based pattern as Google: frontend sends Facebook **access token**; API verifies it and finds or creates user.
 
 ```
 POST /auth/facebook [Public, Rate: 10/15min]
@@ -128,6 +137,22 @@ POST /auth/facebook [Public, Rate: 10/15min]
   v
 Return { accessToken, refreshToken, user }
 ```
+
+**Backend requirements:**
+
+- In [Facebook for Developers](https://developers.facebook.com/): create an app → **Facebook Login** product → get **App ID** and **App Secret**.
+- Set env: `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET`. If missing, `POST /auth/facebook` returns 400 “Facebook Sign-In is not configured”.
+- In the Facebook app: add your frontend origin (e.g. `https://yourapp.com`, `http://localhost:4200`) under **Facebook Login → Settings → Valid OAuth Redirect URIs** (and Client OAuth Login / Web OAuth Login enabled).
+
+**Test page:** Use `facebook-token-test.html` in the repo: set `FB_APP_ID` in the file, run `npx serve -p 4200 .`, open http://localhost:4200/facebook-token-test.html. Sign in with Facebook → click **Send to API** to get the app JWT and create/find user.
+
+**Frontend (e.g. Angular) after receiving the Facebook access token:**
+
+1. **Call the API:** `POST /auth/facebook` with body `{ "accessToken": "<Facebook access token>" }`.  
+   Unlike Google, Facebook uses the **access token** from the Facebook Login SDK (the one you get after the user logs in), not an ID token.
+2. **Request permissions:** When initialising Facebook Login, request at least `email` and `public_profile` so the API can read email, first_name, last_name. Without email, the API returns 400 “email is required”.
+3. **Store the response:** Same as Google: save `accessToken` and `refreshToken` from the response, use `Authorization: Bearer <accessToken>` for API calls, use `user` for UI.
+4. **Sign up vs login:** Same as Google: one endpoint for both; API finds or creates the user.
 
 ---
 
