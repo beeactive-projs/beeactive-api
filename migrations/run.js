@@ -127,15 +127,16 @@ async function runMigrations() {
     await client.connect();
     console.log('Connected to database.\n');
 
-    // --safe mode: track which migrations have already run
+    // Always ensure tracking table exists (needed for both full and safe modes)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS _migrations (
+        name VARCHAR(255) NOT NULL PRIMARY KEY,
+        ran_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // --safe mode: skip already-run migrations
     if (isSafe) {
-      // Create tracking table if it doesn't exist
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS _migrations (
-          name VARCHAR(255) NOT NULL PRIMARY KEY,
-          ran_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
 
       // Get already-run migrations
       const result = await client.query('SELECT name FROM _migrations');
