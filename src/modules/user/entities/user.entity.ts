@@ -17,7 +17,7 @@ import { SocialAccount } from './social-account.entity';
  * User Entity
  *
  * Represents a user in the system.
- * Maps to the 'user' table in MySQL database.
+ * Maps to the 'user' table in PostgreSQL database.
  *
  * Sequelize decorators:
  * - @Table() → Configure table settings
@@ -76,7 +76,7 @@ export class User extends Model {
   declare phone: string;
 
   @Column({
-    type: DataType.TINYINT.UNSIGNED,
+    type: DataType.SMALLINT,
     defaultValue: 1,
   })
   declare avatarId: number;

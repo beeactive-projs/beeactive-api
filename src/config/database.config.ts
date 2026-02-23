@@ -4,76 +4,73 @@ import { SequelizeModuleOptions } from '@nestjs/sequelize';
 /**
  * Database Configuration Factory
  *
- * Creates Sequelize configuration for MySQL connection.
+ * Creates Sequelize configuration for PostgreSQL connection (Neon).
  * Called once when the app starts (see app.module.ts).
  *
  * Key settings:
  * - synchronize: false → We manage schema manually (safer for production)
  * - autoLoadModels: true → Auto-discover @Table() entities
  * - pool → Connection pooling for better performance
- * - dialectOptions → MySQL-specific settings (SSL, timezone, etc.)
+ * - dialectOptions → PostgreSQL-specific settings (SSL for Neon)
  */
 export const getDatabaseConfig = (
   configService: ConfigService,
-): SequelizeModuleOptions => ({
-  dialect: 'mysql',
-  host: configService.get<string>('MYSQLHOST') || configService.get<string>('DB_HOST'),
-  port: configService.get<number>('MYSQLPORT') || configService.get<number>('DB_PORT'),
-  username: configService.get<string>('MYSQLUSER') || configService.get<string>('DB_USERNAME'),
-  password: configService.get<string>('MYSQLPASSWORD') || configService.get<string>('DB_PASSWORD'),
-  database: configService.get<string>('MYSQLDATABASE') || configService.get<string>('DB_DATABASE'),
+): SequelizeModuleOptions => {
+  const databaseUrl = configService.get<string>('DATABASE_URL');
+  const isProduction = configService.get<string>('NODE_ENV') === 'production';
 
-  // Auto-discover and register all @Table() decorated classes
-  autoLoadModels: true,
+  // Enable SSL for Neon (DATABASE_URL) or production; skip for local dev
+  const needsSsl = !!databaseUrl || isProduction;
 
-  // Don't auto-create tables (we use SQL schema - you already have tables!)
-  synchronize: false,
+  // Base config shared by both URL and individual-var modes
+  const baseConfig: SequelizeModuleOptions = {
+    dialect: 'postgres',
+    autoLoadModels: true,
+    synchronize: false,
+    logging:
+      configService.get<string>('NODE_ENV') === 'development'
+        ? console.log
+        : false,
+    timezone: '+00:00',
+    pool: {
+      max: 10,
+      min: 0,
+      acquire: 30000,
+      idle: 10000,
+    },
+    retry: {
+      max: 3,
+    },
+    dialectOptions: {
+      connectTimeout: 60000,
+      ...(needsSsl && {
+        ssl: {
+          rejectUnauthorized: false,
+        },
+      }),
+    },
+    define: {
+      timestamps: true,
+      underscored: true,
+      freezeTableName: true,
+    },
+  };
 
-  // Show SQL queries in console during development only
-  logging:
-    configService.get<string>('NODE_ENV') === 'development'
-      ? console.log
-      : false,
+  // If DATABASE_URL is provided (Neon connection string), use it directly
+  if (databaseUrl) {
+    return {
+      ...baseConfig,
+      uri: databaseUrl,
+    };
+  }
 
-  // Timezone setting (important for DATETIME fields)
-  // Use UTC for both production and development for consistency.
-  // Application-level timezone logic should be handled in the app layer.
-  timezone: '+00:00',
-
-  // Connection pool settings (for production)
-  pool: {
-    max: 10, // Maximum number of connections
-    min: 0, // Minimum number of connections
-    acquire: 30000, // Maximum time (ms) to try to get connection
-    idle: 10000, // Maximum time (ms) a connection can be idle
-  },
-
-  // Retry settings
-  retry: {
-    max: 3, // Retry failed connections 3 times
-  },
-
-  // Dialect-specific options
-  dialectOptions: {
-    connectTimeout: 60000, // 60 seconds connection timeout
-
-    // Production-specific settings
-    ...(configService.get<string>('NODE_ENV') === 'production' && {
-      // SSL Configuration
-      // Railway MySQL uses self-signed certificates on internal network
-      // rejectUnauthorized: false is acceptable here because Railway's
-      // internal networking is already isolated and encrypted
-      ssl: {
-        rejectUnauthorized: false,
-      },
-    }),
-  },
-
-  // Define models directory (helps with auto-discovery)
-  // This ensures Sequelize finds all your entities
-  define: {
-    timestamps: true, // Automatically manage createdAt/updatedAt
-    underscored: true, // Use snake_case for DB columns (firstName → first_name)
-    freezeTableName: true, // Don't pluralize table names (user stays user, not users)
-  },
-});
+  // Fallback to individual environment variables
+  return {
+    ...baseConfig,
+    host: configService.get<string>('PGHOST') || configService.get<string>('DB_HOST'),
+    port: configService.get<number>('PGPORT') || configService.get<number>('DB_PORT'),
+    username: configService.get<string>('PGUSER') || configService.get<string>('DB_USERNAME'),
+    password: configService.get<string>('PGPASSWORD') || configService.get<string>('DB_PASSWORD'),
+    database: configService.get<string>('PGDATABASE') || configService.get<string>('DB_DATABASE'),
+  };
+};

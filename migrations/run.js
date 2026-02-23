@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Database Migration Runner
+ * Database Migration Runner (PostgreSQL / Neon)
  *
- * Runs SQL migration files using mysql2 (already installed).
- * Reads DB credentials from environment variables or .env file.
+ * Runs SQL migration files using pg (node-postgres).
+ * Reads DB credentials from DATABASE_URL or individual env vars.
  *
  * Usage:
  *   node migrations/run.js              ← Run ALL migrations (drops everything!)
@@ -16,14 +16,14 @@
  *   npm run migrate                     ← Same as node migrations/run.js
  *   npm run migrate:only 008            ← Run only 008
  *
- * On Railway (automatic on deploy):
- *   railway:start script runs with --safe flag
+ * On deploy (automatic):
+ *   railway:start / render:start runs with --safe flag
  *   Only NEW migrations execute, existing data is preserved
  */
 
 const fs = require('fs');
 const path = require('path');
-const mysql = require('mysql2/promise');
+const { Client } = require('pg');
 
 // Load .env file if it exists (for local development)
 const envPath = path.join(__dirname, '..', '.env');
@@ -45,28 +45,22 @@ if (fs.existsSync(envPath)) {
 }
 
 // Database config from environment
-// If MYSQL_PUBLIC_URL exists (Railway via `railway run`), parse it for direct access
-// Otherwise fall back to individual env vars
-let config;
-if (process.env.MYSQL_PUBLIC_URL) {
-  const url = new URL(process.env.MYSQL_PUBLIC_URL);
-  config = {
-    host: url.hostname,
-    port: parseInt(url.port || '3306'),
-    user: url.username,
-    password: url.password,
-    database: url.pathname.slice(1), // remove leading /
-    multipleStatements: true,
-    ssl: { rejectUnauthorized: false },
-  };
-} else {
-  config = {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '3306'),
-    user: process.env.DB_USERNAME || 'root',
-    password: process.env.DB_PASSWORD || 'root',
-    database: process.env.DB_DATABASE || 'beeactive',
-    multipleStatements: true,
+// Prefer DATABASE_URL (Neon connection string), fall back to individual vars
+function getClientConfig() {
+  if (process.env.DATABASE_URL) {
+    return {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    };
+  }
+
+  return {
+    host: process.env.PGHOST || process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.PGPORT || process.env.DB_PORT || '5432'),
+    user: process.env.PGUSER || process.env.DB_USERNAME || 'postgres',
+    password: process.env.PGPASSWORD || process.env.DB_PASSWORD || 'postgres',
+    database: process.env.PGDATABASE || process.env.DB_DATABASE || 'beeactive',
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
   };
 }
 
@@ -111,49 +105,41 @@ async function runMigrations() {
     migrations = ALL_MIGRATIONS.slice(startIndex);
   }
 
+  const config = getClientConfig();
+  const displayHost = config.connectionString
+    ? '(DATABASE_URL)'
+    : `${config.host}:${config.port}`;
+  const displayDb = config.connectionString
+    ? new URL(config.connectionString).pathname.slice(1)
+    : config.database;
+
   console.log('==========================================================');
-  console.log('  BeeActive API - Database Migration Runner');
+  console.log('  BeeActive API - Database Migration Runner (PostgreSQL)');
   console.log('==========================================================');
-  console.log(`  Host:     ${config.host}:${config.port}`);
-  console.log(`  Database: ${config.database}`);
+  console.log(`  Host:     ${displayHost}`);
+  console.log(`  Database: ${displayDb}`);
   console.log(`  Mode:     ${isSafe ? 'SAFE (only new migrations)' : 'FULL (drops everything!)'}`);
   console.log('==========================================================\n');
 
-  let connection;
+  const client = new Client(config);
 
   try {
-    // Connect without database first (in case DB doesn't exist)
-    const initConnection = await mysql.createConnection({
-      host: config.host,
-      port: config.port,
-      user: config.user,
-      password: config.password,
-      multipleStatements: true,
-    });
-
-    // Create database if it doesn't exist
-    await initConnection.execute(
-      `CREATE DATABASE IF NOT EXISTS \`${config.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-    );
-    await initConnection.end();
-
-    // Connect to the actual database
-    connection = await mysql.createConnection(config);
+    await client.connect();
     console.log('Connected to database.\n');
 
     // --safe mode: track which migrations have already run
     if (isSafe) {
       // Create tracking table if it doesn't exist
-      await connection.query(`
-        CREATE TABLE IF NOT EXISTS \`_migrations\` (
-          \`name\` VARCHAR(255) NOT NULL PRIMARY KEY,
-          \`ran_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS _migrations (
+          name VARCHAR(255) NOT NULL PRIMARY KEY,
+          ran_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
       `);
 
       // Get already-run migrations
-      const [rows] = await connection.query('SELECT name FROM `_migrations`');
-      const alreadyRun = new Set(rows.map((r) => r.name));
+      const result = await client.query('SELECT name FROM _migrations');
+      const alreadyRun = new Set(result.rows.map((r) => r.name));
 
       // Filter out already-run migrations AND the drop migration
       migrations = migrations.filter(
@@ -182,14 +168,14 @@ async function runMigrations() {
 
       try {
         const sql = fs.readFileSync(filePath, 'utf-8');
-        await connection.query(sql);
+        await client.query(sql);
         console.log('OK');
 
         // Record migration as run (for --safe mode tracking)
         if (file !== '000_drop_existing_schema.sql') {
           try {
-            await connection.query(
-              'INSERT IGNORE INTO `_migrations` (name) VALUES (?)',
+            await client.query(
+              'INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING',
               [file],
             );
           } catch (_) {
@@ -224,7 +210,7 @@ async function runMigrations() {
     console.error('Connection failed:', err.message);
     process.exit(1);
   } finally {
-    if (connection) await connection.end();
+    await client.end();
   }
 }
 

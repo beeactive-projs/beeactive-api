@@ -152,7 +152,7 @@ export class Group extends Model {
   declare country: string | null;
 
   @Column({
-    type: DataType.INTEGER.UNSIGNED,
+    type: DataType.INTEGER,
     defaultValue: 0,
     comment: 'Denormalized member count for sorting/display',
   })

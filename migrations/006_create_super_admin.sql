@@ -13,28 +13,28 @@
 -- --------------------------------------------------------
 -- Insert Super Admin User
 -- --------------------------------------------------------
-INSERT INTO `user` (
-  `id`,
-  `email`,
-  `password_hash`,
-  `first_name`,
-  `last_name`,
-  `phone`,
-  `avatar_id`,
-  `language`,
-  `timezone`,
-  `is_active`,
-  `is_email_verified`,
-  `email_verification_token`,
-  `email_verification_expires`,
-  `password_reset_token`,
-  `password_reset_expires`,
-  `failed_login_attempts`,
-  `locked_until`,
-  `last_login_at`,
-  `created_at`,
-  `updated_at`,
-  `deleted_at`
+INSERT INTO "user" (
+  id,
+  email,
+  password_hash,
+  first_name,
+  last_name,
+  phone,
+  avatar_id,
+  language,
+  timezone,
+  is_active,
+  is_email_verified,
+  email_verification_token,
+  email_verification_expires,
+  password_reset_token,
+  password_reset_expires,
+  failed_login_attempts,
+  locked_until,
+  last_login_at,
+  created_at,
+  updated_at,
+  deleted_at
 ) VALUES (
   'aaaaaaaa-0000-0000-0000-000000000001',
   'beeactivedev@gmail.com',
@@ -45,14 +45,14 @@ INSERT INTO `user` (
   1,
   'en',
   'Europe/Bucharest',
-  1,        -- Active
-  1,        -- Email verified (super admin is pre-verified)
+  TRUE,
+  TRUE,
   NULL,
   NULL,
   NULL,
   NULL,
-  0,        -- No failed attempts
-  NULL,     -- Not locked
+  0,
+  NULL,
   NULL,
   NOW(),
   NOW(),
@@ -62,15 +62,15 @@ INSERT INTO `user` (
 -- --------------------------------------------------------
 -- Assign SUPER_ADMIN Role
 -- --------------------------------------------------------
-INSERT INTO `user_role` (
-  `id`,
-  `user_id`,
-  `role_id`,
-  `group_id`,
-  `assigned_at`,
-  `expires_at`
+INSERT INTO user_role (
+  id,
+  user_id,
+  role_id,
+  group_id,
+  assigned_at,
+  expires_at
 ) VALUES (
-  UUID(),
+  gen_random_uuid()::TEXT,
   'aaaaaaaa-0000-0000-0000-000000000001',
   '7261bd94-006c-11f1-b74f-0242ac110002',  -- SUPER_ADMIN role ID
   NULL,  -- Global role, not group-specific

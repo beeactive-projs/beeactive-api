@@ -5,107 +5,115 @@
 -- =========================================================
 
 -- --------------------------------------------------------
+-- Enum types for sessions
+-- --------------------------------------------------------
+CREATE TYPE enum_session_type AS ENUM ('ONE_ON_ONE', 'GROUP', 'ONLINE', 'WORKSHOP');
+CREATE TYPE enum_session_visibility AS ENUM ('PUBLIC', 'GROUP', 'CLIENTS', 'PRIVATE');
+CREATE TYPE enum_session_status AS ENUM ('DRAFT', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');
+CREATE TYPE enum_participant_status AS ENUM ('REGISTERED', 'CONFIRMED', 'ATTENDED', 'NO_SHOW', 'CANCELLED');
+
+-- --------------------------------------------------------
 -- Table: session
 -- Training sessions (classes, workshops, one-on-one)
 -- --------------------------------------------------------
-CREATE TABLE `session` (
-  `id` CHAR(36) NOT NULL,
-  `group_id` CHAR(36) DEFAULT NULL COMMENT 'Optional group context',
-  `instructor_id` CHAR(36) NOT NULL COMMENT 'Session instructor/trainer',
-  `title` VARCHAR(255) NOT NULL,
-  `description` TEXT DEFAULT NULL,
-  `session_type` ENUM('ONE_ON_ONE', 'GROUP', 'ONLINE', 'WORKSHOP') NOT NULL,
-  `visibility` ENUM('PUBLIC', 'GROUP', 'CLIENTS', 'PRIVATE') NOT NULL DEFAULT 'PRIVATE' COMMENT 'PUBLIC=anyone, GROUP=group members, CLIENTS=instructor clients, PRIVATE=instructor only',
-  `scheduled_at` DATETIME NOT NULL,
-  `duration_minutes` INT NOT NULL,
-  `location` VARCHAR(255) DEFAULT NULL COMMENT 'Physical or virtual location',
-  `max_participants` INT DEFAULT NULL COMMENT 'NULL = unlimited',
-  `price` DECIMAL(10,2) DEFAULT NULL COMMENT 'Session price',
-  `currency` VARCHAR(3) NOT NULL DEFAULT 'RON',
-  `status` ENUM('DRAFT', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'SCHEDULED',
-  `is_recurring` TINYINT(1) NOT NULL DEFAULT 0,
-  `recurring_rule` JSON DEFAULT NULL COMMENT 'Recurrence rule (frequency, interval, daysOfWeek, etc.)',
-  `reminder_sent` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Email reminder sent flag',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `deleted_at` DATETIME DEFAULT NULL COMMENT 'Soft delete',
+CREATE TABLE session (
+  id CHAR(36) NOT NULL,
+  group_id CHAR(36) DEFAULT NULL,
+  instructor_id CHAR(36) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT DEFAULT NULL,
+  session_type enum_session_type NOT NULL,
+  visibility enum_session_visibility NOT NULL DEFAULT 'PRIVATE',
+  scheduled_at TIMESTAMP NOT NULL,
+  duration_minutes INT NOT NULL,
+  location VARCHAR(255) DEFAULT NULL,
+  max_participants INT DEFAULT NULL,
+  price DECIMAL(10,2) DEFAULT NULL,
+  currency VARCHAR(3) NOT NULL DEFAULT 'RON',
+  status enum_session_status NOT NULL DEFAULT 'SCHEDULED',
+  is_recurring BOOLEAN NOT NULL DEFAULT FALSE,
+  recurring_rule JSON DEFAULT NULL,
+  reminder_sent BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP DEFAULT NULL,
 
-  PRIMARY KEY (`id`),
-  KEY `idx_session_instructor` (`instructor_id`),
-  KEY `idx_session_group` (`group_id`),
-  KEY `idx_session_scheduled` (`scheduled_at`),
-  KEY `idx_session_visibility_scheduled` (`visibility`, `scheduled_at`),
-  KEY `idx_session_status` (`status`),
-  KEY `idx_session_reminder` (`reminder_sent`, `scheduled_at`),
-  KEY `idx_session_deleted_at` (`deleted_at`),
+  PRIMARY KEY (id),
 
-  CONSTRAINT `fk_session_instructor` FOREIGN KEY (`instructor_id`)
-    REFERENCES `user` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_session_group` FOREIGN KEY (`group_id`)
-    REFERENCES `group` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Training sessions';
+  CONSTRAINT fk_session_instructor FOREIGN KEY (instructor_id)
+    REFERENCES "user" (id) ON DELETE CASCADE,
+  CONSTRAINT fk_session_group FOREIGN KEY (group_id)
+    REFERENCES "group" (id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_session_instructor ON session (instructor_id);
+CREATE INDEX idx_session_group ON session (group_id);
+CREATE INDEX idx_session_scheduled ON session (scheduled_at);
+CREATE INDEX idx_session_visibility_scheduled ON session (visibility, scheduled_at);
+CREATE INDEX idx_session_status ON session (status);
+CREATE INDEX idx_session_reminder ON session (reminder_sent, scheduled_at);
+CREATE INDEX idx_session_deleted_at ON session (deleted_at);
 
 -- --------------------------------------------------------
 -- Table: session_participant
 -- Users registered for sessions
 -- --------------------------------------------------------
-CREATE TABLE `session_participant` (
-  `id` CHAR(36) NOT NULL,
-  `session_id` CHAR(36) NOT NULL,
-  `user_id` CHAR(36) NOT NULL,
-  `status` ENUM('REGISTERED', 'CONFIRMED', 'ATTENDED', 'NO_SHOW', 'CANCELLED') NOT NULL DEFAULT 'REGISTERED',
-  `checked_in_at` DATETIME DEFAULT NULL COMMENT 'Check-in timestamp',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE session_participant (
+  id CHAR(36) NOT NULL,
+  session_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  status enum_participant_status NOT NULL DEFAULT 'REGISTERED',
+  checked_in_at TIMESTAMP DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_session_participant` (`session_id`, `user_id`),
-  KEY `idx_session_participant_session` (`session_id`),
-  KEY `idx_session_participant_user` (`user_id`),
-  KEY `idx_session_participant_status` (`status`),
+  PRIMARY KEY (id),
+  CONSTRAINT uk_session_participant UNIQUE (session_id, user_id),
 
-  CONSTRAINT `fk_session_participant_session` FOREIGN KEY (`session_id`)
-    REFERENCES `session` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_session_participant_user` FOREIGN KEY (`user_id`)
-    REFERENCES `user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Session participant registrations';
+  CONSTRAINT fk_session_participant_session FOREIGN KEY (session_id)
+    REFERENCES session (id) ON DELETE CASCADE,
+  CONSTRAINT fk_session_participant_user FOREIGN KEY (user_id)
+    REFERENCES "user" (id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_session_participant_session ON session_participant (session_id);
+CREATE INDEX idx_session_participant_user ON session_participant (user_id);
+CREATE INDEX idx_session_participant_status ON session_participant (status);
 
 -- --------------------------------------------------------
 -- Table: invitation
 -- Invitations to join groups
 -- --------------------------------------------------------
-CREATE TABLE `invitation` (
-  `id` CHAR(36) NOT NULL,
-  `inviter_id` CHAR(36) NOT NULL COMMENT 'User who sent invitation',
-  `email` VARCHAR(255) NOT NULL COMMENT 'Invitee email address',
-  `role_id` CHAR(36) NOT NULL COMMENT 'Role to assign upon acceptance',
-  `group_id` CHAR(36) DEFAULT NULL COMMENT 'Group to join',
-  `token` VARCHAR(255) NOT NULL COMMENT 'Unique invitation token (hashed)',
-  `message` TEXT DEFAULT NULL COMMENT 'Personal message from inviter',
-  `expires_at` DATETIME NOT NULL,
-  `accepted_at` DATETIME DEFAULT NULL,
-  `declined_at` DATETIME DEFAULT NULL,
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE invitation (
+  id CHAR(36) NOT NULL,
+  inviter_id CHAR(36) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  role_id CHAR(36) NOT NULL,
+  group_id CHAR(36) DEFAULT NULL,
+  token VARCHAR(255) NOT NULL,
+  message TEXT DEFAULT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  accepted_at TIMESTAMP DEFAULT NULL,
+  declined_at TIMESTAMP DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_invitation_token` (`token`),
-  KEY `idx_invitation_email` (`email`),
-  KEY `idx_invitation_token` (`token`),
-  KEY `idx_invitation_expires` (`expires_at`),
-  KEY `idx_invitation_status` (`accepted_at`, `declined_at`),
-  KEY `idx_invitation_inviter` (`inviter_id`),
-  KEY `idx_invitation_role` (`role_id`),
-  KEY `idx_invitation_group` (`group_id`),
+  PRIMARY KEY (id),
+  CONSTRAINT uk_invitation_token UNIQUE (token),
 
-  CONSTRAINT `fk_invitation_inviter` FOREIGN KEY (`inviter_id`)
-    REFERENCES `user` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_invitation_role` FOREIGN KEY (`role_id`)
-    REFERENCES `role` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_invitation_group` FOREIGN KEY (`group_id`)
-    REFERENCES `group` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Group invitations';
+  CONSTRAINT fk_invitation_inviter FOREIGN KEY (inviter_id)
+    REFERENCES "user" (id) ON DELETE CASCADE,
+  CONSTRAINT fk_invitation_role FOREIGN KEY (role_id)
+    REFERENCES role (id) ON DELETE CASCADE,
+  CONSTRAINT fk_invitation_group FOREIGN KEY (group_id)
+    REFERENCES "group" (id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_invitation_email ON invitation (email);
+CREATE INDEX idx_invitation_token ON invitation (token);
+CREATE INDEX idx_invitation_expires ON invitation (expires_at);
+CREATE INDEX idx_invitation_status ON invitation (accepted_at, declined_at);
+CREATE INDEX idx_invitation_inviter ON invitation (inviter_id);
+CREATE INDEX idx_invitation_role ON invitation (role_id);
+CREATE INDEX idx_invitation_group ON invitation (group_id);
 
 -- =========================================================
 -- Session & invitation tables created successfully
