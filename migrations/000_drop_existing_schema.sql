@@ -8,6 +8,7 @@
 -- Drop tables in reverse order of dependencies (child tables first)
 -- CASCADE handles foreign key dependencies
 
+DROP TABLE IF EXISTS blog_post CASCADE;
 DROP TABLE IF EXISTS role_permission CASCADE;
 DROP TABLE IF EXISTS user_role CASCADE;
 DROP TABLE IF EXISTS session_participant CASCADE;

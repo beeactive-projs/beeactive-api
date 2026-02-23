@@ -65,4 +65,9 @@ export const envValidationSchema = Joi.object({
   GOOGLE_CLIENT_SECRET: Joi.string().optional(),
   FACEBOOK_APP_ID: Joi.string().optional(),
   FACEBOOK_APP_SECRET: Joi.string().optional(),
+
+  // Cloudinary (optional – for image uploads)
+  CLOUDINARY_CLOUD_NAME: Joi.string().optional(),
+  CLOUDINARY_API_KEY: Joi.string().optional(),
+  CLOUDINARY_API_SECRET: Joi.string().optional(),
 });

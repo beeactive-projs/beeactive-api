@@ -20,6 +20,7 @@ import { GroupModule } from './modules/group/group.module';
 import { SessionModule } from './modules/session/session.module';
 import { InvitationModule } from './modules/invitation/invitation.module';
 import { ClientModule } from './modules/client/client.module';
+import { BlogModule } from './modules/blog/blog.module';
 import { CamelCaseInterceptor } from './common/interceptors/camel-case.interceptor';
 
 /**
@@ -104,6 +105,7 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     SessionModule, // Training sessions
     InvitationModule, // Invitation management
     ClientModule, // Instructor-Client relationships
+    BlogModule, // Blog posts + Cloudinary image uploads
   ],
 
   controllers: [],

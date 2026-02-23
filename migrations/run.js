@@ -74,6 +74,8 @@ const ALL_MIGRATIONS = [
   '005_seed_roles_permissions.sql',
   '006_create_super_admin.sql',
   '007_create_client_tables.sql',
+  '008_create_blog_table.sql',
+  '009_seed_blog_posts.sql',
 ];
 
 async function runMigrations() {
