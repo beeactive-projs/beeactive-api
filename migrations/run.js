@@ -76,6 +76,7 @@ const ALL_MIGRATIONS = [
   '007_create_client_tables.sql',
   '008_create_blog_table.sql',
   '009_seed_blog_posts.sql',
+  '010_add_invited_email_to_client_request.sql',
 ];
 
 async function runMigrations() {

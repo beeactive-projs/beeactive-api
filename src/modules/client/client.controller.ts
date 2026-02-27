@@ -84,12 +84,15 @@ export class ClientController {
    */
   @Post('invite')
   @UseGuards(RolesGuard)
-  @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
+  // @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint({ ...ClientDocs.sendInvitation, body: CreateClientRequestDto })
   async sendInvitation(@Request() req, @Body() dto: CreateClientRequestDto) {
-    return this.clientService.sendClientInvitation(
+    console.log('i am heree');
+    console.log(req);
+
+    return this.clientService.sendClientInvitationByEmail(
       req.user.id,
-      dto.toUserId,
+      dto.email,
       dto.message,
     );
   }
@@ -118,10 +121,7 @@ export class ClientController {
    */
   @Post('requests/:requestId/accept')
   @ApiEndpoint(ClientDocs.acceptRequest)
-  async acceptRequest(
-    @Param('requestId') requestId: string,
-    @Request() req,
-  ) {
+  async acceptRequest(@Param('requestId') requestId: string, @Request() req) {
     return this.clientService.acceptRequest(requestId, req.user.id);
   }
 
@@ -131,10 +131,7 @@ export class ClientController {
    */
   @Post('requests/:requestId/decline')
   @ApiEndpoint(ClientDocs.declineRequest)
-  async declineRequest(
-    @Param('requestId') requestId: string,
-    @Request() req,
-  ) {
+  async declineRequest(@Param('requestId') requestId: string, @Request() req) {
     return this.clientService.declineRequest(requestId, req.user.id);
   }
 
@@ -144,10 +141,7 @@ export class ClientController {
    */
   @Post('requests/:requestId/cancel')
   @ApiEndpoint(ClientDocs.cancelRequest)
-  async cancelRequest(
-    @Param('requestId') requestId: string,
-    @Request() req,
-  ) {
+  async cancelRequest(@Param('requestId') requestId: string, @Request() req) {
     return this.clientService.cancelRequest(requestId, req.user.id);
   }
 
@@ -176,10 +170,7 @@ export class ClientController {
   @UseGuards(RolesGuard)
   @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint(ClientDocs.archiveClient)
-  async archiveClient(
-    @Request() req,
-    @Param('clientId') clientId: string,
-  ) {
+  async archiveClient(@Request() req, @Param('clientId') clientId: string) {
     return this.clientService.updateClient(req.user.id, clientId, {
       status: 'ARCHIVED',
     });

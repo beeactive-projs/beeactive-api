@@ -68,9 +68,15 @@ export class ClientRequest extends Model {
   @ForeignKey(() => User)
   @Column({
     type: DataType.CHAR(36),
-    allowNull: false,
+    allowNull: true,
   })
-  declare toUserId: string;
+  declare toUserId: string | null;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+  })
+  declare invitedEmail: string | null;
 
   @Column({
     type: DataType.ENUM(...Object.values(ClientRequestType)),

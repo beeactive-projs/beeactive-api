@@ -210,6 +210,108 @@ export class ClientService {
   // =====================================================
 
   /**
+   * Instructor sends an invitation by email
+   *
+   * If the email belongs to an existing user, delegates to sendClientInvitation.
+   * If not, creates a pending email-only invitation and sends an invite email.
+   * When the person later registers with that email, the invitation can be linked.
+   */
+  async sendClientInvitationByEmail(
+    instructorId: string,
+    email: string,
+    message?: string,
+  ): Promise<{ message: string; request: ClientRequest }> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Verify the sender has the INSTRUCTOR role
+    const hasInstructorRole = await this.roleService.userHasRole(
+      instructorId,
+      'INSTRUCTOR',
+    );
+    if (!hasInstructorRole) {
+      throw new ForbiddenException(
+        'You must have the INSTRUCTOR role to invite clients',
+      );
+    }
+
+    // Cannot invite yourself
+    const instructor = await User.findByPk(instructorId, {
+      attributes: ['id', 'email', 'firstName', 'lastName'],
+    });
+    if (instructor && instructor.email.toLowerCase() === normalizedEmail) {
+      throw new BadRequestException('You cannot invite yourself as a client');
+    }
+
+    // Check if user exists
+    const targetUser = await User.findOne({
+      where: { email: normalizedEmail },
+      attributes: ['id', 'email', 'firstName'],
+    });
+
+    if (targetUser) {
+      // User exists - use existing flow
+      const request = await this.sendClientInvitation(
+        instructorId,
+        targetUser.id,
+        message,
+      );
+      return { message: 'Invitation sent to existing user', request };
+    }
+
+    // User does NOT exist - create email-only invitation
+    // Check no pending email invitation already exists
+    const existingRequest = await this.clientRequestModel.findOne({
+      where: {
+        fromUserId: instructorId,
+        invitedEmail: normalizedEmail,
+        status: ClientRequestStatus.PENDING,
+        expiresAt: { [Op.gt]: new Date() },
+      },
+    });
+
+    if (existingRequest) {
+      throw new ConflictException(
+        'A pending invitation already exists for this email',
+      );
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    const request = await this.clientRequestModel.create({
+      fromUserId: instructorId,
+      toUserId: null,
+      invitedEmail: normalizedEmail,
+      type: ClientRequestType.INSTRUCTOR_TO_CLIENT,
+      message: message || null,
+      status: ClientRequestStatus.PENDING,
+      createdAt: new Date(),
+      expiresAt,
+    });
+
+    // Send invitation email (fire-and-forget)
+    const instructorName = instructor
+      ? `${instructor.firstName} ${instructor.lastName}`
+      : 'An instructor';
+
+    this.emailService
+      .sendClientInvitationEmail(normalizedEmail, instructorName, message)
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to send client invitation email to ${normalizedEmail}: ${err.message}`,
+          'ClientService',
+        ),
+      );
+
+    this.logger.log(
+      `Instructor ${instructorId} invited ${normalizedEmail} (not yet registered) as client`,
+      'ClientService',
+    );
+
+    return { message: 'Invitation sent via email', request };
+  }
+
+  /**
    * Instructor sends an invitation to a user to become their client
    *
    * Flow:
@@ -272,7 +374,6 @@ export class ClientService {
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
 
-      console.log('neffff');
       const request = await this.clientRequestModel.create(
         {
           fromUserId: instructorId,
@@ -285,8 +386,6 @@ export class ClientService {
         },
         { transaction },
       );
-      console.log('ASDD');
-      console.log('request', request);
 
       return request;
     });

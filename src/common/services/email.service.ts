@@ -146,6 +146,35 @@ export class EmailService {
   }
 
   // =====================================================
+  // CLIENT INVITATION EMAILS
+  // =====================================================
+
+  /**
+   * Send client invitation email (for users not yet on the platform)
+   */
+  async sendClientInvitationEmail(
+    email: string,
+    instructorName: string,
+    message?: string,
+  ): Promise<void> {
+    const signUpLink = `${this.frontendUrl}/auth/signup?ref=client-invite`;
+
+    const subject = `${instructorName} invited you to BeeActive`;
+    const html = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>You've been invited!</h2>
+        <p><strong>${instructorName}</strong> would like you to join BeeActive as their client.</p>
+        ${message ? `<p style="padding: 12px; background: #f5f5f5; border-radius: 8px; font-style: italic;">"${message}"</p>` : ''}
+        <p>Create your account to get started:</p>
+        <a href="${signUpLink}" style="display: inline-block; padding: 12px 24px; background: #f59e0b; color: #fff; text-decoration: none; border-radius: 8px; font-weight: bold;">Join BeeActive</a>
+        <p style="margin-top: 24px; color: #666; font-size: 14px;">If you already have an account, just log in and the invitation will be waiting for you.</p>
+      </div>
+    `;
+
+    await this.send(email, subject, html);
+  }
+
+  // =====================================================
   // SESSION NOTIFICATION EMAILS
   // =====================================================
 

@@ -20,7 +20,12 @@ import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { RoleService } from '../role/role.service';
 import { ProfileService } from '../profile/profile.service';
 import { Sequelize } from 'sequelize-typescript';
+import { Op } from 'sequelize';
 import { EmailService } from '../../common/services/email.service';
+import {
+  ClientRequest,
+  ClientRequestStatus,
+} from '../client/entities/client-request.entity';
 
 /** Return type of generateTokens; used for typing buildAuthResponse and responses */
 export interface AuthTokens {
@@ -132,6 +137,14 @@ export class AuthService {
           ),
         );
 
+      // Link any pending client invitations sent to this email
+      this.linkPendingInvitations(user.id, user.email).catch((err) =>
+        this.logger.error(
+          `Failed to link pending invitations: ${err.message}`,
+          'AuthService',
+        ),
+      );
+
       return this.buildAuthResponse(user, tokens, roleNames);
     } catch (error) {
       // Rollback transaction on error
@@ -225,6 +238,39 @@ export class AuthService {
         roles: roleNames,
       },
     };
+  }
+
+  /**
+   * Link pending client invitations to a newly registered user
+   *
+   * When a user registers, check if any instructors had sent email-only
+   * invitations to this email. If found, update the toUserId FK so the
+   * invitation shows up in the user's pending requests.
+   */
+  private async linkPendingInvitations(
+    userId: string,
+    email: string,
+  ): Promise<void> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const [affectedCount] = await ClientRequest.update(
+      { toUserId: userId },
+      {
+        where: {
+          invitedEmail: normalizedEmail,
+          toUserId: null,
+          status: ClientRequestStatus.PENDING,
+          expiresAt: { [Op.gt]: new Date() },
+        },
+      },
+    );
+
+    if (affectedCount > 0) {
+      this.logger.log(
+        `Linked ${affectedCount} pending invitation(s) to newly registered user ${email}`,
+        'AuthService',
+      );
+    }
   }
 
   /**

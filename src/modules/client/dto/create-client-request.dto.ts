@@ -1,20 +1,20 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
  * Create Client Request DTO
  *
- * Used when an instructor invites a user to become their client,
- * or when a user requests to become an instructor's client.
+ * Used when an instructor invites a user to become their client.
+ * Accepts an email address - the system resolves to a userId internally.
  */
 export class CreateClientRequestDto {
   @ApiProperty({
-    example: '550e8400-e29b-41d4-a716-446655440000',
-    description: 'User ID of the person to send the request to',
+    example: 'client@example.com',
+    description: 'Email of the user to invite as a client',
   })
-  @IsUUID()
+  @IsEmail()
   @IsNotEmpty()
-  toUserId: string;
+  email: string;
 
   @ApiPropertyOptional({
     example: 'I would like to help you with your fitness goals!',
