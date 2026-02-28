@@ -337,10 +337,13 @@ export class GroupService {
     const data = members.map((member) => ({
       id: member.id,
       userId: member.userId,
-      firstName: member.user.firstName,
-      lastName: member.user.lastName,
-      email: member.user.email,
-      avatarId: member.user.avatarId,
+      user: {
+        id: member.user.id,
+        firstName: member.user.firstName,
+        lastName: member.user.lastName,
+        email: member.user.email,
+        avatarId: member.user.avatarId,
+      },
       isOwner: member.isOwner,
       nickname: member.nickname,
       sharedHealthInfo: member.sharedHealthInfo,
