@@ -40,6 +40,14 @@ CREATE INDEX IF NOT EXISTS idx_instructor_profile_deleted_at
 -- ------------------------------------------------------------
 -- 2) feedback.user_id → FK on "user"(id)
 -- ------------------------------------------------------------
+-- Orphaned rows (user_id points to a deleted user) must be nulled out before
+-- the FK can be validated. This mirrors the ON DELETE SET NULL behaviour the
+-- constraint enforces going forward.
+UPDATE feedback
+   SET user_id = NULL
+ WHERE user_id IS NOT NULL
+   AND user_id NOT IN (SELECT id FROM "user");
+
 -- DO block: ADD CONSTRAINT has no IF NOT EXISTS, so we check pg_constraint.
 DO $$ BEGIN
   IF NOT EXISTS (

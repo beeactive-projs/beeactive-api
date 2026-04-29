@@ -1,31 +1,32 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
   Body,
+  Controller,
+  Delete,
+  Get,
   Param,
+  Patch,
+  Post,
   Query,
-  UseGuards,
   Request,
+  UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
-import { GroupService } from './group.service';
-import { CreateGroupDto } from './dto/create-group.dto';
-import { UpdateGroupDto } from './dto/update-group.dto';
-import { UpdateMemberDto } from './dto/update-member.dto';
-import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
-import { DiscoverGroupsDto } from './dto/discover-groups.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { GroupDocs } from '../../common/docs/group.docs';
 import { GroupRoleDocs } from '../../common/docs/post.docs';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { RolesGuard } from '../../common/guards/roles.guard';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
+import { AddMembersBulkDto } from './dto/add-members-bulk.dto';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { DiscoverGroupsDto } from './dto/discover-groups.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { UpdateMemberDto } from './dto/update-member.dto';
+import { GroupService } from './group.service';
 
 /**
  * Group Controller
@@ -196,6 +197,24 @@ export class GroupController {
       pagination.page,
       pagination.limit,
     );
+  }
+
+  @Post(':id/members/bulk')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiEndpoint({
+    summary: 'Add multiple members',
+    description:
+      'Add multiple users to the group in a single request. Owner only. Already-existing active members are silently skipped.',
+    auth: true,
+    body: AddMembersBulkDto,
+    responses: [{ status: 201, description: 'Members added' }],
+  })
+  async addMembersBulk(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: AddMembersBulkDto,
+  ) {
+    return this.groupService.addMembersBulk(id, req.user.id, dto.userIds);
   }
 
   @Patch(':id/members/me')

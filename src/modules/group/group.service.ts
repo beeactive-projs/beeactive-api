@@ -1,36 +1,36 @@
+import type { LoggerService } from '@nestjs/common';
 import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
-  ForbiddenException,
-  BadRequestException,
-  Inject,
 } from '@nestjs/common';
-import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { Op, Sequelize, Transaction, WhereOptions, literal } from 'sequelize';
-import { Group, JoinPolicy } from './entities/group.entity';
-import { GroupMember, GroupMemberRole } from './entities/group-member.entity';
-import { CreateGroupDto } from './dto/create-group.dto';
-import { UpdateGroupDto } from './dto/update-group.dto';
-import { UpdateMemberDto } from './dto/update-member.dto';
-import {
-  AssignableMemberRole,
-  UpdateMemberRoleDto,
-} from './dto/update-member-role.dto';
-import { DiscoverGroupsDto } from './dto/discover-groups.dto';
-import { User } from '../user/entities/user.entity';
-import { Session } from '../session/entities/session.entity';
+import { Op, Transaction, WhereOptions, literal } from 'sequelize';
+import { buildPaginatedResponse } from '../../common/dto/pagination.dto';
+import { CryptoService } from '../../common/services/crypto.service';
+import { EmailService } from '../../common/services/email.service';
+import { buildSearchTerm } from '../../common/utils/search.utils';
+import { InstructorClient } from '../client/entities/instructor-client.entity';
 import {
   InstructorProfile,
   type SocialLinks,
 } from '../profile/entities/instructor-profile.entity';
-import { InstructorClient } from '../client/entities/instructor-client.entity';
-import { EmailService } from '../../common/services/email.service';
-import { CryptoService } from '../../common/services/crypto.service';
-import { buildPaginatedResponse } from '../../common/dto/pagination.dto';
-import { buildSearchTerm } from '../../common/utils/search.utils';
 import { SearchIndexService } from '../search/search-index.service';
+import { Session } from '../session/entities/session.entity';
+import { User } from '../user/entities/user.entity';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { DiscoverGroupsDto } from './dto/discover-groups.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
+import {
+  AssignableMemberRole,
+  UpdateMemberRoleDto,
+} from './dto/update-member-role.dto';
+import { UpdateMemberDto } from './dto/update-member.dto';
+import { GroupMember, GroupMemberRole } from './entities/group-member.entity';
+import { Group, JoinPolicy } from './entities/group.entity';
 
 /**
  * Group Service
@@ -842,10 +842,91 @@ export class GroupService {
   // =====================================================
 
   /**
+   * Add multiple users as members in a single transaction (owner only).
+   *
+   * - Active members (leftAt IS NULL) are silently skipped.
+   * - Previously-removed members (leftAt IS NOT NULL) are re-activated.
+   * - Unknown users are created fresh.
+   * Returns newly created or re-activated memberships.
+   */
+  async addMembersBulk(
+    groupId: string,
+    requestingUserId: string,
+    userIds: string[],
+  ): Promise<GroupMember[]> {
+    await this.assertOwnerAndGet(groupId, requestingUserId);
+
+    const sequelize = this.groupModel.sequelize!;
+    const transaction = await sequelize.transaction();
+
+    try {
+      const allExisting = await this.memberModel.findAll({
+        where: { groupId, userId: { [Op.in]: userIds } },
+        attributes: ['userId', 'leftAt'],
+        transaction,
+      });
+
+      const activeIds = new Set(
+        allExisting.filter((m) => m.leftAt === null).map((m) => m.userId),
+      );
+      const rejoinIds = new Set(
+        allExisting.filter((m) => m.leftAt !== null).map((m) => m.userId),
+      );
+
+      const toCreate = userIds.filter(
+        (id) => !activeIds.has(id) && !rejoinIds.has(id),
+      );
+
+      const [reactivated, created] = await Promise.all([
+        rejoinIds.size > 0
+          ? this.memberModel
+              .update(
+                { leftAt: null },
+                {
+                  where: {
+                    groupId,
+                    userId: { [Op.in]: [...rejoinIds] },
+                  },
+                  transaction,
+                },
+              )
+              .then(() =>
+                this.memberModel.findAll({
+                  where: { groupId, userId: { [Op.in]: [...rejoinIds] } },
+                  transaction,
+                }),
+              )
+          : Promise.resolve([] as GroupMember[]),
+        Promise.all(
+          toCreate.map((userId) =>
+            this.memberModel.create(
+              { groupId, userId, role: GroupMemberRole.MEMBER },
+              { transaction },
+            ),
+          ),
+        ),
+      ]);
+
+      await transaction.commit();
+
+      this.logger.log(
+        `Group ${groupId}: ${created.length} added, ${reactivated.length} re-activated, ${activeIds.size} skipped (already active) — by ${requestingUserId}`,
+        'GroupService',
+      );
+
+      return [...reactivated, ...created];
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  /**
    * Add a user as a member (used by InvitationService).
    *
-   * If already a member, returns existing membership.
-   * Otherwise creates a new one with role=MEMBER.
+   * - Active member: returns existing record unchanged.
+   * - Previously-removed member (leftAt set): clears leftAt and returns record.
+   * - Unknown: creates a new membership with role=MEMBER.
    */
   async addMember(
     groupId: string,
@@ -857,11 +938,16 @@ export class GroupService {
       : {};
 
     const existing = await this.memberModel.findOne({
-      where: { groupId, userId, leftAt: null },
+      where: { groupId, userId },
       ...txOpt,
     });
 
-    if (existing) return existing;
+    if (existing) {
+      if (existing.leftAt !== null) {
+        await existing.update({ leftAt: null }, txOpt);
+      }
+      return existing;
+    }
 
     return this.memberModel.create(
       { groupId, userId, role: GroupMemberRole.MEMBER },
