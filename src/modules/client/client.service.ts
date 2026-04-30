@@ -250,11 +250,161 @@ export class ClientService {
     );
   }
 
+  /**
+   * Server-side filtered + sorted + paginated pending requests list for a
+   * PrimeNG table. Queries client_request and returns rows where the
+   * instructor is either the sender (INSTRUCTOR_TO_CLIENT) or recipient
+   * (CLIENT_TO_INSTRUCTOR), with status = PENDING and not expired.
+   *
+   * Allowed filter fields:
+   *   type, createdAt, expiresAt, invitedEmail, message,
+   *   fromUser.firstName, fromUser.lastName, fromUser.email,
+   *   toUser.firstName, toUser.lastName, toUser.email
+   */
+  async filterPendingRequests(
+    instructorId: string,
+    dto: FilterSettingsDto,
+  ): Promise<PaginatedResponse<ClientRow>> {
+    const page = Math.floor(dto.first / dto.rows) + 1;
+    const opts = buildFilterOptions(dto, {
+      allowedFields: [
+        'type',
+        'createdAt',
+        'expiresAt',
+        'invitedEmail',
+        'message',
+        'fromUser.firstName',
+        'fromUser.lastName',
+        'fromUser.email',
+        'toUser.firstName',
+        'toUser.lastName',
+        'toUser.email',
+      ],
+      defaultSortField: 'createdAt',
+    });
+
+    const where = {
+      [Op.and]: [
+        {
+          [Op.or]: [
+            {
+              fromUserId: instructorId,
+              type: ClientRequestType.INSTRUCTOR_TO_CLIENT,
+            },
+            {
+              toUserId: instructorId,
+              type: ClientRequestType.CLIENT_TO_INSTRUCTOR,
+            },
+          ],
+          status: ClientRequestStatus.PENDING,
+          expiresAt: { [Op.gt]: new Date() },
+        },
+        opts.where,
+      ],
+    };
+
+    const include = [
+      {
+        model: User,
+        as: 'fromUser',
+        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+      },
+      {
+        model: User,
+        as: 'toUser',
+        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+      },
+    ];
+
+    const [count, rows] = await Promise.all([
+      this.clientRequestModel.count({ where, include }),
+      this.clientRequestModel.findAll({
+        where,
+        include,
+        order: opts.order,
+        limit: opts.limit,
+        offset: opts.offset,
+        subQuery: opts.subQuery,
+      }),
+    ]);
+
+    const data = rows.map((row) => this.toPendingClientRow(row, instructorId));
+
+    return buildPaginatedResponse(data, count, page, dto.rows);
+  }
+
+  /**
+   * Total count of pending client_request rows where this instructor is
+   * either sender (INSTRUCTOR_TO_CLIENT) or recipient (CLIENT_TO_INSTRUCTOR),
+   * status = PENDING, not expired. Powers the Pending-requests badge.
+   */
+  async getPendingRequestsCount(
+    instructorId: string,
+  ): Promise<{ count: number }> {
+    const count = await this.clientRequestModel.count({
+      where: {
+        [Op.or]: [
+          {
+            fromUserId: instructorId,
+            type: ClientRequestType.INSTRUCTOR_TO_CLIENT,
+          },
+          {
+            toUserId: instructorId,
+            type: ClientRequestType.CLIENT_TO_INSTRUCTOR,
+          },
+        ],
+        status: ClientRequestStatus.PENDING,
+        expiresAt: { [Op.gt]: new Date() },
+      },
+    });
+    return { count };
+  }
+
   private clientUserInclude() {
     return {
       model: User,
       as: 'client',
       attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+    };
+  }
+
+  /**
+   * Normalise a client_request row into the ClientRow shape consumed by the
+   * frontend clients/pending-requests tables. Picks the "other" user
+   * (toUser for outgoing invites, fromUser for incoming requests).
+   */
+  private toPendingClientRow(
+    row: ClientRequest,
+    instructorId: string,
+  ): ClientRow {
+    const isInstructorInvite =
+      row.type === ClientRequestType.INSTRUCTOR_TO_CLIENT;
+    const clientUser = isInstructorInvite ? row.toUser : row.fromUser;
+    return {
+      id: row.id,
+      instructorId,
+      clientId: clientUser?.id ?? null,
+      status: InstructorClientStatus.PENDING,
+      initiatedBy: isInstructorInvite
+        ? InitiatedBy.INSTRUCTOR
+        : InitiatedBy.CLIENT,
+      notes: row.message,
+      startedAt: null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      invitedEmail: row.invitedEmail,
+      requestType: row.type,
+      expiresAt: row.expiresAt,
+      client: clientUser
+        ? {
+            id: clientUser.id,
+            firstName: clientUser.firstName,
+            lastName: clientUser.lastName,
+            email: clientUser.email,
+            avatarId: clientUser.avatarId ?? null,
+          }
+        : null,
+      groupMemberships: [],
     };
   }
 
@@ -331,40 +481,7 @@ export class ClientService {
         offset,
       });
 
-    // Normalise into the same shape as instructor_client rows so the
-    // frontend table can render them identically.
-    const data = rows.map((row) => {
-      const isInstructorInvite =
-        row.type === ClientRequestType.INSTRUCTOR_TO_CLIENT;
-      const clientUser = isInstructorInvite ? row.toUser : row.fromUser;
-
-      return {
-        id: row.id,
-        instructorId,
-        clientId: clientUser?.id || null,
-        status: InstructorClientStatus.PENDING,
-        initiatedBy: isInstructorInvite
-          ? InitiatedBy.INSTRUCTOR
-          : InitiatedBy.CLIENT,
-        notes: row.message,
-        startedAt: null,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-        invitedEmail: row.invitedEmail,
-        requestType: row.type,
-        expiresAt: row.expiresAt,
-        client: clientUser
-          ? {
-              id: clientUser.id,
-              firstName: clientUser.firstName,
-              lastName: clientUser.lastName,
-              email: clientUser.email,
-              avatarId: clientUser.avatarId,
-            }
-          : null,
-        groupMemberships: [],
-      };
-    });
+    const data = rows.map((row) => this.toPendingClientRow(row, instructorId));
 
     return buildPaginatedResponse(data, totalItems, page, limit);
   }
@@ -404,37 +521,7 @@ export class ClientService {
       order: [['createdAt', 'DESC']],
     });
 
-    return rows.map((row): ClientRow => {
-      const isInstructorInvite =
-        row.type === ClientRequestType.INSTRUCTOR_TO_CLIENT;
-      const clientUser = isInstructorInvite ? row.toUser : row.fromUser;
-      return {
-        id: row.id,
-        instructorId,
-        clientId: clientUser?.id ?? null,
-        status: InstructorClientStatus.PENDING,
-        initiatedBy: isInstructorInvite
-          ? InitiatedBy.INSTRUCTOR
-          : InitiatedBy.CLIENT,
-        notes: row.message,
-        startedAt: null,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-        invitedEmail: row.invitedEmail,
-        requestType: row.type,
-        expiresAt: row.expiresAt,
-        client: clientUser
-          ? {
-              id: clientUser.id,
-              firstName: clientUser.firstName,
-              lastName: clientUser.lastName,
-              email: clientUser.email,
-              avatarId: clientUser.avatarId ?? null,
-            }
-          : null,
-        groupMemberships: [],
-      };
-    });
+    return rows.map((row) => this.toPendingClientRow(row, instructorId));
   }
 
   /**
@@ -710,24 +797,25 @@ export class ClientService {
       });
 
       if (existing) {
-        await existing.update(
-          {
-            status: InstructorClientStatus.PENDING,
-            initiatedBy: InitiatedBy.INSTRUCTOR,
-            startedAt: null,
-          },
-          { transaction },
-        );
-      } else {
-        await this.instructorClientModel.create(
-          {
-            instructorId,
-            clientId: toUserId,
-            status: InstructorClientStatus.PENDING,
-            initiatedBy: InitiatedBy.INSTRUCTOR,
-          },
-          { transaction },
-        );
+        throw new BadRequestException('This user is already your client');
+        //   await existing.update(
+        //     {
+        //       status: InstructorClientStatus.PENDING,
+        //       initiatedBy: InitiatedBy.INSTRUCTOR,
+        //       startedAt: null,
+        //     },
+        //     { transaction },
+        //   );
+        // } else {
+        //   await this.instructorClientModel.create(
+        //     {
+        //       instructorId,
+        //       clientId: toUserId,
+        //       status: InstructorClientStatus.PENDING,
+        //       initiatedBy: InitiatedBy.INSTRUCTOR,
+        //     },
+        //     { transaction },
+        //   );
       }
 
       // Create client_request record

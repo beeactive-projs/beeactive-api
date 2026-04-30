@@ -69,6 +69,25 @@ export class ClientController {
   }
 
   /**
+   * POST /clients/requests/filter
+   * PrimeNG server-side filtered, sorted, and paginated pending requests table.
+   * Returns client_request rows where the authenticated instructor is either
+   * sender (INSTRUCTOR_TO_CLIENT) or recipient (CLIENT_TO_INSTRUCTOR), with
+   * status PENDING and not yet expired. Rows are normalised into the same
+   * shape as the clients table consumes.
+   */
+  @Post('requests/filter')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint(ClientDocs.filterPendingRequests)
+  filterPendingRequests(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: FilterSettingsDto,
+  ) {
+    return this.clientService.filterPendingRequests(req.user.id, dto);
+  }
+
+  /**
    * GET /clients
    * List the authenticated instructor's clients with pagination and optional status filter.
    */
@@ -131,6 +150,20 @@ export class ClientController {
   @ApiEndpoint(ClientDocs.getPendingRequests)
   async getPendingRequests(@Request() req: AuthenticatedRequest) {
     return this.clientService.getPendingRequests(req.user.id);
+  }
+
+  /**
+   * GET /clients/requests/pending/count
+   * Returns the total count of pending client_request rows where the
+   * authenticated instructor is sender or recipient (used for the
+   * Pending-requests badge on the clients page).
+   */
+  @Get('requests/pending/count')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint(ClientDocs.getPendingRequestsCount)
+  getPendingRequestsCount(@Request() req: AuthenticatedRequest) {
+    return this.clientService.getPendingRequestsCount(req.user.id);
   }
 
   /**

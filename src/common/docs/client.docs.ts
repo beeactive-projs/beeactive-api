@@ -50,6 +50,70 @@ export const ClientDocs = {
     ],
   } as ApiEndpointOptions,
 
+  getPendingRequestsCount: {
+    summary: 'Count pending client requests',
+    description:
+      'Returns the total number of pending client_request rows where the authenticated instructor is either ' +
+      'sender (INSTRUCTOR_TO_CLIENT) or recipient (CLIENT_TO_INSTRUCTOR). Only PENDING and not-expired rows ' +
+      'are counted. Used to render the badge on the Pending-requests button.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Pending count', example: { count: 3 } },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+    ],
+  } as ApiEndpointOptions,
+
+  filterPendingRequests: {
+    summary: 'Filter pending client requests (PrimeNG table)',
+    description:
+      "Server-side filtered, sorted, and paginated list of the authenticated instructor's pending client_request rows. " +
+      'Includes both outgoing invitations (INSTRUCTOR_TO_CLIENT, fromUserId = instructor) and incoming requests ' +
+      '(CLIENT_TO_INSTRUCTOR, toUserId = instructor). Only rows with status = PENDING and expiresAt > now are returned. ' +
+      'Rows are normalised into the same shape used by the clients table. ' +
+      'Filterable fields: type, createdAt, expiresAt, invitedEmail, message, ' +
+      'fromUser.firstName, fromUser.lastName, fromUser.email, ' +
+      'toUser.firstName, toUser.lastName, toUser.email.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Filtered pending requests list',
+        example: {
+          items: [
+            {
+              id: 'request-uuid',
+              instructorId: 'instructor-uuid',
+              clientId: 'user-uuid',
+              status: 'PENDING',
+              initiatedBy: 'CLIENT',
+              notes: "Hi, I'd like to train with you",
+              startedAt: null,
+              createdAt: '2026-04-20T10:00:00.000Z',
+              updatedAt: '2026-04-20T10:00:00.000Z',
+              invitedEmail: null,
+              requestType: 'CLIENT_TO_INSTRUCTOR',
+              expiresAt: '2026-05-20T10:00:00.000Z',
+              client: {
+                id: 'user-uuid',
+                firstName: 'Jane',
+                lastName: 'Doe',
+                email: 'jane@example.com',
+                avatarId: null,
+              },
+              groupMemberships: [],
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 20,
+        },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+    ],
+  } as ApiEndpointOptions,
+
   getMyClients: {
     summary: 'List my clients',
     description:
