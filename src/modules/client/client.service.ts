@@ -221,7 +221,7 @@ export class ClientService {
       {
         model: User,
         as: 'client',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
       },
     ];
 
@@ -307,12 +307,12 @@ export class ClientService {
       {
         model: User,
         as: 'fromUser',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
       },
       {
         model: User,
         as: 'toUser',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
       },
     ];
 
@@ -364,7 +364,7 @@ export class ClientService {
     return {
       model: User,
       as: 'client',
-      attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+      attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
     };
   }
 
@@ -468,12 +468,12 @@ export class ClientService {
           {
             model: User,
             as: 'fromUser',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+            attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
           },
           {
             model: User,
             as: 'toUser',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+            attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
           },
         ],
         order: [['createdAt', 'DESC']],
@@ -510,12 +510,12 @@ export class ClientService {
         {
           model: User,
           as: 'fromUser',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
         },
         {
           model: User,
           as: 'toUser',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
         },
       ],
       order: [['createdAt', 'DESC']],
@@ -595,7 +595,7 @@ export class ClientService {
         {
           model: User,
           as: 'instructor',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
         },
       ],
       order: [['startedAt', 'DESC']],
@@ -1538,7 +1538,7 @@ export class ClientService {
         {
           model: User,
           as: 'fromUser',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarId'],
+          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
         },
       ],
       order: [['createdAt', 'DESC']],

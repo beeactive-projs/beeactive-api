@@ -441,7 +441,7 @@ export class InvitationService {
           {
             model: User,
             as: 'inviter',
-            attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+            attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
           },
           {
             model: Group,

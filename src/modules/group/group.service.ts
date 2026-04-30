@@ -370,7 +370,7 @@ export class GroupService {
               'firstName',
               'lastName',
               'phone',
-              'avatarId',
+              'avatarUrl',
             ],
           },
         ],
@@ -592,7 +592,7 @@ export class GroupService {
       include: [
         {
           model: User,
-          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
         },
       ],
     });

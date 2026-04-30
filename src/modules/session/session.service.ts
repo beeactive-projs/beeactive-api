@@ -199,7 +199,7 @@ export class SessionService {
           {
             model: User,
             as: 'instructor',
-            attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+            attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
           },
         ],
         order: [['scheduledAt', 'ASC']],
@@ -291,7 +291,7 @@ export class SessionService {
           {
             model: User,
             as: 'instructor',
-            attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+            attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
           },
         ],
         order: [[sortField, sortDir]],
@@ -312,14 +312,14 @@ export class SessionService {
         {
           model: User,
           as: 'instructor',
-          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
         },
         {
           model: SessionParticipant,
           include: [
             {
               model: User,
-              attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+              attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
             },
           ],
         },
@@ -633,7 +633,7 @@ export class SessionService {
         {
           model: User,
           as: 'instructor',
-          attributes: ['id', 'firstName', 'lastName', 'avatarId'],
+          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
         },
       ],
       order: [['scheduledAt', 'ASC']],
