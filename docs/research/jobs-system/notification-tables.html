@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Notification System — Proposed Tables</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --panel-2: #1c2230;
+    --border: #2a3142;
+    --text: #e6e8ee;
+    --text-dim: #9ba3b4;
+    --accent: #ffb627;
+    --accent-2: #6ea8ff;
+    --pk: #ff7a90;
+    --fk: #6ea8ff;
+    --null: #9ba3b4;
+    --type: #c4a7ff;
+    --note: #7fd1a3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.5;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    margin-bottom: 32px;
+    max-width: 900px;
+  }
+  .legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+    padding: 12px 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.pk { background: var(--pk); }
+  .dot.fk { background: var(--fk); }
+  .dot.null { background: var(--null); }
+  .dot.json { background: var(--type); }
+  .dot.note { background: var(--note); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+    gap: 24px;
+    margin-bottom: 40px;
+  }
+
+  .table-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+  .table-header {
+    background: var(--panel-2);
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-name {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .table-purpose {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    text-align: left;
+    padding: 10px 16px;
+    background: var(--panel-2);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(110, 168, 255, 0.05); }
+
+  .col-name {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .col-name.pk::before {
+    content: "🔑 ";
+  }
+  .col-name.fk::before {
+    content: "🔗 ";
+  }
+  .col-type {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--type);
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .col-purpose {
+    color: var(--text);
+  }
+  .nullable {
+    display: inline-block;
+    padding: 1px 6px;
+    margin-left: 6px;
+    background: rgba(155, 163, 180, 0.15);
+    color: var(--null);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  .pk-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    margin-left: 6px;
+    background: rgba(255, 122, 144, 0.15);
+    color: var(--pk);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .fk-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    margin-left: 6px;
+    background: rgba(110, 168, 255, 0.15);
+    color: var(--fk);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .indexes {
+    padding: 12px 20px;
+    background: rgba(127, 209, 163, 0.05);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .indexes-label {
+    color: var(--note);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+  .indexes code {
+    display: block;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--text);
+    margin: 2px 0;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  .relationship {
+    margin-top: 24px;
+    padding: 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .relationship h2 {
+    margin: 0 0 16px;
+    font-size: 18px;
+    color: var(--accent);
+  }
+  .ascii {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    color: var(--text);
+    white-space: pre;
+    line-height: 1.6;
+    background: var(--panel-2);
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+
+  .flow {
+    margin-top: 24px;
+    padding: 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .flow h2 {
+    margin: 0 0 16px;
+    font-size: 18px;
+    color: var(--accent);
+  }
+  .flow ol {
+    margin: 0;
+    padding-left: 20px;
+  }
+  .flow li {
+    margin-bottom: 8px;
+  }
+  .flow code {
+    background: rgba(255, 182, 39, 0.1);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .state-table {
+    margin-top: 24px;
+  }
+  .state-table table {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .state-table thead th {
+    background: var(--panel-2);
+  }
+  .state-name {
+    font-weight: 700;
+    color: var(--accent-2);
+  }
+  .state-cols {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--type);
+    font-size: 12px;
+  }
+
+  h2.section { margin-top: 40px; font-size: 22px; }
+</style>
+</head>
+<body>
+
+<h1>Notification System — Proposed Tables</h1>
+<p class="subtitle">
+Four tables for the multi-channel notification module. Pattern adapted from clym/events-api with the alert/receipt split,
+plus a separate device-token table that handles web push + Ionic mobile FCM in one place.
+</p>
+
+<div class="legend">
+  <div class="legend-item"><span class="dot pk"></span> Primary key</div>
+  <div class="legend-item"><span class="dot fk"></span> Foreign key</div>
+  <div class="legend-item"><span class="dot null"></span> Nullable</div>
+  <div class="legend-item"><span class="dot json"></span> Type</div>
+  <div class="legend-item"><span class="dot note"></span> Index</div>
+</div>
+
+<h2 class="section">Tables</h2>
+
+<div class="grid">
+
+  <!-- TABLE 1: notification -->
+  <div class="table-card">
+    <div class="table-header">
+      <div class="table-name">notification</div>
+      <div class="table-purpose">The message itself. One row per event, not per recipient. Broadcasts share one row.</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-name pk">id <span class="pk-badge">PK</span></td>
+          <td class="col-type">CHAR(36)</td>
+          <td class="col-purpose">UUID, project convention</td>
+        </tr>
+        <tr>
+          <td class="col-name">type</td>
+          <td class="col-type">VARCHAR(64)</td>
+          <td class="col-purpose">Enum: <code>SESSION_REMINDER_1H</code>, <code>INVOICE_PAID</code>, etc.</td>
+        </tr>
+        <tr>
+          <td class="col-name">title</td>
+          <td class="col-type">VARCHAR(200)</td>
+          <td class="col-purpose">Short headline shown in the bell</td>
+        </tr>
+        <tr>
+          <td class="col-name">body</td>
+          <td class="col-type">TEXT</td>
+          <td class="col-purpose">Full notification text</td>
+        </tr>
+        <tr>
+          <td class="col-name">data</td>
+          <td class="col-type">JSONB</td>
+          <td class="col-purpose"><code>{ screen, entityId, action }</code> for FE deep-linking</td>
+        </tr>
+        <tr>
+          <td class="col-name">severity</td>
+          <td class="col-type">VARCHAR(16)</td>
+          <td class="col-purpose"><code>info</code> / <code>success</code> / <code>warn</code> / <code>error</code> — drives icon &amp; color</td>
+        </tr>
+        <tr>
+          <td class="col-name">icon_url <span class="nullable">NULL</span></td>
+          <td class="col-type">VARCHAR(300)</td>
+          <td class="col-purpose">Optional icon override (otherwise derived from severity)</td>
+        </tr>
+        <tr>
+          <td class="col-name">priority</td>
+          <td class="col-type">SMALLINT</td>
+          <td class="col-purpose">Default 1. Higher = more prominent in the UI</td>
+        </tr>
+        <tr>
+          <td class="col-name">audience_type</td>
+          <td class="col-type">VARCHAR(16)</td>
+          <td class="col-purpose"><code>USER</code> / <code>GROUP</code> / <code>PLATFORM</code></td>
+        </tr>
+        <tr>
+          <td class="col-name">audience_id <span class="nullable">NULL</span></td>
+          <td class="col-type">CHAR(36)</td>
+          <td class="col-purpose">user/group id; null when audience is PLATFORM</td>
+        </tr>
+        <tr>
+          <td class="col-name">deliver_at <span class="nullable">NULL</span></td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">When recipients start seeing it (null = immediate)</td>
+        </tr>
+        <tr>
+          <td class="col-name">expire_at <span class="nullable">NULL</span></td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">Auto-hides after this date</td>
+        </tr>
+        <tr>
+          <td class="col-name">fingerprint <span class="nullable">NULL</span></td>
+          <td class="col-type">VARCHAR(64)</td>
+          <td class="col-purpose">sha256 of (type + dedup keys) — prevents duplicates</td>
+        </tr>
+        <tr>
+          <td class="col-name">created_at</td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">Standard</td>
+        </tr>
+        <tr>
+          <td class="col-name">updated_at</td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">Standard</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="indexes">
+      <div class="indexes-label">Indexes</div>
+      <code>(deliver_at) WHERE deliver_at IS NOT NULL</code>
+      <code>(expire_at) WHERE expire_at IS NOT NULL</code>
+      <code>(fingerprint) WHERE fingerprint IS NOT NULL</code>
+      <code>(audience_type, audience_id)</code>
+    </div>
+  </div>
+
+  <!-- TABLE 2: notification_receipt -->
+  <div class="table-card">
+    <div class="table-header">
+      <div class="table-name">notification_receipt</div>
+      <div class="table-purpose">Per-recipient state: delivered, viewed, read, clicked, dismissed. One row per (notification, user).</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-name pk">id <span class="pk-badge">PK</span></td>
+          <td class="col-type">CHAR(36)</td>
+          <td class="col-purpose">UUID</td>
+        </tr>
+        <tr>
+          <td class="col-name fk">notification_id <span class="fk-badge">FK</span></td>
+          <td class="col-type">CHAR(36)</td>
+          <td class="col-purpose">→ notification.id (CASCADE on delete)</td>
+        </tr>
+        <tr>
+          <td class="col-name fk">user_id <span class="fk-badge">FK</span></td>
+          <td class="col-type">CHAR(36)</td>
+          <td class="col-purpose">→ user.id — the recipient</td>
+        </tr>
+        <tr>
+          <td class="col-name">delivered_at <span class="nullable">NULL</span></td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">When in-app worker created the receipt (≈ "sent to bell")</td>
+        </tr>
+        <tr>
+          <td class="col-name">viewed_at <span class="nullable">NULL</span></td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">When user opened the bell dropdown and saw it</td>
+        </tr>
+        <tr>
+          <td class="col-name">read_at <span class="nullable">NULL</span></td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">When marked read (clicked or "mark all read")</td>
+        </tr>
+        <tr>
+          <td class="col-name">clicked_at <span class="nullable">NULL</span></td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">When user followed the deep link</td>
+        </tr>
+        <tr>
+          <td class="col-name">dismissed_at <span class="nullable">NULL</span></td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">When user X'd it without reading</td>
+        </tr>
+        <tr>
+          <td class="col-name">delivered_channels</td>
+          <td class="col-type">JSONB</td>
+          <td class="col-purpose">Audit: <code>{ in_app: 'sent', email: 'sent', push: 'failed:no_devices' }</code></td>
+        </tr>
+        <tr>
+          <td class="col-name">created_at</td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">Standard</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="indexes">
+      <div class="indexes-label">Indexes &amp; Constraints</div>
+      <code>UNIQUE (notification_id, user_id)</code>
+      <code>(user_id, read_at, created_at DESC) — bell badge query</code>
+      <code>(user_id, viewed_at) — analytics</code>
+      <code>(notification_id) — find all recipients of an alert</code>
+    </div>
+  </div>
+
+  <!-- TABLE 3: notification_preference -->
+  <div class="table-card">
+    <div class="table-header">
+      <div class="table-name">notification_preference</div>
+      <div class="table-purpose">Per-user channel toggles. Sparse — only filled when user changes from default.</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-name pk">id <span class="pk-badge">PK</span></td>
+          <td class="col-type">CHAR(36)</td>
+          <td class="col-purpose">UUID</td>
+        </tr>
+        <tr>
+          <td class="col-name fk">user_id <span class="fk-badge">FK</span></td>
+          <td class="col-type">CHAR(36)</td>
+          <td class="col-purpose">→ user.id</td>
+        </tr>
+        <tr>
+          <td class="col-name">type</td>
+          <td class="col-type">VARCHAR(64)</td>
+          <td class="col-purpose">Notification type (e.g. <code>SESSION_REMINDER_1H</code>)</td>
+        </tr>
+        <tr>
+          <td class="col-name">channels</td>
+          <td class="col-type">JSONB</td>
+          <td class="col-purpose"><code>{ in_app: true, email: true, push: false, sms: false }</code></td>
+        </tr>
+        <tr>
+          <td class="col-name">updated_at</td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">Audit</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="indexes">
+      <div class="indexes-label">Indexes &amp; Constraints</div>
+      <code>UNIQUE (user_id, type)</code>
+      <code>(user_id) — settings page query</code>
+    </div>
+  </div>
+
+  <!-- TABLE 4: device_token -->
+  <div class="table-card">
+    <div class="table-header">
+      <div class="table-name">device_token</div>
+      <div class="table-purpose">One row per device registered for push. Web Push + Ionic mobile FCM live here together.</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-name pk">id <span class="pk-badge">PK</span></td>
+          <td class="col-type">CHAR(36)</td>
+          <td class="col-purpose">UUID</td>
+        </tr>
+        <tr>
+          <td class="col-name fk">user_id <span class="fk-badge">FK</span></td>
+          <td class="col-type">CHAR(36)</td>
+          <td class="col-purpose">→ user.id (owner)</td>
+        </tr>
+        <tr>
+          <td class="col-name">platform</td>
+          <td class="col-type">VARCHAR(16)</td>
+          <td class="col-purpose"><code>web</code> / <code>ios</code> / <code>android</code></td>
+        </tr>
+        <tr>
+          <td class="col-name">token</td>
+          <td class="col-type">TEXT</td>
+          <td class="col-purpose">FCM token, or JSON-stringified Web Push subscription</td>
+        </tr>
+        <tr>
+          <td class="col-name">endpoint_hash</td>
+          <td class="col-type">VARCHAR(64)</td>
+          <td class="col-purpose">SHA256 of unique endpoint — for the UNIQUE index</td>
+        </tr>
+        <tr>
+          <td class="col-name">device_label <span class="nullable">NULL</span></td>
+          <td class="col-type">VARCHAR(120)</td>
+          <td class="col-purpose">Optional UA / device name for "logged-in devices" UI</td>
+        </tr>
+        <tr>
+          <td class="col-name">last_seen_at</td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">Updated on app open / browser visit. Used to prune stale devices</td>
+        </tr>
+        <tr>
+          <td class="col-name">revoked_at <span class="nullable">NULL</span></td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">Set on logout, permanent push failure, or user "remove device"</td>
+        </tr>
+        <tr>
+          <td class="col-name">created_at</td>
+          <td class="col-type">TIMESTAMPTZ</td>
+          <td class="col-purpose">Standard</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="indexes">
+      <div class="indexes-label">Indexes &amp; Constraints</div>
+      <code>UNIQUE (user_id, endpoint_hash)</code>
+      <code>(user_id, revoked_at) — push worker query</code>
+      <code>(last_seen_at) — pruning sweeper</code>
+    </div>
+  </div>
+
+</div>
+
+<!-- RELATIONSHIP DIAGRAM -->
+<div class="relationship">
+  <h2>Relationships</h2>
+  <div class="ascii">user (1) ─────┬───── (N) notification_receipt ──── (N) notification
+              │                                          (audience_type, audience_id)
+              ├───── (N) notification_preference          one alert → many receipts (broadcast)
+              │                                           one user → many alerts via receipts
+              └───── (N) device_token</div>
+</div>
+
+<!-- DELIVERY FLOW -->
+<div class="flow">
+  <h2>Delivery flow when notify() fires</h2>
+  <ol>
+    <li><code>notify(userId, SESSION_REMINDER_1H, ...)</code> is called by a service or scheduler.</li>
+    <li><strong>Create the alert</strong>: insert one row into <code>notification</code> (the message).</li>
+    <li><strong>Resolve recipients</strong>: for <code>USER</code> audience that's just userId; for <code>GROUP</code> walk <code>group_member</code>; for <code>PLATFORM</code> all users.</li>
+    <li><strong>Create receipts</strong>: insert one row per recipient into <code>notification_receipt</code> with <code>delivered_at = now()</code>.</li>
+    <li><strong>Read preferences</strong>: look up <code>notification_preference</code> per recipient (fall back to system default if no row).</li>
+    <li><strong>Fan out to channels</strong>: for each enabled channel, enqueue a job:
+      <ul>
+        <li><code>notifications.email_send</code> → Resend</li>
+        <li><code>notifications.push_send</code> → looks up <code>device_token</code> rows, sends via web-push lib (web) or FCM (ios/android)</li>
+        <li><code>notifications.sms_send</code> → Twilio (later)</li>
+      </ul>
+    </li>
+    <li><strong>Update audit</strong>: workers write to <code>receipt.delivered_channels</code> with <code>'sent'</code>, <code>'failed:reason'</code>, or <code>'skipped:preference_off'</code>.</li>
+  </ol>
+</div>
+
+<!-- STATE TABLE -->
+<div class="state-table">
+  <h2 class="section">How states differentiate (the read/sent/clicked question)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>State</th>
+        <th>Columns set</th>
+        <th>What it means</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="state-name">Created</td>
+        <td class="state-cols">notification row exists, no receipt yet</td>
+        <td>Producer enqueued it; in-app worker hasn't run</td>
+      </tr>
+      <tr>
+        <td class="state-name">Sent / Delivered</td>
+        <td class="state-cols">receipt.delivered_at</td>
+        <td>In-app worker created the receipt → bell will show it</td>
+      </tr>
+      <tr>
+        <td class="state-name">Channel status</td>
+        <td class="state-cols">receipt.delivered_channels.email = 'sent'</td>
+        <td>Per-channel result: <code>sent</code> / <code>failed:reason</code> / <code>skipped:preference_off</code></td>
+      </tr>
+      <tr>
+        <td class="state-name">Viewed</td>
+        <td class="state-cols">receipt.viewed_at</td>
+        <td>User opened the bell dropdown (FE marks viewed on dropdown open)</td>
+      </tr>
+      <tr>
+        <td class="state-name">Read</td>
+        <td class="state-cols">receipt.read_at</td>
+        <td>User explicitly marked it read or clicked it</td>
+      </tr>
+      <tr>
+        <td class="state-name">Clicked</td>
+        <td class="state-cols">receipt.clicked_at</td>
+        <td>User followed the deep link to the screen</td>
+      </tr>
+      <tr>
+        <td class="state-name">Dismissed</td>
+        <td class="state-cols">receipt.dismissed_at</td>
+        <td>User X'd it without reading</td>
+      </tr>
+      <tr>
+        <td class="state-name">Expired</td>
+        <td class="state-cols">notification.expire_at &lt; now()</td>
+        <td>Auto-hidden by the bell query, can be cleaned up</td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="color: var(--text-dim); font-size: 13px; margin-top: 16px;">
+    The unread badge count = <code>WHERE user_id = ? AND read_at IS NULL AND dismissed_at IS NULL AND (expire_at IS NULL OR expire_at &gt; now())</code>.
+  </p>
+</div>
+
+</body>
+</html>
