@@ -23,6 +23,7 @@ import type { AuthenticatedRequest } from '../../common/types/authenticated-requ
 import { AddMembersBulkDto } from './dto/add-members-bulk.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { DiscoverGroupsDto } from './dto/discover-groups.dto';
+import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
@@ -137,12 +138,13 @@ export class GroupController {
     summary: 'Transfer group ownership',
     description: 'Transfer ownership to another member. Current owner only.',
     auth: true,
+    body: TransferOwnershipDto,
     responses: [{ status: 200, description: 'Ownership transferred' }],
   })
   async transferOwnership(
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,
-    @Body() dto: { newOwnerId: string },
+    @Body() dto: TransferOwnershipDto,
   ) {
     return this.groupService.transferOwnership(id, req.user.id, dto.newOwnerId);
   }

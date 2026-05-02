@@ -541,37 +541,52 @@ export class PostService {
     const comment = await this.commentModel.findByPk(commentId);
     if (!comment) throw new NotFoundException('Comment not found');
 
-    if (comment.authorId === userId) {
-      await comment.destroy();
-      return;
+    if (comment.authorId !== userId) {
+      const audiences = await this.audienceModel.findAll({
+        where: {
+          postId: comment.postId,
+          audienceType: PostAudienceType.GROUP,
+        },
+      });
+      const groupIds = audiences
+        .map((a) => a.audienceId)
+        .filter((id): id is string => id !== null);
+      if (groupIds.length === 0) {
+        throw new ForbiddenException('Cannot delete this comment');
+      }
+
+      const staffMembership = await this.memberModel.findOne({
+        where: {
+          userId,
+          groupId: { [Op.in]: groupIds },
+          role: { [Op.in]: [GroupMemberRole.OWNER, GroupMemberRole.MODERATOR] },
+          leftAt: null,
+        },
+      });
+      if (!staffMembership) {
+        throw new ForbiddenException('Cannot delete this comment');
+      }
     }
 
-    const audiences = await this.audienceModel.findAll({
-      where: {
-        postId: comment.postId,
-        audienceType: PostAudienceType.GROUP,
-      },
-    });
-    const groupIds = audiences
-      .map((a) => a.audienceId)
-      .filter((id): id is string => id !== null);
-    if (groupIds.length === 0) {
-      throw new ForbiddenException('Cannot delete this comment');
+    // Cascade replies when removing a top-level comment so the thread
+    // doesn't strand orphaned replies under a deleted parent. Replies
+    // can only nest one level (enforced in addComment), so a single
+    // bulk update covers it.
+    const sequelize = this.commentModel.sequelize!;
+    const tx = await sequelize.transaction();
+    try {
+      if (comment.parentCommentId === null) {
+        await this.commentModel.destroy({
+          where: { parentCommentId: comment.id },
+          transaction: tx,
+        });
+      }
+      await comment.destroy({ transaction: tx });
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback();
+      throw err;
     }
-
-    const staffMembership = await this.memberModel.findOne({
-      where: {
-        userId,
-        groupId: { [Op.in]: groupIds },
-        role: { [Op.in]: [GroupMemberRole.OWNER, GroupMemberRole.MODERATOR] },
-        leftAt: null,
-      },
-    });
-    if (!staffMembership) {
-      throw new ForbiddenException('Cannot delete this comment');
-    }
-
-    await comment.destroy();
   }
 
   // =============================================================

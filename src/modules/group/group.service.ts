@@ -258,8 +258,7 @@ export class GroupService {
       throw new NotFoundException('Group not found');
     }
 
-    // Verify membership with a single targeted query
-    // await this.assertMember(groupId, userId);
+    await this.assertMember(groupId, userId);
 
     return group;
   }
@@ -347,8 +346,7 @@ export class GroupService {
     page: number = 1,
     limit: number = 20,
   ) {
-    // Verify the requesting user is a member
-    // await this.assertMember(groupId, userId);
+    await this.assertMember(groupId, userId);
 
     const offset = (page - 1) * limit;
 
@@ -448,7 +446,7 @@ export class GroupService {
     memberId: string,
     userId: string,
   ): Promise<void> {
-    // await this.assertOwner(groupId, userId);
+    await this.assertOwner(groupId, userId);
 
     const member = await this.memberModel.findOne({
       where: { groupId, userId: memberId, leftAt: null },
@@ -691,7 +689,7 @@ export class GroupService {
   async selfJoinGroup(groupId: string, userId: string): Promise<GroupMember> {
     const group = await this.groupModel.findByPk(groupId);
 
-    if (!group) {
+    if (!group || !group.isActive) {
       throw new NotFoundException('Group not found');
     }
 
@@ -800,7 +798,7 @@ export class GroupService {
       where: { joinToken: hashedToken },
     });
 
-    if (!group) {
+    if (!group || !group.isActive) {
       throw new NotFoundException('Invalid or expired join link');
     }
 
