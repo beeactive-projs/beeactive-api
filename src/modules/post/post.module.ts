@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { Post } from './entities/post.entity';
-import { PostAudience } from './entities/post-audience.entity';
 import { PostComment } from './entities/post-comment.entity';
 import { PostReaction } from './entities/post-reaction.entity';
 import { Group } from '../group/entities/group.entity';
@@ -15,7 +14,6 @@ import { SearchModule } from '../search/search.module';
   imports: [
     SequelizeModule.forFeature([
       Post,
-      PostAudience,
       PostComment,
       PostReaction,
       Group,

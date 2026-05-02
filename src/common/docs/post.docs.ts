@@ -20,15 +20,17 @@ export const PostDocs = {
   } as ApiEndpointOptions,
 
   createPost: {
-    summary: 'Create a post',
+    summary: 'Create a post (fans out to N groups)',
     description:
-      'Creates a post in one or more groups (1–9). The author must be an active member of every ' +
-      'target group. Per-group policy applies: OWNER/MODERATOR posts always go through; MEMBER ' +
-      'posts are blocked when the group has memberPostPolicy=DISABLED, are immediately visible ' +
-      'when OPEN, and land in PENDING approval state when APPROVAL_REQUIRED.',
+      'Creates one independent post per group in `groupIds` (1–9). Each post owns its own ' +
+      'comments, reactions, and image copies — same content, separate threads. The author must ' +
+      'be an active member of every target group. Per-group policy applies: OWNER/MODERATOR ' +
+      'posts always go through; MEMBER posts are blocked when memberPostPolicy=DISABLED, are ' +
+      'immediately visible when OPEN, and land in PENDING when APPROVAL_REQUIRED. Returns ' +
+      '`{ posts: FeedItem[] }` — one item per group, in the order of `groupIds`.',
     auth: true,
     responses: [
-      { status: 201, description: 'Post created' },
+      { status: 201, description: 'Posts created' },
       ApiStandardResponses.BadRequest,
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,
@@ -66,7 +68,8 @@ export const PostDocs = {
   updatePost: {
     summary: 'Update a post (author only)',
     description:
-      'Updates content and/or media. Audience (group list) is intentionally immutable post-creation.',
+      'Updates content and/or media on a single post. The post`s group is intentionally ' +
+      'immutable — to share to a different group, create a new post.',
     auth: true,
     responses: [
       { status: 200, description: 'Post updated' },
@@ -78,15 +81,14 @@ export const PostDocs = {
   } as ApiEndpointOptions,
 
   deletePost: {
-    summary: 'Delete a post — selectively per group, or everywhere',
+    summary: 'Delete a post',
     description:
-      'If `groupIds` is omitted the post is removed from all audiences and the post itself ' +
-      'is soft-deleted. If `groupIds` is provided only those audiences are removed; the post ' +
-      'is auto-deleted when its last active audience is removed. Author may target any of ' +
-      'their groups; OWNER/MODERATOR may only target groups they moderate.',
+      'Soft-deletes the post (tombstones content, cascades to comments + reactions, purges ' +
+      'every Cloudinary asset under the post`s folder). Idempotent on already-deleted rows. ' +
+      'Callable by the author or by any OWNER/MODERATOR of the post`s group.',
     auth: true,
     responses: [
-      { status: 200, description: 'Post / audiences removed' },
+      { status: 200, description: 'Post deleted' },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,
       ApiStandardResponses.NotFound,
@@ -94,10 +96,10 @@ export const PostDocs = {
   } as ApiEndpointOptions,
 
   moderatePost: {
-    summary: 'Approve or reject a pending post for a specific group',
+    summary: 'Approve or reject a pending post',
     description:
-      'OWNER/MODERATOR-only. Approves the audience entry (post becomes visible in that group) ' +
-      'or rejects it (audience entry is soft-deleted). Sends the post author a notification.',
+      'OWNER/MODERATOR of the post`s group only. APPROVED → post becomes visible. REJECTED → ' +
+      'post is destroyed (tombstone + cascade + Cloudinary purge). Author is notified either way.',
     auth: true,
     responses: [
       { status: 200, description: 'Decision applied' },
@@ -111,7 +113,7 @@ export const PostDocs = {
   addComment: {
     summary: 'Comment on a post',
     description:
-      'Caller must be an active member of at least one APPROVED audience group on the post. ' +
+      'Caller must be an active member of the post`s group, and the post must be APPROVED. ' +
       'If `parentCommentId` is supplied, it must point to a root comment — 1 level of nesting ' +
       'is enforced server-side.',
     auth: true,
@@ -140,8 +142,8 @@ export const PostDocs = {
   deleteComment: {
     summary: 'Delete a comment',
     description:
-      'Author can always delete their own comment. OWNER/MODERATOR of any audience group ' +
-      'on the parent post may also delete.',
+      'Author can always delete their own comment. OWNER/MODERATOR of the post`s group may ' +
+      'also delete. Replies to a deleted top-level comment are cascaded.',
     auth: true,
     responses: [
       { status: 200, description: 'Comment deleted' },

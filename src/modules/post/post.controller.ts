@@ -26,7 +26,6 @@ import { isSupportedImage } from '../../common/utils/image.utils';
 import { PostService } from './post.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
-import { DeletePostDto } from './dto/delete-post.dto';
 import { ModeratePostDto } from './dto/moderate-post.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ToggleReactionDto } from './dto/toggle-reaction.dto';
@@ -131,24 +130,22 @@ export class PostController {
   }
 
   @Delete(':postId')
-  @ApiEndpoint({ ...PostDocs.deletePost, body: DeletePostDto })
+  @ApiEndpoint(PostDocs.deletePost)
   async deletePost(
     @Request() req: AuthenticatedRequest,
     @Param('postId') postId: string,
-    @Body() dto: DeletePostDto,
   ) {
-    return this.postService.deletePost(req.user.id, postId, dto ?? {});
+    return this.postService.deletePost(req.user.id, postId);
   }
 
-  @Patch(':postId/audiences/:groupId')
+  @Patch(':postId/moderate')
   @ApiEndpoint({ ...PostDocs.moderatePost, body: ModeratePostDto })
   async moderatePost(
     @Request() req: AuthenticatedRequest,
     @Param('postId') postId: string,
-    @Param('groupId') groupId: string,
     @Body() dto: ModeratePostDto,
   ): Promise<{ ok: true }> {
-    await this.postService.moderatePost(req.user.id, postId, groupId, dto);
+    await this.postService.moderatePost(req.user.id, postId, dto);
     return { ok: true };
   }
 

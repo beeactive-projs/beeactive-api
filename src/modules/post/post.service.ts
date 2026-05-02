@@ -9,12 +9,7 @@ import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { Op, Transaction, UniqueConstraintError } from 'sequelize';
-import { Post } from './entities/post.entity';
-import {
-  PostAudience,
-  PostAudienceApproval,
-  PostAudienceType,
-} from './entities/post-audience.entity';
+import { Post, PostApprovalState } from './entities/post.entity';
 import { PostComment } from './entities/post-comment.entity';
 import { PostReaction } from './entities/post-reaction.entity';
 import { CloudinaryService } from '../../common/services/cloudinary.service';
@@ -26,7 +21,6 @@ import {
 import { User } from '../user/entities/user.entity';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
-import { DeletePostDto } from './dto/delete-post.dto';
 import { ModerationDecision, ModeratePostDto } from './dto/moderate-post.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ToggleReactionDto } from './dto/toggle-reaction.dto';
@@ -42,17 +36,20 @@ import {
 } from '../notification/notification.service';
 
 /**
- * Tombstone written into post/comment `content` when the row is soft-deleted,
- * so the plaintext doesn't sit in the DB indefinitely. The row itself is kept
- * (paranoid: true) for audit; the body is gone.
+ * Tombstone written into post/comment `content` when the row is
+ * soft-deleted, so the plaintext doesn't sit in the DB after delete.
+ * The row itself is kept (paranoid: true) for audit; the body is gone.
  */
 const DELETED_CONTENT_TOMBSTONE = '[deleted]';
 
 export interface FeedItem {
   id: string;
   authorId: string;
+  groupId: string;
+  approvalState: PostApprovalState;
   content: string;
   mediaUrls: string[] | null;
+  postedAt: Date;
   createdAt: Date;
   updatedAt: Date;
   reactionCount: number;
@@ -64,15 +61,18 @@ export interface FeedItem {
     lastName: string;
     avatarUrl: string | null;
   } | null;
-  audiences?: PostAudience[];
+}
+
+/** Per-group spec used inside the create-post fan-out. */
+interface GroupCreateSpec {
+  group: Group;
+  approvalState: PostApprovalState;
 }
 
 @Injectable()
 export class PostService {
   constructor(
     @InjectModel(Post) private readonly postModel: typeof Post,
-    @InjectModel(PostAudience)
-    private readonly audienceModel: typeof PostAudience,
     @InjectModel(PostComment)
     private readonly commentModel: typeof PostComment,
     @InjectModel(PostReaction)
@@ -87,11 +87,26 @@ export class PostService {
     private readonly logger: LoggerService,
   ) {}
 
-  // =============================================================
-  // CREATE
-  // =============================================================
+  // =====================================================================
+  // CREATE — fan-out to one independent post per group
+  // =====================================================================
 
-  async createPost(authorId: string, dto: CreatePostDto): Promise<FeedItem> {
+  /**
+   * Create one post per groupId in `dto.groupIds`. Each post owns its own
+   * comments / reactions / image copies. Cross-posting in the FE is a
+   * single API call here; we resolve every group's approval state up
+   * front, then create posts one-by-one (each in its own transaction so a
+   * downstream failure on post #3 doesn't roll back posts #1 and #2).
+   *
+   * Image handling: the FE uploads each image once via /posts/upload-image
+   * (staging URL). For each created post we clone every staging asset
+   * into the post's per-post Cloudinary folder. After all posts are
+   * created we delete the original staging asset so it doesn't linger.
+   */
+  async createPost(
+    authorId: string,
+    dto: CreatePostDto,
+  ): Promise<{ posts: FeedItem[] }> {
     const uniqueGroupIds = Array.from(new Set(dto.groupIds));
     if (uniqueGroupIds.length !== dto.groupIds.length) {
       throw new BadRequestException('Duplicate groupIds in request');
@@ -101,29 +116,70 @@ export class PostService {
       this.cloudinaryService.assertOwnedUrls(dto.mediaUrls);
     }
 
-    // Resolve groups + author memberships in one shot.
+    const specs = await this.resolveCreateSpecs(authorId, uniqueGroupIds);
+    const stagingUrls = dto.mediaUrls ?? [];
+
+    const created: Post[] = [];
+    for (const spec of specs) {
+      const post = await this.createSinglePost(
+        authorId,
+        spec,
+        dto.content,
+        stagingUrls,
+      );
+      created.push(post);
+    }
+
+    // After-commit: search index, notifications, staging cleanup.
+    // None of these can roll back the posts; they're best-effort.
+    await Promise.all(
+      created.map((p) =>
+        this.searchIndexService.upsertPost(p.id).catch((err) => {
+          this.logger.error(
+            `[posts] search index upsert failed for ${p.id}: ${(err as Error).message}`,
+            'PostService',
+          );
+        }),
+      ),
+    );
+    await this.notifyAuthorsForPending(authorId, created);
+    await Promise.all(
+      stagingUrls.map((url) => this.cloudinaryService.deleteByUrl(url)),
+    );
+
+    const items = await Promise.all(
+      created.map((p) => this.hydrateSingle(p.id, authorId)),
+    );
+    return { posts: items };
+  }
+
+  /**
+   * Resolve every target group's membership + post policy + role in one
+   * pair of queries, then derive the per-group approval state. Throws on
+   * any group the author can't post into so the entire fan-out aborts
+   * before we touch the DB.
+   */
+  private async resolveCreateSpecs(
+    authorId: string,
+    groupIds: string[],
+  ): Promise<GroupCreateSpec[]> {
     const groups = await this.groupModel.findAll({
-      where: { id: { [Op.in]: uniqueGroupIds } },
+      where: { id: { [Op.in]: groupIds } },
     });
-    if (groups.length !== uniqueGroupIds.length) {
+    if (groups.length !== groupIds.length) {
       throw new NotFoundException('One or more groups were not found');
     }
 
     const memberships = await this.memberModel.findAll({
       where: {
-        groupId: { [Op.in]: uniqueGroupIds },
+        groupId: { [Op.in]: groupIds },
         userId: authorId,
         leftAt: null,
       },
     });
     const membershipByGroup = new Map(memberships.map((m) => [m.groupId, m]));
 
-    // Per-group policy + role evaluation.
-    type AudienceSpec = {
-      groupId: string;
-      approvalState: PostAudienceApproval;
-    };
-    const audienceSpecs: AudienceSpec[] = [];
+    const specs: GroupCreateSpec[] = [];
     for (const group of groups) {
       const membership = membershipByGroup.get(group.id);
       if (!membership) {
@@ -131,15 +187,13 @@ export class PostService {
           `You are not an active member of group ${group.id}`,
         );
       }
+
       const isStaff =
         membership.role === GroupMemberRole.OWNER ||
         membership.role === GroupMemberRole.MODERATOR;
 
       if (isStaff) {
-        audienceSpecs.push({
-          groupId: group.id,
-          approvalState: PostAudienceApproval.APPROVED,
-        });
+        specs.push({ group, approvalState: PostApprovalState.APPROVED });
         continue;
       }
 
@@ -148,71 +202,114 @@ export class PostService {
           `Members are not allowed to post in group ${group.id}`,
         );
       }
-      audienceSpecs.push({
-        groupId: group.id,
+
+      specs.push({
+        group,
         approvalState:
           group.memberPostPolicy === MemberPostPolicy.APPROVAL_REQUIRED
-            ? PostAudienceApproval.PENDING
-            : PostAudienceApproval.APPROVED,
+            ? PostApprovalState.PENDING
+            : PostApprovalState.APPROVED,
       });
     }
 
+    return specs;
+  }
+
+  /**
+   * Insert one post + clone every staging asset into the post's folder.
+   * Uses a transaction for the DB writes; image clones happen after
+   * commit so a Cloudinary slowdown can't tie up a Postgres connection.
+   * If image cloning fails partway through, the post still exists with
+   * the assets that were cloned so far — the user retries by editing.
+   */
+  private async createSinglePost(
+    authorId: string,
+    spec: GroupCreateSpec,
+    content: string,
+    stagingUrls: string[],
+  ): Promise<Post> {
     const sequelize = this.postModel.sequelize!;
     const tx = await sequelize.transaction();
-    let createdPostId: string;
+    let post: Post;
     try {
-      const post = await this.postModel.create(
+      post = await this.postModel.create(
         {
           authorId,
-          content: dto.content,
-          mediaUrls: dto.mediaUrls ?? null,
+          groupId: spec.group.id,
+          approvalState: spec.approvalState,
+          content,
+          mediaUrls: null,
         },
         { transaction: tx },
       );
-      createdPostId = post.id;
-
-      await this.audienceModel.bulkCreate(
-        audienceSpecs.map((spec) => ({
-          postId: post.id,
-          audienceType: PostAudienceType.GROUP,
-          audienceId: spec.groupId,
-          approvalState: spec.approvalState,
-        })),
-        { transaction: tx },
-      );
-
       await tx.commit();
     } catch (err) {
       await tx.rollback();
       throw err;
     }
 
-    // After commit: search index + approval-flow notifications.
-    // Failures here log but never roll back the user-visible write.
-    await this.searchIndexService.upsertPost(createdPostId).catch((err) => {
-      this.logger.error(
-        `[posts] search index upsert failed for ${createdPostId}: ${(err as Error).message}`,
-        'PostService',
-      );
-    });
-
-    const pendingGroupIds = audienceSpecs
-      .filter((s) => s.approvalState === PostAudienceApproval.PENDING)
-      .map((s) => s.groupId);
-    if (pendingGroupIds.length > 0) {
-      await this.notifyPendingApproval(
-        createdPostId,
-        authorId,
-        pendingGroupIds,
-      );
+    if (stagingUrls.length > 0) {
+      const cloned: string[] = [];
+      for (const src of stagingUrls) {
+        try {
+          const { url } = await this.cloudinaryService.cloneByUrl(src, {
+            resource: 'posts',
+            userId: authorId,
+            postId: post.id,
+          });
+          cloned.push(url);
+        } catch (err) {
+          this.logger.error(
+            `[posts] cloneByUrl failed for ${src} on post ${post.id}: ${(err as Error).message}`,
+            'PostService',
+          );
+        }
+      }
+      if (cloned.length > 0) {
+        await post.update({ mediaUrls: cloned });
+      }
     }
 
-    return this.hydrateSingle(createdPostId, authorId);
+    return post;
   }
 
-  // =============================================================
+  /** Notify staff of every group where this fan-out produced a PENDING post. */
+  private async notifyAuthorsForPending(
+    authorId: string,
+    posts: Post[],
+  ): Promise<void> {
+    const pending = posts.filter(
+      (p) => p.approvalState === PostApprovalState.PENDING,
+    );
+    if (pending.length === 0) return;
+
+    const groupIds = pending.map((p) => p.groupId);
+    const staff = await this.memberModel.findAll({
+      where: {
+        groupId: { [Op.in]: groupIds },
+        role: { [Op.in]: [GroupMemberRole.OWNER, GroupMemberRole.MODERATOR] },
+        leftAt: null,
+      },
+    });
+
+    // One notification per (post, staffUser). Deduped by post id.
+    for (const post of pending) {
+      const recipients = staff
+        .filter((m) => m.groupId === post.groupId && m.userId !== authorId)
+        .map((m) => m.userId);
+      if (recipients.length === 0) continue;
+      await this.notificationService.notifyMany(recipients, {
+        type: NotificationType.POST_PENDING_APPROVAL,
+        title: 'A post needs your review',
+        body: 'A member has posted in a group you moderate.',
+        data: { screen: 'post-pending', entityId: post.id },
+      });
+    }
+  }
+
+  // =====================================================================
   // READ
-  // =============================================================
+  // =====================================================================
 
   async getGroupFeed(
     userId: string,
@@ -224,7 +321,7 @@ export class PostService {
     return this.queryFeed(
       userId,
       groupId,
-      PostAudienceApproval.APPROVED,
+      PostApprovalState.APPROVED,
       page,
       limit,
     );
@@ -240,7 +337,7 @@ export class PostService {
     return this.queryFeed(
       userId,
       groupId,
-      PostAudienceApproval.PENDING,
+      PostApprovalState.PENDING,
       page,
       limit,
     );
@@ -252,14 +349,12 @@ export class PostService {
     page: number,
     limit: number,
   ): Promise<PaginatedResponse<PostComment>> {
-    const post = await this.postModel.findByPk(postId);
-    if (!post) throw new NotFoundException('Post not found');
-    await this.assertCanViewPost(userId, postId);
+    const post = await this.assertCanViewPost(userId, postId);
 
     const offset = getOffset(page, limit);
 
     const { rows, count } = await this.commentModel.findAndCountAll({
-      where: { postId, parentCommentId: null },
+      where: { postId: post.id, parentCommentId: null },
       include: [
         {
           model: User,
@@ -290,9 +385,9 @@ export class PostService {
     return buildPaginatedResponse(rows, count, page, limit);
   }
 
-  // =============================================================
+  // =====================================================================
   // UPDATE
-  // =============================================================
+  // =====================================================================
 
   async updatePost(
     userId: string,
@@ -312,18 +407,13 @@ export class PostService {
       this.cloudinaryService.assertOwnedUrls(dto.mediaUrls);
     }
 
+    const previousMedia = post.mediaUrls ?? [];
+
     const updates: Partial<Post> = {};
     if (dto.content !== undefined) updates.content = dto.content;
     if (dto.mediaUrls !== undefined) {
       updates.mediaUrls = dto.mediaUrls.length === 0 ? null : dto.mediaUrls;
     }
-
-    // URLs that were on the post but aren't on the new list need their
-    // Cloudinary assets purged so we don't leak storage on every edit.
-    // Snapshot `previous` BEFORE the update — Sequelize mutates the
-    // model instance in place when update() is awaited.
-    const previousMedia = post.mediaUrls ?? [];
-
     await post.update(updates);
 
     if (dto.mediaUrls !== undefined) {
@@ -347,52 +437,37 @@ export class PostService {
   async moderatePost(
     userId: string,
     postId: string,
-    groupId: string,
     dto: ModeratePostDto,
   ): Promise<void> {
-    await this.assertGroupStaff(userId, groupId);
+    const post = await this.postModel.findByPk(postId);
+    if (!post) throw new NotFoundException('Post not found');
+    await this.assertGroupStaff(userId, post.groupId);
 
-    const audience = await this.audienceModel.findOne({
-      where: {
-        postId,
-        audienceType: PostAudienceType.GROUP,
-        audienceId: groupId,
-      },
-    });
-    if (!audience) {
-      throw new NotFoundException('Audience entry not found for this group');
-    }
-    if (audience.approvalState !== PostAudienceApproval.PENDING) {
+    if (post.approvalState !== PostApprovalState.PENDING) {
       throw new BadRequestException(
-        `This audience entry is already ${audience.approvalState.toLowerCase()}`,
+        `This post is already ${post.approvalState.toLowerCase()}`,
       );
     }
 
-    const post = await this.postModel.findByPk(postId);
-    if (!post) throw new NotFoundException('Post not found');
-
-    const sequelize = this.postModel.sequelize!;
-    const tx = await sequelize.transaction();
-    try {
-      if (dto.decision === ModerationDecision.APPROVED) {
-        await audience.update(
-          { approvalState: PostAudienceApproval.APPROVED },
-          { transaction: tx },
-        );
-      } else {
-        // Soft-delete the audience row; we leave approval_state as PENDING
-        // because the row is now hidden by the deletedAt filter anyway.
-        // The audit signal "this was rejected" lives in the deletedAt
-        // timestamp + the moderator action log (see #11, future work).
-        await audience.destroy({ transaction: tx });
+    if (dto.decision === ModerationDecision.APPROVED) {
+      await post.update({ approvalState: PostApprovalState.APPROVED });
+      await this.searchIndexService.upsertPost(postId).catch(() => undefined);
+    } else {
+      // REJECTED: tombstone + soft-delete + purge assets. The post becomes
+      // unrecoverable from the user's view; mods can still query soft-
+      // deleted rows for audit.
+      const mediaToDelete = post.mediaUrls ?? [];
+      const sequelize = this.postModel.sequelize!;
+      const tx = await sequelize.transaction();
+      try {
+        await this.destroyPostFully(post, tx);
+        await tx.commit();
+      } catch (err) {
+        await tx.rollback();
+        throw err;
       }
-      await tx.commit();
-    } catch (err) {
-      await tx.rollback();
-      throw err;
+      await this.afterPostFullyDeleted(postId, post.authorId, mediaToDelete);
     }
-
-    await this.searchIndexService.upsertPost(postId).catch(() => undefined);
 
     if (post.authorId !== userId) {
       await this.notificationService.notify({
@@ -414,195 +489,54 @@ export class PostService {
     }
   }
 
-  // =============================================================
-  // DELETE (selective)
-  // =============================================================
+  // =====================================================================
+  // DELETE
+  // =====================================================================
 
-  async deletePost(
-    userId: string,
-    postId: string,
-    dto: DeletePostDto,
-  ): Promise<{ post: 'kept' | 'deleted'; audiencesRemoved: number }> {
-    // Bypass paranoid filter so we can detect "post row exists but already
-    // soft-deleted" and short-circuit idempotently.
+  async deletePost(userId: string, postId: string): Promise<{ deleted: true }> {
+    // Bypass paranoid filter so we can detect "already soft-deleted" and
+    // short-circuit idempotently.
     const post = await this.postModel.findOne({
       where: { id: postId },
       paranoid: false,
     });
     if (!post) throw new NotFoundException('Post not found');
 
-    // Truly already deleted — nothing to do, success is idempotent.
+    // Idempotent on retries.
     if (post.deletedAt !== null) {
-      return { post: 'deleted', audiencesRemoved: 0 };
+      return { deleted: true };
     }
 
-    const allAudiences = await this.audienceModel.findAll({
-      where: { postId, audienceType: PostAudienceType.GROUP },
-    });
-    const activeAudiences = allAudiences.filter((a) => a.deletedAt === null);
-    // Post is alive but has no active audiences (data drift, manual cleanup,
-    // or a race). Fall through so we tombstone + destroy + purge assets,
-    // not silently return success.
-    if (activeAudiences.length === 0) {
-      const mediaToDelete = post.mediaUrls ?? [];
-      const sequelize = this.postModel.sequelize!;
-      const tx = await sequelize.transaction();
-      try {
-        await this.destroyPostFully(post, tx);
-        await tx.commit();
-      } catch (err) {
-        await tx.rollback();
-        throw err;
-      }
-
-      await this.afterPostFullyDeleted(postId, mediaToDelete);
-      return { post: 'deleted', audiencesRemoved: 0 };
+    // Author can delete their own; group OWNER/MODERATOR can delete any.
+    if (post.authorId !== userId) {
+      await this.assertGroupStaff(userId, post.groupId);
     }
 
-    const isAuthor = post.authorId === userId;
-
-    // Resolve which audience rows the caller is allowed to remove.
-    let targetAudiences: PostAudience[];
-    if (isAuthor) {
-      targetAudiences = dto.groupIds
-        ? activeAudiences.filter((a) =>
-            dto.groupIds!.includes(a.audienceId ?? ''),
-          )
-        : activeAudiences;
-    } else {
-      // Non-author: must be OWNER/MODERATOR of at least one audience group.
-      const userMods = await this.memberModel.findAll({
-        where: {
-          userId,
-          groupId: {
-            [Op.in]: activeAudiences
-              .map((a) => a.audienceId)
-              .filter((id): id is string => id !== null),
-          },
-          role: { [Op.in]: [GroupMemberRole.OWNER, GroupMemberRole.MODERATOR] },
-          leftAt: null,
-        },
-      });
-      const moderatedGroupIds = new Set(userMods.map((m) => m.groupId));
-      if (moderatedGroupIds.size === 0) {
-        throw new ForbiddenException(
-          'Only the author or a group moderator can delete this post',
-        );
-      }
-      const requested = dto.groupIds
-        ? new Set(dto.groupIds)
-        : moderatedGroupIds;
-      targetAudiences = activeAudiences.filter(
-        (a) =>
-          a.audienceId !== null &&
-          moderatedGroupIds.has(a.audienceId) &&
-          requested.has(a.audienceId),
-      );
-      if (targetAudiences.length === 0) {
-        throw new ForbiddenException(
-          'You are not a moderator of any of the targeted groups',
-        );
-      }
-    }
-
-    const targetIds = new Set(targetAudiences.map((a) => a.id));
-    const remainingActive = activeAudiences.filter((a) => !targetIds.has(a.id));
-
-    // Snapshot media URLs BEFORE the update — the tombstone overwrite
-    // sets mediaUrls to null inside the transaction.
     const mediaToDelete = post.mediaUrls ?? [];
-
     const sequelize = this.postModel.sequelize!;
     const tx = await sequelize.transaction();
-    let postDeleted = false;
     try {
-      for (const a of targetAudiences) {
-        await a.destroy({ transaction: tx });
-      }
-      if (remainingActive.length === 0) {
-        await this.destroyPostFully(post, tx);
-        postDeleted = true;
-      }
+      await this.destroyPostFully(post, tx);
       await tx.commit();
     } catch (err) {
       await tx.rollback();
       throw err;
     }
 
-    if (postDeleted) {
-      await this.afterPostFullyDeleted(postId, mediaToDelete);
-    } else {
-      await this.searchIndexService.upsertPost(postId).catch(() => undefined);
-    }
-
-    return {
-      post: postDeleted ? 'deleted' : 'kept',
-      audiencesRemoved: targetAudiences.length,
-    };
+    await this.afterPostFullyDeleted(postId, post.authorId, mediaToDelete);
+    return { deleted: true };
   }
 
-  /**
-   * Inside-transaction cleanup when a post is being soft-deleted in full.
-   *
-   * Tombstones plaintext on the post, cascades the same treatment to all of
-   * its comments (paranoid: true on PostComment), and hard-deletes its
-   * reactions (paranoid: false — no content to retain, just count noise).
-   * The post itself is destroyed last so callers can rely on the fact that
-   * by the time this resolves, the row is soft-deleted.
-   */
-  private async destroyPostFully(post: Post, tx: Transaction): Promise<void> {
-    const postId = post.id;
-    // 1. Tombstone + soft-delete every comment (and its replies).
-    await this.commentModel.update(
-      { content: DELETED_CONTENT_TOMBSTONE },
-      { where: { postId }, transaction: tx },
-    );
-    await this.commentModel.destroy({ where: { postId }, transaction: tx });
-    // 2. Reactions: no content to tombstone, just hard-delete.
-    await this.reactionModel.destroy({ where: { postId }, transaction: tx });
-    // 3. Tombstone the post itself + soft-delete it.
-    await post.update(
-      { content: DELETED_CONTENT_TOMBSTONE, mediaUrls: null },
-      { transaction: tx },
-    );
-    await post.destroy({ transaction: tx });
-  }
-
-  /**
-   * After-commit side effects when a post is fully deleted: drop search index
-   * entry and purge Cloudinary assets. Failures are logged but never
-   * surfaced — the user-visible state has already changed.
-   */
-  private async afterPostFullyDeleted(
-    postId: string,
-    mediaUrls: string[],
-  ): Promise<void> {
-    await this.searchIndexService
-      .removeIfExists('post', postId)
-      .catch(() => undefined);
-    if (mediaUrls.length > 0) {
-      this.logger.log(
-        `[posts] purging ${mediaUrls.length} Cloudinary asset(s) for deleted post ${postId}`,
-        'PostService',
-      );
-      await Promise.all(
-        mediaUrls.map((url) => this.cloudinaryService.deleteByUrl(url)),
-      );
-    }
-  }
-
-  // =============================================================
+  // =====================================================================
   // COMMENTS
-  // =============================================================
+  // =====================================================================
 
   async addComment(
     userId: string,
     postId: string,
     dto: CreateCommentDto,
   ): Promise<PostComment> {
-    const post = await this.postModel.findByPk(postId);
-    if (!post) throw new NotFoundException('Post not found');
-    await this.assertCanViewPost(userId, postId);
+    const post = await this.assertCanViewPost(userId, postId);
 
     if (dto.parentCommentId) {
       const parent = await this.commentModel.findByPk(dto.parentCommentId);
@@ -649,37 +583,14 @@ export class PostService {
     if (!comment) throw new NotFoundException('Comment not found');
 
     if (comment.authorId !== userId) {
-      const audiences = await this.audienceModel.findAll({
-        where: {
-          postId: comment.postId,
-          audienceType: PostAudienceType.GROUP,
-        },
-      });
-      const groupIds = audiences
-        .map((a) => a.audienceId)
-        .filter((id): id is string => id !== null);
-      if (groupIds.length === 0) {
-        throw new ForbiddenException('Cannot delete this comment');
-      }
-
-      const staffMembership = await this.memberModel.findOne({
-        where: {
-          userId,
-          groupId: { [Op.in]: groupIds },
-          role: { [Op.in]: [GroupMemberRole.OWNER, GroupMemberRole.MODERATOR] },
-          leftAt: null,
-        },
-      });
-      if (!staffMembership) {
-        throw new ForbiddenException('Cannot delete this comment');
-      }
+      // Non-author: must be staff of the post's group.
+      const post = await this.postModel.findByPk(comment.postId);
+      if (!post) throw new NotFoundException('Post not found');
+      await this.assertGroupStaff(userId, post.groupId);
     }
 
-    // Cascade replies when removing a top-level comment so the thread
-    // doesn't strand orphaned replies under a deleted parent. Replies
-    // can only nest one level (enforced in addComment), so a single
-    // bulk update covers it. Plaintext is tombstoned on the way out so
-    // it isn't kept in the DB after a delete.
+    // Cascade replies for top-level comments. Replies are 1-level only
+    // (enforced in addComment), so a single bulk update covers it.
     const sequelize = this.commentModel.sequelize!;
     const tx = await sequelize.transaction();
     try {
@@ -705,17 +616,15 @@ export class PostService {
     }
   }
 
-  // =============================================================
+  // =====================================================================
   // REACTIONS
-  // =============================================================
+  // =====================================================================
 
   async toggleReaction(
     userId: string,
     postId: string,
     dto: ToggleReactionDto,
   ): Promise<{ reacted: boolean; count: number }> {
-    const post = await this.postModel.findByPk(postId);
-    if (!post) throw new NotFoundException('Post not found');
     await this.assertCanViewPost(userId, postId);
 
     const reactionType = dto.reactionType ?? 'LIKE';
@@ -745,8 +654,8 @@ export class PostService {
           reacted = true;
         } catch (err) {
           if (err instanceof UniqueConstraintError) {
-            // Race: another concurrent request created the reaction. Treat
-            // as a successful toggle-on.
+            // Race: another concurrent request created the reaction.
+            // Treat as a successful toggle-on.
             reacted = true;
           } else {
             throw err;
@@ -767,9 +676,53 @@ export class PostService {
     return { reacted, count };
   }
 
-  // =============================================================
-  // INTERNAL HELPERS
-  // =============================================================
+  // =====================================================================
+  // SHARED HELPERS
+  // =====================================================================
+
+  /**
+   * Inside-transaction cleanup when a post is being soft-deleted in full.
+   *
+   * Tombstones plaintext on the post, cascades the same treatment to its
+   * comments (paranoid: true on PostComment), and hard-deletes its
+   * reactions (paranoid: false — no content to retain).
+   */
+  private async destroyPostFully(post: Post, tx: Transaction): Promise<void> {
+    const postId = post.id;
+    await this.commentModel.update(
+      { content: DELETED_CONTENT_TOMBSTONE },
+      { where: { postId }, transaction: tx },
+    );
+    await this.commentModel.destroy({ where: { postId }, transaction: tx });
+    await this.reactionModel.destroy({ where: { postId }, transaction: tx });
+    await post.update(
+      { content: DELETED_CONTENT_TOMBSTONE, mediaUrls: null },
+      { transaction: tx },
+    );
+    await post.destroy({ transaction: tx });
+  }
+
+  /**
+   * After-commit side effects when a post is fully deleted: drop search
+   * index entry and purge the post's Cloudinary folder. Failures are
+   * logged but never surfaced — the user-visible state already changed.
+   */
+  private async afterPostFullyDeleted(
+    postId: string,
+    authorId: string,
+    mediaUrls: string[],
+  ): Promise<void> {
+    await this.searchIndexService
+      .removeIfExists('post', postId)
+      .catch(() => undefined);
+    if (mediaUrls.length > 0) {
+      // Nuke the post's folder in one shot — covers every media URL plus
+      // any orphaned versions (e.g. transformations Cloudinary may have
+      // generated). Falls back to per-URL delete if the folder API fails.
+      const folder = this.cloudinaryService.buildPostFolder(authorId, postId);
+      await this.cloudinaryService.deleteFolder(folder);
+    }
+  }
 
   private async assertActiveMember(
     userId: string,
@@ -799,112 +752,76 @@ export class PostService {
   }
 
   /**
-   * Asserts the user is an active member of at least one APPROVED, non-deleted
-   * audience group on the post. Used for read access (feed, comments, reactions).
+   * Resolves the post + asserts the user can view it (active member of
+   * its group, post must be APPROVED). Returns the Post for callers that
+   * need it. Throws ForbiddenException on miss — never NotFoundException
+   * on access denial, so we don't leak existence to non-members.
    */
   private async assertCanViewPost(
     userId: string,
     postId: string,
-  ): Promise<void> {
-    const audiences = await this.audienceModel.findAll({
-      where: {
-        postId,
-        audienceType: PostAudienceType.GROUP,
-        approvalState: PostAudienceApproval.APPROVED,
-        deletedAt: null,
-      },
-    });
-    const groupIds = audiences
-      .map((a) => a.audienceId)
-      .filter((id): id is string => id !== null);
-    if (groupIds.length === 0) {
+  ): Promise<Post> {
+    const post = await this.postModel.findByPk(postId);
+    if (!post) throw new NotFoundException('Post not found');
+    if (post.approvalState !== PostApprovalState.APPROVED) {
       throw new ForbiddenException('Post is not visible to you');
     }
-    const member = await this.memberModel.findOne({
-      where: {
-        userId,
-        groupId: { [Op.in]: groupIds },
-        leftAt: null,
-      },
-    });
-    if (!member) {
-      throw new ForbiddenException('Post is not visible to you');
-    }
+    await this.assertActiveMember(userId, post.groupId);
+    return post;
   }
 
   private async queryFeed(
     userId: string,
     groupId: string,
-    approvalState: PostAudienceApproval,
+    approvalState: PostApprovalState,
     page: number,
     limit: number,
   ): Promise<PaginatedResponse<FeedItem>> {
     const offset = getOffset(page, limit);
 
-    const { rows: audiences, count } = await this.audienceModel.findAndCountAll(
-      {
-        where: {
-          audienceType: PostAudienceType.GROUP,
-          audienceId: groupId,
-          approvalState,
+    const { rows: posts, count } = await this.postModel.findAndCountAll({
+      where: { groupId, approvalState },
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
         },
-        include: [
-          {
-            model: Post,
-            required: true,
-            where: { deletedAt: null },
-            include: [
-              {
-                model: User,
-                as: 'author',
-                attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
-              },
-              // Include all live audiences so the FE can offer
-              // selective delete without an extra round trip.
-              {
-                model: PostAudience,
-                as: 'audiences',
-                required: false,
-              },
-            ],
-          },
-        ],
-        order: [['postedAt', 'DESC']],
-        offset,
-        limit,
-      },
-    );
+      ],
+      order: [['postedAt', 'DESC']],
+      offset,
+      limit,
+    });
 
-    const postIds = audiences.map((a) => a.postId);
+    const postIds = posts.map((p) => p.id);
     const [reactionCounts, commentCounts, myReactions] = await Promise.all([
       this.countReactionsByPost(postIds),
       this.countCommentsByPost(postIds),
       this.fetchMyReactions(userId, postIds),
     ]);
 
-    const items: FeedItem[] = audiences.map((a) => {
-      const post = a.post;
-      return {
-        id: post.id,
-        authorId: post.authorId,
-        content: post.content,
-        mediaUrls: post.mediaUrls,
-        createdAt: post.createdAt,
-        updatedAt: post.updatedAt,
-        reactionCount: reactionCounts.get(post.id) ?? 0,
-        commentCount: commentCounts.get(post.id) ?? 0,
-        myReaction: myReactions.get(post.id) ?? null,
-        author: post.author
-          ? {
-              id: post.author.id,
-              firstName: post.author.firstName,
-              lastName: post.author.lastName,
-              avatarUrl: post.author.avatarUrl,
-            }
-          : null,
-        audiences: post.audiences ?? [],
-      };
-    });
+    const items: FeedItem[] = posts.map((post) => ({
+      id: post.id,
+      authorId: post.authorId,
+      groupId: post.groupId,
+      approvalState: post.approvalState,
+      content: post.content,
+      mediaUrls: post.mediaUrls,
+      postedAt: post.postedAt,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+      reactionCount: reactionCounts.get(post.id) ?? 0,
+      commentCount: commentCounts.get(post.id) ?? 0,
+      myReaction: myReactions.get(post.id) ?? null,
+      author: post.author
+        ? {
+            id: post.author.id,
+            firstName: post.author.firstName,
+            lastName: post.author.lastName,
+            avatarUrl: post.author.avatarUrl,
+          }
+        : null,
+    }));
 
     return buildPaginatedResponse(items, count, page, limit);
   }
@@ -920,7 +837,6 @@ export class PostService {
           as: 'author',
           attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
         },
-        { model: PostAudience, as: 'audiences' },
       ],
     });
     if (!post) throw new NotFoundException('Post not found');
@@ -934,8 +850,11 @@ export class PostService {
     return {
       id: post.id,
       authorId: post.authorId,
+      groupId: post.groupId,
+      approvalState: post.approvalState,
       content: post.content,
       mediaUrls: post.mediaUrls,
+      postedAt: post.postedAt,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
       reactionCount,
@@ -949,7 +868,6 @@ export class PostService {
             avatarUrl: post.author.avatarUrl,
           }
         : null,
-      audiences: post.audiences ?? [],
     };
   }
 
@@ -996,30 +914,5 @@ export class PostService {
       where: { authorId: userId, postId: { [Op.in]: postIds } },
     });
     return new Map(rows.map((r) => [r.postId, r.reactionType]));
-  }
-
-  private async notifyPendingApproval(
-    postId: string,
-    authorId: string,
-    groupIds: string[],
-  ): Promise<void> {
-    const staff = await this.memberModel.findAll({
-      where: {
-        groupId: { [Op.in]: groupIds },
-        role: { [Op.in]: [GroupMemberRole.OWNER, GroupMemberRole.MODERATOR] },
-        leftAt: null,
-      },
-    });
-    const staffUserIds = Array.from(
-      new Set(staff.map((m) => m.userId).filter((id) => id !== authorId)),
-    );
-    if (staffUserIds.length === 0) return;
-
-    await this.notificationService.notifyMany(staffUserIds, {
-      type: NotificationType.POST_PENDING_APPROVAL,
-      title: 'A post needs your review',
-      body: 'A member has posted in a group you moderate.',
-      data: { screen: 'post-pending', entityId: postId },
-    });
   }
 }

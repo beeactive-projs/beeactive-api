@@ -9,18 +9,22 @@ import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 
 /**
  * Cloudinary upload context. The combination produces a path like
- *   motionhive/<env>/<resource>/<userId?>/<filename>
+ *   motionhive/<env>/<resource>/<userId?>/<postId?>/<filename>
  * which keeps assets:
  *   - separated by environment (dev/staging/prod sharing one account),
  *   - grouped by feature (`posts`, `avatars`, `blog`),
  *   - partitioned per user when relevant — so GDPR erasure and per-user
- *     audits become a single `delete_resources_by_prefix` call.
+ *     audits become a single `delete_resources_by_prefix` call,
+ *   - partitioned per post when relevant — so `deletePost` can wipe a
+ *     post's entire image set in one call.
  */
 export interface UploadContext {
   /** Feature this asset belongs to (`posts`, `avatars`, `blog`, ...). */
   resource: string;
-  /** Owning user id when the asset is user-scoped. Optional for blog. */
+  /** Owning user id when the asset is user-scoped. */
   userId?: string;
+  /** Owning post id (post images only). */
+  postId?: string;
 }
 
 @Injectable()
@@ -90,6 +94,7 @@ export class CloudinaryService {
   private buildFolder(ctx: UploadContext): string {
     const parts = ['motionhive', this.envPrefix, ctx.resource];
     if (ctx.userId) parts.push(ctx.userId);
+    if (ctx.postId) parts.push(ctx.postId);
     return parts.join('/');
   }
 
@@ -210,6 +215,62 @@ export class CloudinaryService {
     const dot = last.lastIndexOf('.');
     tail[tail.length - 1] = dot > 0 ? last.slice(0, dot) : last;
     return tail.join('/');
+  }
+
+  /**
+   * Clone a Cloudinary asset into a new folder by re-uploading it from
+   * its public URL. Used by the post fan-out flow: the FE uploads images
+   * once via /posts/upload-image (staging folder), then the BE clones
+   * them per post so each post owns its own assets cleanly. Returns the
+   * new secure_url + publicId.
+   */
+  async cloneByUrl(
+    srcUrl: string,
+    ctx: UploadContext,
+  ): Promise<{ url: string; publicId: string }> {
+    if (!this.configured) {
+      throw new InternalServerErrorException(
+        'Cloudinary is not configured. Check CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.',
+      );
+    }
+    const result = await cloudinary.uploader.upload(srcUrl, {
+      folder: this.buildFolder(ctx),
+      resource_type: 'image',
+    });
+    return { url: result.secure_url, publicId: result.public_id };
+  }
+
+  /**
+   * Best-effort prefix delete: removes every asset whose publicId starts
+   * with the given folder path. Used when a post is destroyed — we
+   * delete the whole `motionhive/<env>/posts/<userId>/<postId>/` folder
+   * in one Cloudinary call rather than walking each mediaUrl.
+   */
+  async deleteFolder(folderPath: string): Promise<void> {
+    if (!this.configured) return;
+    try {
+      await cloudinary.api.delete_resources_by_prefix(folderPath);
+      // Best-effort: cleans up the now-empty folder node from the UI tree.
+      // Cloudinary returns an error if the folder isn't empty or doesn't
+      // exist; we swallow both.
+      try {
+        await cloudinary.api.delete_folder(folderPath);
+      } catch {
+        /* folder already gone or had nested non-empty subfolders */
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Cloudinary delete_resources_by_prefix(${folderPath}) failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  /** Path used by the per-post folder. Exposed so callers can build it
+   *  without depending on the env-prefix internals. */
+  buildPostFolder(userId: string, postId: string): string {
+    return this.buildFolder({ resource: 'posts', userId, postId });
   }
 
   /**

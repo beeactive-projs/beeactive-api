@@ -10,21 +10,29 @@ import {
   ForeignKey,
   BelongsTo,
 } from 'sequelize-typescript';
+import { Group } from '../../group/entities/group.entity';
 import { User } from '../../user/entities/user.entity';
-import { PostAudience } from './post-audience.entity';
 import { PostComment } from './post-comment.entity';
 import { PostReaction } from './post-reaction.entity';
 
 /**
+ * Approval state for a post when the group's member-post policy requires
+ * moderation. Staff posts are always APPROVED on create. Member posts in
+ * an APPROVAL_REQUIRED group land in PENDING until a moderator decides.
+ */
+export enum PostApprovalState {
+  APPROVED = 'APPROVED',
+  PENDING = 'PENDING',
+  REJECTED = 'REJECTED',
+}
+
+/**
  * Post Entity
  *
- * Author-owned post. V1 ships with group audiences only; V2/V3 add
- * personal/follower and public audiences via post_audience without
- * touching this table.
- *
- * Engagement (comments, reactions) FKs to the post itself — shared
- * across all audiences. See PAYMENT-FLOWS-style decision log in
- * the posts feature memory file for the rationale.
+ * V1 model: each post belongs to exactly one group. Cross-posting is a
+ * server-side fan-out — `POST /posts` with N groupIds creates N
+ * independent posts, each owning its own comments / reactions / images.
+ * Mirrors Facebook & LinkedIn semantics.
  */
 @Table({
   tableName: 'post',
@@ -47,6 +55,20 @@ export class Post extends Model {
   })
   declare authorId: string;
 
+  @ForeignKey(() => Group)
+  @Column({
+    type: DataType.CHAR(36),
+    allowNull: false,
+  })
+  declare groupId: string;
+
+  @Column({
+    type: DataType.ENUM(...Object.values(PostApprovalState)),
+    allowNull: false,
+    defaultValue: PostApprovalState.APPROVED,
+  })
+  declare approvalState: PostApprovalState;
+
   @Column({
     type: DataType.TEXT,
     allowNull: false,
@@ -56,9 +78,16 @@ export class Post extends Model {
   @Column({
     type: DataType.JSON,
     allowNull: true,
-    comment: 'Array of Cloudinary secure_url strings',
+    comment: 'Array of Cloudinary secure_url strings owned by THIS post',
   })
   declare mediaUrls: string[] | null;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: false,
+    defaultValue: DataType.NOW,
+  })
+  declare postedAt: Date;
 
   @CreatedAt
   declare createdAt: Date;
@@ -72,8 +101,8 @@ export class Post extends Model {
   @BelongsTo(() => User, 'authorId')
   declare author: User;
 
-  @HasMany(() => PostAudience)
-  declare audiences: PostAudience[];
+  @BelongsTo(() => Group, 'groupId')
+  declare group: Group;
 
   @HasMany(() => PostComment)
   declare comments: PostComment[];
