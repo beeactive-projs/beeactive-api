@@ -464,10 +464,10 @@ export class UserService {
     }
 
     const previousPublicId = user.avatarPublicId;
-    const { url, publicId } = await this.cloudinaryService.uploadImage(
-      file,
-      'avatars',
-    );
+    const { url, publicId } = await this.cloudinaryService.uploadImage(file, {
+      resource: 'avatars',
+      userId,
+    });
     user.avatarUrl = url;
     user.avatarPublicId = publicId;
     await user.save();

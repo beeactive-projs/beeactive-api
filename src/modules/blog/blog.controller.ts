@@ -231,7 +231,10 @@ ${blogXml}
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @ApiEndpoint(BlogDocs.uploadImage)
-  async uploadImage(@UploadedFile() file: Express.Multer.File) {
-    return this.blogService.uploadImage(file);
+  async uploadImage(
+    @Request() req: AuthenticatedRequest,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.blogService.uploadImage(file, req.user.id);
   }
 }

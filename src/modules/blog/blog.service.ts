@@ -325,6 +325,9 @@ export class BlogService {
   ): Promise<BlogPostResponse> {
     const post = await this.findEntityById(id);
     this.assertCanEdit(post, auth);
+    // Snapshot the previous cover so we can purge it from Cloudinary
+    // after the DB write commits, if the writer replaces (or clears) it.
+    const previousCover = post.coverImage;
 
     const isAdmin = auth.roles.some((r) => ADMIN_ROLES.includes(r));
     const patch: Partial<BlogPost> = { ...dto };
@@ -359,6 +362,16 @@ export class BlogService {
     }
 
     await post.update(patch);
+
+    // Cover replaced or cleared → purge the previous Cloudinary asset.
+    if (
+      dto.coverImage !== undefined &&
+      previousCover &&
+      previousCover !== dto.coverImage
+    ) {
+      await this.cloudinaryService.deleteByUrl(previousCover);
+    }
+
     // Reload to pick up any author-relation change after attribution
     // edits.
     return this.toResponse(await this.findEntityById(id));
@@ -367,11 +380,18 @@ export class BlogService {
   async delete(id: string, auth: AuthContext): Promise<void> {
     const post = await this.findEntityById(id);
     this.assertCanEdit(post, auth);
+    const cover = post.coverImage;
     await post.destroy();
+    if (cover) {
+      await this.cloudinaryService.deleteByUrl(cover);
+    }
   }
 
-  async uploadImage(file: Express.Multer.File) {
-    return this.cloudinaryService.uploadImage(file, 'blog');
+  async uploadImage(file: Express.Multer.File, authorId: string) {
+    return this.cloudinaryService.uploadImage(file, {
+      resource: 'blog',
+      userId: authorId,
+    });
   }
 
   async getSitemapSlugs(): Promise<{ slug: string; updatedAt: Date }[]> {

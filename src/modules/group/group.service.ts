@@ -15,6 +15,10 @@ import { EmailService } from '../../common/services/email.service';
 import { buildSearchTerm } from '../../common/utils/search.utils';
 import { InstructorClient } from '../client/entities/instructor-client.entity';
 import {
+  NotificationService,
+  NotificationType,
+} from '../notification/notification.service';
+import {
   InstructorProfile,
   type SocialLinks,
 } from '../profile/entities/instructor-profile.entity';
@@ -30,7 +34,7 @@ import {
 } from './dto/update-member-role.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { GroupMember, GroupMemberRole } from './entities/group-member.entity';
-import { Group, JoinPolicy } from './entities/group.entity';
+import { Group, JoinPolicy, MemberPostPolicy } from './entities/group.entity';
 
 /**
  * Group Service
@@ -74,6 +78,7 @@ export class GroupService {
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
     private readonly searchIndexService: SearchIndexService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // =====================================================
@@ -155,6 +160,7 @@ export class GroupService {
             timezone: dto.timezone || 'Europe/Bucharest',
             isPublic: dto.isPublic || false,
             joinPolicy: dto.joinPolicy || JoinPolicy.INVITE_ONLY,
+            memberPostPolicy: dto.memberPostPolicy || MemberPostPolicy.DISABLED,
             tags: dto.tags,
             contactEmail: dto.contactEmail,
             contactPhone: dto.contactPhone,
@@ -277,14 +283,25 @@ export class GroupService {
 
     // If name changes, regenerate slug. `slug` isn't on UpdateGroupDto
     // (the client can't set it directly); we attach it here so Sequelize
-    // writes it alongside the DTO payload.
+    // writes it alongside the DTO payload. Slug lookup + write share a
+    // transaction so a concurrent rename can't grab the same slug between
+    // the uniqueness check and the update — the unique index is the real
+    // guard, but this collapses the race window.
     const updatePayload: UpdateGroupDto & { slug?: string } = { ...dto };
-    if (dto.name && dto.name !== group.name) {
-      const baseSlug = this.generateSlug(dto.name);
-      updatePayload.slug = await this.ensureUniqueSlug(baseSlug);
+    const sequelize = this.groupModel.sequelize!;
+    const tx = await sequelize.transaction();
+    try {
+      if (dto.name && dto.name !== group.name) {
+        const baseSlug = this.generateSlug(dto.name);
+        updatePayload.slug = await this.ensureUniqueSlug(baseSlug, tx);
+      }
+      await group.update(updatePayload, { transaction: tx });
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback();
+      throw err;
     }
 
-    await group.update(updatePayload);
     await this.searchIndexService.upsertGroup(group.id);
     return group;
   }
@@ -295,7 +312,23 @@ export class GroupService {
   async deleteGroup(groupId: string, userId: string): Promise<void> {
     const group = await this.assertOwnerAndGet(groupId, userId);
 
-    await group.destroy(); // Soft delete (paranoid: true sets deletedAt)
+    // Invalidate any outstanding join link before soft-deleting the group
+    // so a stale token can't be redeemed if the group is ever restored or
+    // if a paranoid filter is bypassed. Both writes share a transaction.
+    const sequelize = this.groupModel.sequelize!;
+    const tx = await sequelize.transaction();
+    try {
+      await group.update(
+        { joinToken: null, joinTokenExpiresAt: null },
+        { transaction: tx },
+      );
+      await group.destroy({ transaction: tx });
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
+
     await this.searchIndexService.removeIfExists('group', group.id);
 
     this.logger.log(
@@ -466,6 +499,14 @@ export class GroupService {
       `Member ${memberId} removed from group ${groupId} by ${userId}`,
       'GroupService',
     );
+
+    await this.notificationService.notify({
+      userId: memberId,
+      type: NotificationType.GROUP_MEMBER_REMOVED,
+      title: 'You were removed from a group',
+      body: 'A group owner removed you from the group.',
+      data: { screen: 'groups', entityId: groupId },
+    });
   }
 
   // =====================================================
@@ -988,15 +1029,23 @@ export class GroupService {
       // Demote current owner to MEMBER. (Promoting them to MODERATOR
       // instead would be a separate product decision; keeping the
       // current behaviour — old owner becomes a regular member.)
+      // Scoped to the active membership row so any historical (left)
+      // rows for the same user aren't touched.
       await this.memberModel.update(
         { role: GroupMemberRole.MEMBER },
-        { where: { groupId, userId: currentOwnerId }, transaction },
+        {
+          where: { groupId, userId: currentOwnerId, leftAt: null },
+          transaction,
+        },
       );
 
-      // Promote new owner.
+      // Promote new owner. Same scoping rule.
       await this.memberModel.update(
         { role: GroupMemberRole.OWNER },
-        { where: { groupId, userId: newOwnerId }, transaction },
+        {
+          where: { groupId, userId: newOwnerId, leftAt: null },
+          transaction,
+        },
       );
 
       // Update group instructorId
@@ -1015,6 +1064,25 @@ export class GroupService {
       `Group ${groupId} ownership transferred from ${currentOwnerId} to ${newOwnerId}`,
       'GroupService',
     );
+
+    // Notify both parties after commit. Failures here log but don't roll
+    // back the transfer — the user-visible action already succeeded.
+    await Promise.all([
+      this.notificationService.notify({
+        userId: newOwnerId,
+        type: NotificationType.GROUP_OWNERSHIP_TRANSFERRED,
+        title: 'You are now the owner of a group',
+        body: 'Group ownership was transferred to you.',
+        data: { screen: 'group-detail', entityId: groupId },
+      }),
+      this.notificationService.notify({
+        userId: currentOwnerId,
+        type: NotificationType.GROUP_OWNERSHIP_TRANSFERRED,
+        title: 'Group ownership transferred',
+        body: 'You have transferred ownership of the group.',
+        data: { screen: 'group-detail', entityId: groupId },
+      }),
+    ]);
 
     return { message: 'Ownership transferred successfully' };
   }

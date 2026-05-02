@@ -22,6 +22,7 @@ import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { PostDocs } from '../../common/docs/post.docs';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { CloudinaryService } from '../../common/services/cloudinary.service';
+import { isSupportedImage } from '../../common/utils/image.utils';
 import { PostService } from './post.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -49,19 +50,30 @@ export class PostController {
   @Throttle({ default: { limit: 30, ttl: 3_600_000 } })
   @ApiEndpoint(PostDocs.uploadImage)
   async uploadImage(
+    @Request() req: AuthenticatedRequest,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<{ url: string; publicId: string }> {
     if (!file) {
       throw new BadRequestException('No file provided.');
     }
-    if (!file.mimetype?.startsWith('image/')) {
+    // mimetype comes from the multipart header — trivially spoofable.
+    // Sniff the magic bytes too so we reject e.g. an .exe relabelled as
+    // image/png. Cloudinary itself also rejects non-images, but this fails
+    // fast and keeps malformed payloads out of the upload pipeline.
+    if (
+      !file.mimetype?.startsWith('image/') ||
+      !isSupportedImage(file.buffer)
+    ) {
       throw new BadRequestException('Only image files are accepted.');
     }
     const MAX_BYTES = 5 * 1024 * 1024;
     if (file.size > MAX_BYTES) {
       throw new BadRequestException('File is larger than 5 MB.');
     }
-    return this.cloudinaryService.uploadImage(file, 'posts');
+    return this.cloudinaryService.uploadImage(file, {
+      resource: 'posts',
+      userId: req.user.id,
+    });
   }
 
   // =====================================================

@@ -8,7 +8,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { JoinPolicy } from '../entities/group.entity';
+import { JoinPolicy, MemberPostPolicy } from '../entities/group.entity';
 
 export class UpdateGroupDto {
   @ApiPropertyOptional({ example: 'Morning HIIT Crew' })
@@ -52,6 +52,17 @@ export class UpdateGroupDto {
   @IsEnum(JoinPolicy)
   @IsOptional()
   joinPolicy?: JoinPolicy;
+
+  @ApiPropertyOptional({
+    enum: MemberPostPolicy,
+    example: MemberPostPolicy.OPEN,
+    description:
+      'Whether non-staff members can post in the group. ' +
+      'OWNER/MODERATOR posts always bypass approval.',
+  })
+  @IsEnum(MemberPostPolicy)
+  @IsOptional()
+  memberPostPolicy?: MemberPostPolicy;
 
   @ApiPropertyOptional({
     example: ['fitness', 'hiit', 'morning'],

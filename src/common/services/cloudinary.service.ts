@@ -7,15 +7,39 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 
+/**
+ * Cloudinary upload context. The combination produces a path like
+ *   motionhive/<env>/<resource>/<userId?>/<filename>
+ * which keeps assets:
+ *   - separated by environment (dev/staging/prod sharing one account),
+ *   - grouped by feature (`posts`, `avatars`, `blog`),
+ *   - partitioned per user when relevant — so GDPR erasure and per-user
+ *     audits become a single `delete_resources_by_prefix` call.
+ */
+export interface UploadContext {
+  /** Feature this asset belongs to (`posts`, `avatars`, `blog`, ...). */
+  resource: string;
+  /** Owning user id when the asset is user-scoped. Optional for blog. */
+  userId?: string;
+}
+
 @Injectable()
 export class CloudinaryService {
   private readonly logger = new Logger(CloudinaryService.name);
   private configured = false;
+  private readonly cloudName: string | undefined;
+  private readonly envPrefix: string;
 
   constructor(private configService: ConfigService) {
     const cloudName = this.configService.get<string>('CLOUDINARY_CLOUD_NAME');
     const apiKey = this.configService.get<string>('CLOUDINARY_API_KEY');
     const apiSecret = this.configService.get<string>('CLOUDINARY_API_SECRET');
+
+    this.cloudName = cloudName;
+    // Asset path is namespaced by NODE_ENV so dev uploads can't collide
+    // with production assets when both share a single Cloudinary account.
+    const nodeEnv = this.configService.get<string>('NODE_ENV') ?? 'development';
+    this.envPrefix = nodeEnv;
 
     if (cloudName && apiKey && apiSecret) {
       cloudinary.config({
@@ -27,9 +51,51 @@ export class CloudinaryService {
     }
   }
 
+  /**
+   * Returns true if the URL points at our Cloudinary account, false otherwise.
+   *
+   * Why: post/blog clients can pass any URL into `mediaUrls`. Without this
+   * check, the FE renders `<img src="…">` against arbitrary external hosts —
+   * phishing CDNs, IP-leak via referer, etc. We only allow URLs we ourselves
+   * uploaded. Falls back to host-only check when CLOUDINARY_CLOUD_NAME isn't
+   * configured (dev environments).
+   */
+  isOwnedUrl(rawUrl: string): boolean {
+    let url: URL;
+    try {
+      url = new URL(rawUrl);
+    } catch {
+      return false;
+    }
+    if (url.protocol !== 'https:') return false;
+    if (url.hostname !== 'res.cloudinary.com') return false;
+    if (this.cloudName) {
+      // path is /<cloud_name>/image/upload/...
+      return url.pathname.startsWith(`/${this.cloudName}/`);
+    }
+    return true;
+  }
+
+  assertOwnedUrls(urls: string[]): void {
+    for (const url of urls) {
+      if (!this.isOwnedUrl(url)) {
+        throw new BadRequestException(
+          'mediaUrls must be Cloudinary URLs returned by /posts/upload-image',
+        );
+      }
+    }
+  }
+
+  /** Build the Cloudinary `folder:` for an upload from the context. */
+  private buildFolder(ctx: UploadContext): string {
+    const parts = ['motionhive', this.envPrefix, ctx.resource];
+    if (ctx.userId) parts.push(ctx.userId);
+    return parts.join('/');
+  }
+
   async uploadImage(
     file: Express.Multer.File,
-    folder = 'blog',
+    ctx: UploadContext,
   ): Promise<{ url: string; publicId: string }> {
     if (!file) {
       throw new BadRequestException('No file provided');
@@ -47,7 +113,7 @@ export class CloudinaryService {
         cloudinary.uploader
           .upload_stream(
             {
-              folder: `motionhive/${folder}`,
+              folder: this.buildFolder(ctx),
               resource_type: 'image',
               transformation: [{ quality: 'auto', fetch_format: 'auto' }],
             },
@@ -92,6 +158,90 @@ export class CloudinaryService {
   }
 
   async deleteImage(publicId: string): Promise<void> {
-    await cloudinary.uploader.destroy(publicId);
+    const result = (await cloudinary.uploader.destroy(publicId)) as {
+      result?: string;
+    };
+    // Cloudinary returns { result: 'ok' } on success, { result: 'not found' }
+    // when the publicId doesn't exist. We log the latter because it usually
+    // means our extractPublicId parsing is off for that URL shape.
+    if (result?.result && result.result !== 'ok') {
+      this.logger.warn(
+        `Cloudinary destroy for ${publicId} returned: ${result.result}`,
+      );
+    }
+  }
+
+  /**
+   * Parse the Cloudinary publicId out of a secure_url.
+   *
+   * Cloudinary URLs we generate have the shape:
+   *   https://res.cloudinary.com/<cloud>/image/upload/[transformations/]v<version>/<folder>/<name>.<ext>
+   *
+   * publicId is `<folder>/<name>` (no extension, no version, no transformations).
+   * Returns null when the URL doesn't match — callers should treat that as
+   * "nothing to clean up" rather than an error.
+   */
+  extractPublicId(rawUrl: string): string | null {
+    if (!this.isOwnedUrl(rawUrl)) return null;
+    let url: URL;
+    try {
+      url = new URL(rawUrl);
+    } catch {
+      return null;
+    }
+    // pathname: /<cloud>/image/upload/[transformations/]v<version>/<publicIdWithExt>
+    const segments = url.pathname.split('/').filter(Boolean);
+    const uploadIdx = segments.indexOf('upload');
+    if (uploadIdx === -1 || uploadIdx === segments.length - 1) return null;
+
+    // Skip any transformation segments + the version segment (`v<digits>`).
+    let cursor = uploadIdx + 1;
+    while (cursor < segments.length && !/^v\d+$/.test(segments[cursor])) {
+      cursor++;
+    }
+    if (cursor >= segments.length) {
+      // No version segment found — treat the whole tail after `upload` as
+      // the publicId (some legacy URLs lack `v<version>`).
+      cursor = uploadIdx;
+    }
+    const tail = segments.slice(cursor + 1);
+    if (tail.length === 0) return null;
+    const last = tail[tail.length - 1];
+    const dot = last.lastIndexOf('.');
+    tail[tail.length - 1] = dot > 0 ? last.slice(0, dot) : last;
+    return tail.join('/');
+  }
+
+  /**
+   * Best-effort delete of a single Cloudinary asset given its URL. Errors
+   * are swallowed and logged — the caller has already committed the
+   * user-visible state change (post deleted, cover replaced, etc.) and
+   * we don't want a Cloudinary outage to roll that back. Orphans can be
+   * swept later.
+   */
+  async deleteByUrl(rawUrl: string | null | undefined): Promise<void> {
+    if (!rawUrl) {
+      this.logger.debug(`deleteByUrl: skipping empty url`);
+      return;
+    }
+    const publicId = this.extractPublicId(rawUrl);
+    if (!publicId) {
+      this.logger.warn(
+        `deleteByUrl: could not extract publicId from "${rawUrl}" (cloudName=${this.cloudName ?? 'unset'}) — skipping`,
+      );
+      return;
+    }
+    this.logger.log(
+      `deleteByUrl: destroying publicId="${publicId}" (from "${rawUrl}")`,
+    );
+    try {
+      await this.deleteImage(publicId);
+    } catch (err) {
+      this.logger.warn(
+        `Cloudinary delete failed for ${publicId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 }

@@ -8,7 +8,7 @@ import {
 import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { Op, UniqueConstraintError } from 'sequelize';
+import { Op, Transaction, UniqueConstraintError } from 'sequelize';
 import { Post } from './entities/post.entity';
 import {
   PostAudience,
@@ -17,6 +17,7 @@ import {
 } from './entities/post-audience.entity';
 import { PostComment } from './entities/post-comment.entity';
 import { PostReaction } from './entities/post-reaction.entity';
+import { CloudinaryService } from '../../common/services/cloudinary.service';
 import { Group, MemberPostPolicy } from '../group/entities/group.entity';
 import {
   GroupMember,
@@ -39,6 +40,13 @@ import {
   NotificationService,
   NotificationType,
 } from '../notification/notification.service';
+
+/**
+ * Tombstone written into post/comment `content` when the row is soft-deleted,
+ * so the plaintext doesn't sit in the DB indefinitely. The row itself is kept
+ * (paranoid: true) for audit; the body is gone.
+ */
+const DELETED_CONTENT_TOMBSTONE = '[deleted]';
 
 export interface FeedItem {
   id: string;
@@ -74,6 +82,7 @@ export class PostService {
     private readonly memberModel: typeof GroupMember,
     private readonly searchIndexService: SearchIndexService,
     private readonly notificationService: NotificationService,
+    private readonly cloudinaryService: CloudinaryService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -86,6 +95,10 @@ export class PostService {
     const uniqueGroupIds = Array.from(new Set(dto.groupIds));
     if (uniqueGroupIds.length !== dto.groupIds.length) {
       throw new BadRequestException('Duplicate groupIds in request');
+    }
+
+    if (dto.mediaUrls?.length) {
+      this.cloudinaryService.assertOwnedUrls(dto.mediaUrls);
     }
 
     // Resolve groups + author memberships in one shot.
@@ -295,13 +308,31 @@ export class PostService {
       throw new BadRequestException('Nothing to update');
     }
 
+    if (dto.mediaUrls?.length) {
+      this.cloudinaryService.assertOwnedUrls(dto.mediaUrls);
+    }
+
     const updates: Partial<Post> = {};
     if (dto.content !== undefined) updates.content = dto.content;
     if (dto.mediaUrls !== undefined) {
       updates.mediaUrls = dto.mediaUrls.length === 0 ? null : dto.mediaUrls;
     }
 
+    // URLs that were on the post but aren't on the new list need their
+    // Cloudinary assets purged so we don't leak storage on every edit.
+    // Snapshot `previous` BEFORE the update — Sequelize mutates the
+    // model instance in place when update() is awaited.
+    const previousMedia = post.mediaUrls ?? [];
+
     await post.update(updates);
+
+    if (dto.mediaUrls !== undefined) {
+      const nextSet = new Set(dto.mediaUrls);
+      const orphaned = previousMedia.filter((url) => !nextSet.has(url));
+      await Promise.all(
+        orphaned.map((url) => this.cloudinaryService.deleteByUrl(url)),
+      );
+    }
 
     await this.searchIndexService.upsertPost(postId).catch((err) => {
       this.logger.error(
@@ -349,10 +380,10 @@ export class PostService {
           { transaction: tx },
         );
       } else {
-        await audience.update(
-          { approvalState: PostAudienceApproval.REJECTED },
-          { transaction: tx },
-        );
+        // Soft-delete the audience row; we leave approval_state as PENDING
+        // because the row is now hidden by the deletedAt filter anyway.
+        // The audit signal "this was rejected" lives in the deletedAt
+        // timestamp + the moderator action log (see #11, future work).
         await audience.destroy({ transaction: tx });
       }
       await tx.commit();
@@ -392,15 +423,39 @@ export class PostService {
     postId: string,
     dto: DeletePostDto,
   ): Promise<{ post: 'kept' | 'deleted'; audiencesRemoved: number }> {
-    const post = await this.postModel.findByPk(postId);
+    // Bypass paranoid filter so we can detect "post row exists but already
+    // soft-deleted" and short-circuit idempotently.
+    const post = await this.postModel.findOne({
+      where: { id: postId },
+      paranoid: false,
+    });
     if (!post) throw new NotFoundException('Post not found');
+
+    // Truly already deleted — nothing to do, success is idempotent.
+    if (post.deletedAt !== null) {
+      return { post: 'deleted', audiencesRemoved: 0 };
+    }
 
     const allAudiences = await this.audienceModel.findAll({
       where: { postId, audienceType: PostAudienceType.GROUP },
     });
     const activeAudiences = allAudiences.filter((a) => a.deletedAt === null);
+    // Post is alive but has no active audiences (data drift, manual cleanup,
+    // or a race). Fall through so we tombstone + destroy + purge assets,
+    // not silently return success.
     if (activeAudiences.length === 0) {
-      // Already fully deleted.
+      const mediaToDelete = post.mediaUrls ?? [];
+      const sequelize = this.postModel.sequelize!;
+      const tx = await sequelize.transaction();
+      try {
+        await this.destroyPostFully(post, tx);
+        await tx.commit();
+      } catch (err) {
+        await tx.rollback();
+        throw err;
+      }
+
+      await this.afterPostFullyDeleted(postId, mediaToDelete);
       return { post: 'deleted', audiencesRemoved: 0 };
     }
 
@@ -453,6 +508,10 @@ export class PostService {
     const targetIds = new Set(targetAudiences.map((a) => a.id));
     const remainingActive = activeAudiences.filter((a) => !targetIds.has(a.id));
 
+    // Snapshot media URLs BEFORE the update — the tombstone overwrite
+    // sets mediaUrls to null inside the transaction.
+    const mediaToDelete = post.mediaUrls ?? [];
+
     const sequelize = this.postModel.sequelize!;
     const tx = await sequelize.transaction();
     let postDeleted = false;
@@ -461,7 +520,7 @@ export class PostService {
         await a.destroy({ transaction: tx });
       }
       if (remainingActive.length === 0) {
-        await post.destroy({ transaction: tx });
+        await this.destroyPostFully(post, tx);
         postDeleted = true;
       }
       await tx.commit();
@@ -471,9 +530,7 @@ export class PostService {
     }
 
     if (postDeleted) {
-      await this.searchIndexService
-        .removeIfExists('post', postId)
-        .catch(() => undefined);
+      await this.afterPostFullyDeleted(postId, mediaToDelete);
     } else {
       await this.searchIndexService.upsertPost(postId).catch(() => undefined);
     }
@@ -482,6 +539,56 @@ export class PostService {
       post: postDeleted ? 'deleted' : 'kept',
       audiencesRemoved: targetAudiences.length,
     };
+  }
+
+  /**
+   * Inside-transaction cleanup when a post is being soft-deleted in full.
+   *
+   * Tombstones plaintext on the post, cascades the same treatment to all of
+   * its comments (paranoid: true on PostComment), and hard-deletes its
+   * reactions (paranoid: false — no content to retain, just count noise).
+   * The post itself is destroyed last so callers can rely on the fact that
+   * by the time this resolves, the row is soft-deleted.
+   */
+  private async destroyPostFully(post: Post, tx: Transaction): Promise<void> {
+    const postId = post.id;
+    // 1. Tombstone + soft-delete every comment (and its replies).
+    await this.commentModel.update(
+      { content: DELETED_CONTENT_TOMBSTONE },
+      { where: { postId }, transaction: tx },
+    );
+    await this.commentModel.destroy({ where: { postId }, transaction: tx });
+    // 2. Reactions: no content to tombstone, just hard-delete.
+    await this.reactionModel.destroy({ where: { postId }, transaction: tx });
+    // 3. Tombstone the post itself + soft-delete it.
+    await post.update(
+      { content: DELETED_CONTENT_TOMBSTONE, mediaUrls: null },
+      { transaction: tx },
+    );
+    await post.destroy({ transaction: tx });
+  }
+
+  /**
+   * After-commit side effects when a post is fully deleted: drop search index
+   * entry and purge Cloudinary assets. Failures are logged but never
+   * surfaced — the user-visible state has already changed.
+   */
+  private async afterPostFullyDeleted(
+    postId: string,
+    mediaUrls: string[],
+  ): Promise<void> {
+    await this.searchIndexService
+      .removeIfExists('post', postId)
+      .catch(() => undefined);
+    if (mediaUrls.length > 0) {
+      this.logger.log(
+        `[posts] purging ${mediaUrls.length} Cloudinary asset(s) for deleted post ${postId}`,
+        'PostService',
+      );
+      await Promise.all(
+        mediaUrls.map((url) => this.cloudinaryService.deleteByUrl(url)),
+      );
+    }
   }
 
   // =============================================================
@@ -571,16 +678,25 @@ export class PostService {
     // Cascade replies when removing a top-level comment so the thread
     // doesn't strand orphaned replies under a deleted parent. Replies
     // can only nest one level (enforced in addComment), so a single
-    // bulk update covers it.
+    // bulk update covers it. Plaintext is tombstoned on the way out so
+    // it isn't kept in the DB after a delete.
     const sequelize = this.commentModel.sequelize!;
     const tx = await sequelize.transaction();
     try {
       if (comment.parentCommentId === null) {
+        await this.commentModel.update(
+          { content: DELETED_CONTENT_TOMBSTONE },
+          { where: { parentCommentId: comment.id }, transaction: tx },
+        );
         await this.commentModel.destroy({
           where: { parentCommentId: comment.id },
           transaction: tx,
         });
       }
+      await comment.update(
+        { content: DELETED_CONTENT_TOMBSTONE },
+        { transaction: tx },
+      );
       await comment.destroy({ transaction: tx });
       await tx.commit();
     } catch (err) {
@@ -603,37 +719,51 @@ export class PostService {
     await this.assertCanViewPost(userId, postId);
 
     const reactionType = dto.reactionType ?? 'LIKE';
-    const existing = await this.reactionModel.findOne({
-      where: { postId, authorId: userId },
-    });
+    const sequelize = this.reactionModel.sequelize!;
+    const tx = await sequelize.transaction();
 
     let reacted: boolean;
-    if (existing && existing.reactionType === reactionType) {
-      await existing.destroy();
-      reacted = false;
-    } else if (existing) {
-      await existing.update({ reactionType });
-      reacted = true;
-    } else {
-      try {
-        await this.reactionModel.create({
-          postId,
-          authorId: userId,
-          reactionType,
-        });
+    let count: number;
+    try {
+      const existing = await this.reactionModel.findOne({
+        where: { postId, authorId: userId },
+        transaction: tx,
+      });
+
+      if (existing && existing.reactionType === reactionType) {
+        await existing.destroy({ transaction: tx });
+        reacted = false;
+      } else if (existing) {
+        await existing.update({ reactionType }, { transaction: tx });
         reacted = true;
-      } catch (err) {
-        if (err instanceof UniqueConstraintError) {
-          // Race: another concurrent request created the reaction. Treat
-          // as a successful toggle-on.
+      } else {
+        try {
+          await this.reactionModel.create(
+            { postId, authorId: userId, reactionType },
+            { transaction: tx },
+          );
           reacted = true;
-        } else {
-          throw err;
+        } catch (err) {
+          if (err instanceof UniqueConstraintError) {
+            // Race: another concurrent request created the reaction. Treat
+            // as a successful toggle-on.
+            reacted = true;
+          } else {
+            throw err;
+          }
         }
       }
+
+      count = await this.reactionModel.count({
+        where: { postId },
+        transaction: tx,
+      });
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback();
+      throw err;
     }
 
-    const count = await this.reactionModel.count({ where: { postId } });
     return { reacted, count };
   }
 
@@ -681,6 +811,7 @@ export class PostService {
         postId,
         audienceType: PostAudienceType.GROUP,
         approvalState: PostAudienceApproval.APPROVED,
+        deletedAt: null,
       },
     });
     const groupIds = audiences
