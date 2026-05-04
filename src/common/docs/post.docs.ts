@@ -38,6 +38,21 @@ export const PostDocs = {
     ],
   } as ApiEndpointOptions,
 
+  getMyFeed: {
+    summary: "Aggregated feed across the caller's groups",
+    description:
+      'Paginated APPROVED posts from every group the caller is an active ' +
+      'member of, sorted by `postedAt` DESC. Each item includes ' +
+      '`group: { id, name, logoUrl }` so the FE can label which group ' +
+      'a post came from. Returns an empty page when the caller has no ' +
+      'memberships.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Feed listed' },
+      ApiStandardResponses.Unauthorized,
+    ],
+  } as ApiEndpointOptions,
+
   getGroupFeed: {
     summary: 'List approved posts for a group',
     description:

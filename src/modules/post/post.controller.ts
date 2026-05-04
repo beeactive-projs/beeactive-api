@@ -89,6 +89,19 @@ export class PostController {
     return this.postService.createPost(req.user.id, dto);
   }
 
+  @Get('feed')
+  @ApiEndpoint(PostDocs.getMyFeed)
+  async getMyFeed(
+    @Request() req: AuthenticatedRequest,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.postService.getMyFeed(
+      req.user.id,
+      pagination.page ?? 1,
+      pagination.limit ?? 20,
+    );
+  }
+
   @Get('group/:groupId')
   @ApiEndpoint(PostDocs.getGroupFeed)
   async getGroupFeed(

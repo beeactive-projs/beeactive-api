@@ -18,10 +18,12 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { GroupDocs } from '../../common/docs/group.docs';
 import { GroupRoleDocs } from '../../common/docs/post.docs';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
 import { AddMembersBulkDto } from './dto/add-members-bulk.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
+import { DecideJoinRequestDto } from './dto/decide-join-request.dto';
 import { DiscoverGroupsDto } from './dto/discover-groups.dto';
 import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
@@ -44,7 +46,11 @@ import { GroupService } from './group.service';
  * - GET    /groups/:id                   -> Get group details (member only)
  * - PATCH  /groups/:id                   -> Update group (owner only)
  * - DELETE /groups/:id                   -> Delete group (owner only)
- * - POST   /groups/:id/join             -> Self-join (public + OPEN policy only)
+ * - POST   /groups/:id/join             -> Self-join OPEN, or request join on APPROVAL
+ * - GET    /groups/:id/join-requests    -> List pending requests (owner only)
+ * - GET    /groups/:id/join-requests/mine -> Get my pending request (or null)
+ * - DELETE /groups/:id/join-requests/mine -> Cancel my pending request
+ * - PATCH  /groups/:id/join-requests/:rid -> Approve or reject (owner only)
  * - GET    /groups/:id/members          -> List members (paginated)
  * - PATCH  /groups/:id/members/me       -> Update own membership settings
  * - DELETE /groups/:id/members/me       -> Leave group
@@ -63,9 +69,13 @@ export class GroupController {
   // =====================================================
 
   @Get('discover')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiEndpoint(GroupDocs.discoverGroups)
-  async discoverGroups(@Query() dto: DiscoverGroupsDto) {
-    return this.groupService.discoverGroups(dto);
+  async discoverGroups(
+    @Query() dto: DiscoverGroupsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupService.discoverGroups(dto, req.user?.id ?? null);
   }
 
   @Get(':id/public')
@@ -177,8 +187,76 @@ export class GroupController {
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,
   ) {
-    await this.groupService.selfJoinGroup(id, req.user.id);
-    return { message: 'You have joined the group' };
+    const result = await this.groupService.selfJoinGroup(id, req.user.id);
+    if (result.status === 'JOINED') {
+      return {
+        status: 'JOINED' as const,
+        message: 'You have joined the group',
+        member: result.member,
+      };
+    }
+    return {
+      status: 'PENDING' as const,
+      message: 'Your request to join has been sent. The owner will review it.',
+      request: result.request,
+    };
+  }
+
+  // =====================================================
+  // JOIN REQUESTS (APPROVAL groups)
+  // =====================================================
+
+  @Get(':id/join-requests')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiEndpoint(GroupDocs.listJoinRequests)
+  async listJoinRequests(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.groupService.listJoinRequests(
+      id,
+      req.user.id,
+      pagination.page ?? 1,
+      pagination.limit ?? 20,
+    );
+  }
+
+  @Get(':id/join-requests/mine')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiEndpoint(GroupDocs.getMyJoinRequest)
+  async getMyJoinRequest(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const request = await this.groupService.getMyJoinRequest(id, req.user.id);
+    return { request };
+  }
+
+  @Delete(':id/join-requests/mine')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiEndpoint(GroupDocs.cancelMyJoinRequest)
+  async cancelMyJoinRequest(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    await this.groupService.cancelMyJoinRequest(id, req.user.id);
+    return { message: 'Request cancelled' };
+  }
+
+  @Patch(':id/join-requests/:requestId')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiEndpoint({
+    ...GroupDocs.decideJoinRequest,
+    body: DecideJoinRequestDto,
+  })
+  async decideJoinRequest(
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: DecideJoinRequestDto,
+  ) {
+    return this.groupService.decideJoinRequest(id, requestId, req.user.id, dto);
   }
 
   // =====================================================

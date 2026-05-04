@@ -18,6 +18,7 @@ import {
   GroupMember,
   GroupMemberRole,
 } from '../group/entities/group-member.entity';
+import { GroupService } from '../group/group.service';
 import { User } from '../user/entities/user.entity';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -61,6 +62,12 @@ export interface FeedItem {
     lastName: string;
     avatarUrl: string | null;
   } | null;
+  /**
+   * Optional. Populated by the cross-group feed (`getMyFeed`) so the FE
+   * can label which group a post came from. The per-group feed leaves
+   * this `null` because the group is implicit in the URL.
+   */
+  group?: { id: string; name: string; logoUrl: string | null } | null;
 }
 
 /** Per-group spec used inside the create-post fan-out. */
@@ -83,6 +90,7 @@ export class PostService {
     private readonly searchIndexService: SearchIndexService,
     private readonly notificationService: NotificationService,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly groupService: GroupService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -325,6 +333,57 @@ export class PostService {
       page,
       limit,
     );
+  }
+
+  /**
+   * Aggregated feed across every group the user is an active member of.
+   *
+   * Mirrors Facebook's "groups feed" surface — APPROVED posts only,
+   * sorted by `postedAt DESC`, paginated. Each item is enriched with
+   * `group: { id, name, logoUrl }` so the FE can show a "posted in X"
+   * badge above the author line.
+   *
+   * Returns an empty paginated response when the user has no
+   * memberships, avoiding a wasted DB round-trip.
+   */
+  async getMyFeed(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResponse<FeedItem>> {
+    const groupIds = await this.groupService.findMyGroupIds(userId);
+    if (groupIds.length === 0) {
+      return buildPaginatedResponse([], 0, page, limit);
+    }
+
+    const offset = getOffset(page, limit);
+
+    const { rows: posts, count } = await this.postModel.findAndCountAll({
+      where: {
+        groupId: { [Op.in]: groupIds },
+        approvalState: PostApprovalState.APPROVED,
+      },
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+        },
+        {
+          model: Group,
+          as: 'group',
+          attributes: ['id', 'name', 'logoUrl'],
+        },
+      ],
+      order: [['postedAt', 'DESC']],
+      offset,
+      limit,
+    });
+
+    const items = await this.hydrateFeedItems(posts, userId, {
+      includeGroup: true,
+    });
+    return buildPaginatedResponse(items, count, page, limit);
   }
 
   async getPendingForGroup(
@@ -793,6 +852,22 @@ export class PostService {
       limit,
     });
 
+    const items = await this.hydrateFeedItems(posts, userId);
+    return buildPaginatedResponse(items, count, page, limit);
+  }
+
+  /**
+   * Hydrate a batch of posts with reactions, comments, and the caller's
+   * own reaction. Shared by the per-group and aggregated feeds.
+   *
+   * `includeGroup`: pass `true` when the posts were loaded with the
+   * `group` association — the helper will surface it on each FeedItem.
+   */
+  private async hydrateFeedItems(
+    posts: Post[],
+    userId: string,
+    options: { includeGroup?: boolean } = {},
+  ): Promise<FeedItem[]> {
     const postIds = posts.map((p) => p.id);
     const [reactionCounts, commentCounts, myReactions] = await Promise.all([
       this.countReactionsByPost(postIds),
@@ -800,7 +875,7 @@ export class PostService {
       this.fetchMyReactions(userId, postIds),
     ]);
 
-    const items: FeedItem[] = posts.map((post) => ({
+    return posts.map((post) => ({
       id: post.id,
       authorId: post.authorId,
       groupId: post.groupId,
@@ -821,9 +896,15 @@ export class PostService {
             avatarUrl: post.author.avatarUrl,
           }
         : null,
+      group:
+        options.includeGroup && post.group
+          ? {
+              id: post.group.id,
+              name: post.group.name,
+              logoUrl: post.group.logoUrl,
+            }
+          : null,
     }));
-
-    return buildPaginatedResponse(items, count, page, limit);
   }
 
   private async hydrateSingle(

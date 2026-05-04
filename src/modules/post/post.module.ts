@@ -9,6 +9,7 @@ import { PostController } from './post.controller';
 import { PostService } from './post.service';
 import { CloudinaryService } from '../../common/services/cloudinary.service';
 import { SearchModule } from '../search/search.module';
+import { GroupModule } from '../group/group.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SearchModule } from '../search/search.module';
       GroupMember,
     ]),
     SearchModule,
+    GroupModule,
   ],
   controllers: [PostController],
   providers: [PostService, CloudinaryService],

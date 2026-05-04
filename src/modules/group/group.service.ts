@@ -34,7 +34,15 @@ import {
 } from './dto/update-member-role.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { GroupMember, GroupMemberRole } from './entities/group-member.entity';
+import {
+  GroupJoinRequest,
+  GroupJoinRequestStatus,
+} from './entities/group-join-request.entity';
 import { Group, JoinPolicy, MemberPostPolicy } from './entities/group.entity';
+import {
+  DecideJoinRequestDto,
+  JoinRequestDecision,
+} from './dto/decide-join-request.dto';
 
 /**
  * Group Service
@@ -64,6 +72,13 @@ export interface PublicInstructorProfile {
   socialLinks?: SocialLinks | null;
 }
 
+/** Result returned by `selfJoinGroup`. Branches on group's joinPolicy. */
+export interface SelfJoinResult {
+  status: 'JOINED' | 'PENDING';
+  member?: GroupMember;
+  request?: GroupJoinRequest;
+}
+
 @Injectable()
 export class GroupService {
   constructor(
@@ -71,6 +86,8 @@ export class GroupService {
     private groupModel: typeof Group,
     @InjectModel(GroupMember)
     private memberModel: typeof GroupMember,
+    @InjectModel(GroupJoinRequest)
+    private joinRequestModel: typeof GroupJoinRequest,
     @InjectModel(InstructorClient)
     private instructorClientModel: typeof InstructorClient,
     private emailService: EmailService,
@@ -226,30 +243,37 @@ export class GroupService {
   async getMyGroups(userId: string): Promise<Group[]> {
     const memberships = await this.memberModel.findAll({
       where: { userId, leftAt: null },
-      include: [
-        {
-          model: Group,
-          where: { isActive: true },
-        },
-      ],
+      attributes: ['groupId'],
     });
 
-    return memberships.map((m) => m.group);
+    const groupIds = memberships.map((m) => m.groupId);
+    if (groupIds.length === 0) return [];
+
+    const memberCountLiteral = literal(
+      '(SELECT COUNT(*)::int FROM group_member WHERE group_member.group_id = "Group"."id" AND group_member.left_at IS NULL)',
+    );
+
+    return this.groupModel.findAll({
+      where: { id: { [Op.in]: groupIds }, isActive: true },
+      attributes: {
+        include: [[memberCountLiteral, 'memberCount']],
+      },
+    });
   }
   /**
-   * Get all groups the user belongs to (active memberships only)
+   * Get all groups owned by the instructor
    */
   async getInstructorsGroups(instructorId: string): Promise<Group[]> {
-    const groups = await this.groupModel.findAll({
-      where: { instructorId },
-      include: [
-        {
-          model: GroupMember,
-        },
-      ],
-    });
+    const memberCountLiteral = literal(
+      '(SELECT COUNT(*)::int FROM group_member WHERE group_member.group_id = "Group"."id" AND group_member.left_at IS NULL)',
+    );
 
-    return groups;
+    return this.groupModel.findAll({
+      where: { instructorId },
+      attributes: {
+        include: [[memberCountLiteral, 'memberCount']],
+      },
+    });
   }
 
   /**
@@ -522,9 +546,18 @@ export class GroupService {
    * and free-text search on name/description.
    * Sorted by member count (most popular first).
    *
-   * No authentication required.
+   * Authentication is optional. When `currentUserId` is provided:
+   * - Groups the user is already an active member of are excluded.
+   * - Each row is enriched with `myJoinRequestStatus: 'PENDING' | null`
+   *   so the UI can render "Request pending" instead of "Request to join".
+   *
+   * Anonymous callers see the unfiltered public list with no
+   * `myJoinRequestStatus` field.
    */
-  async discoverGroups(dto: DiscoverGroupsDto) {
+  async discoverGroups(
+    dto: DiscoverGroupsDto,
+    currentUserId: string | null = null,
+  ) {
     const page = dto.page || 1;
     const limit = dto.limit || 20;
     const offset = (page - 1) * limit;
@@ -540,12 +573,24 @@ export class GroupService {
         : null;
     const term = dto.search ? buildSearchTerm(dto.search) : null;
 
+    // When the caller is signed in, exclude any group where they're an
+    // active member. Member groups belong in "Your groups", not Discover.
+    const excludeMemberClause = currentUserId
+      ? [
+          literal(
+            `NOT EXISTS (SELECT 1 FROM group_member gm WHERE gm.group_id = "Group"."id" AND gm.user_id = ${sequelize.escape(currentUserId)} AND gm.left_at IS NULL)`,
+          ),
+        ]
+      : [];
+
+    const andClauses = [...(tagConditions ?? []), ...excludeMemberClause];
+
     const where: WhereOptions<Group> = {
       isPublic: true,
       isActive: true,
       ...(dto.city && { city: { [Op.iLike]: `%${dto.city}%` } }),
       ...(dto.country && { country: dto.country }),
-      ...(tagConditions && { [Op.and]: tagConditions }),
+      ...(andClauses.length > 0 && { [Op.and]: andClauses }),
       ...(term && {
         [Op.or]: [
           { name: { [Op.iLike]: term } },
@@ -581,7 +626,33 @@ export class GroupService {
         offset,
       });
 
-    return buildPaginatedResponse(data, totalItems, page, limit);
+    if (!currentUserId) {
+      return buildPaginatedResponse(data, totalItems, page, limit);
+    }
+
+    // Enrich each row with the caller's PENDING request status so the
+    // FE can render "Request pending" without a second round-trip.
+    const groupIds = data.map((g) => g.id);
+    const pendingRequests =
+      groupIds.length > 0
+        ? await this.joinRequestModel.findAll({
+            where: {
+              userId: currentUserId,
+              groupId: { [Op.in]: groupIds },
+              status: GroupJoinRequestStatus.PENDING,
+            },
+            attributes: ['groupId'],
+          })
+        : [];
+    const pendingSet = new Set(pendingRequests.map((r) => r.groupId));
+
+    const enriched = data.map((g) => {
+      const json: Record<string, unknown> = g.toJSON();
+      json.myJoinRequestStatus = pendingSet.has(g.id) ? 'PENDING' : null;
+      return json;
+    });
+
+    return buildPaginatedResponse(enriched, totalItems, page, limit);
   }
 
   /**
@@ -719,16 +790,22 @@ export class GroupService {
   // =====================================================
 
   /**
-   * Self-join a public group
+   * Self-join a public group.
    *
-   * Only works if:
-   * - Group is public
-   * - Join policy is OPEN
-   * - User is not already a member
+   * Branches on the group's joinPolicy:
+   * - OPEN     → instant membership (returns { status: 'JOINED', member }).
+   * - APPROVAL → creates (or returns existing) PENDING GroupJoinRequest
+   *              and notifies the owner. Returns { status: 'PENDING', request }.
+   *              Idempotent: a second call while still pending returns the
+   *              same request rather than creating a duplicate.
+   * - INVITE_ONLY → ForbiddenException; user needs an invite/link.
    *
-   * Uses a transaction to ensure member creation + count increment are atomic.
+   * Throws if the group is not public or already-joined.
    */
-  async selfJoinGroup(groupId: string, userId: string): Promise<GroupMember> {
+  async selfJoinGroup(
+    groupId: string,
+    userId: string,
+  ): Promise<SelfJoinResult> {
     const group = await this.groupModel.findByPk(groupId);
 
     if (!group || !group.isActive) {
@@ -741,33 +818,269 @@ export class GroupService {
       );
     }
 
-    if (group.joinPolicy !== JoinPolicy.OPEN) {
+    if (group.joinPolicy === JoinPolicy.INVITE_ONLY) {
       throw new ForbiddenException(
-        `This group requires ${group.joinPolicy === JoinPolicy.INVITE_ONLY ? 'an invitation' : 'approval from the owner'} to join.`,
+        'This group requires an invitation to join.',
       );
     }
 
-    // Check if already a member
-    const existing = await this.memberModel.findOne({
+    const existingMember = await this.memberModel.findOne({
       where: { groupId, userId, leftAt: null },
     });
-
-    if (existing) {
+    if (existingMember) {
       throw new BadRequestException('You are already a member of this group');
     }
 
-    const member = await this.memberModel.create({
+    if (group.joinPolicy === JoinPolicy.OPEN) {
+      const member = await this.memberModel.create({
+        groupId,
+        userId,
+        role: GroupMemberRole.MEMBER,
+      });
+      this.logger.log(
+        `User ${userId} self-joined group ${group.name} (${groupId})`,
+        'GroupService',
+      );
+      return { status: 'JOINED', member };
+    }
+
+    // joinPolicy === APPROVAL: create or reuse PENDING request.
+    const existingPending = await this.joinRequestModel.findOne({
+      where: { groupId, userId, status: GroupJoinRequestStatus.PENDING },
+    });
+    if (existingPending) {
+      return { status: 'PENDING', request: existingPending };
+    }
+
+    const request = await this.joinRequestModel.create({
       groupId,
       userId,
-      role: GroupMemberRole.MEMBER,
+      status: GroupJoinRequestStatus.PENDING,
     });
 
     this.logger.log(
-      `User ${userId} self-joined group ${group.name} (${groupId})`,
+      `User ${userId} requested to join group ${group.name} (${groupId})`,
       'GroupService',
     );
 
-    return member;
+    // Notify the owner. Best-effort — don't fail the request creation if
+    // the notification pipeline has a hiccup.
+    await this.notificationService
+      .notify({
+        userId: group.instructorId,
+        type: NotificationType.GROUP_JOIN_REQUEST_RECEIVED,
+        title: 'New request to join your group',
+        body: 'A user has requested to join your group.',
+        data: { screen: 'group-detail', entityId: groupId },
+      })
+      .catch((err) => {
+        this.logger.error(
+          `[groups] notify GROUP_JOIN_REQUEST_RECEIVED failed for owner ${group.instructorId}, group ${groupId}: ${(err as Error).message}`,
+          'GroupService',
+        );
+      });
+
+    return { status: 'PENDING', request };
+  }
+
+  // =====================================================
+  // JOIN REQUEST WORKFLOW (APPROVAL groups)
+  // =====================================================
+
+  /**
+   * List pending join requests for a group (owner only).
+   *
+   * Returns paginated PENDING requests with the requesting user hydrated.
+   */
+  async listJoinRequests(
+    groupId: string,
+    requestingUserId: string,
+    page: number = 1,
+    limit: number = 20,
+  ) {
+    await this.assertOwnerAndGet(groupId, requestingUserId);
+    const offset = (page - 1) * limit;
+
+    const { rows, count } = await this.joinRequestModel.findAndCountAll({
+      where: { groupId, status: GroupJoinRequestStatus.PENDING },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+      offset,
+      limit,
+    });
+
+    return buildPaginatedResponse(rows, count, page, limit);
+  }
+
+  /**
+   * Approve or reject a pending join request (owner only).
+   *
+   * Approve: atomically marks the request APPROVED and creates a
+   *          GroupMember row. Idempotent if the user is already an
+   *          active member (just marks the request).
+   * Reject : marks the request REJECTED, no membership created.
+   *
+   * Either way, the requesting user gets a notification.
+   */
+  async decideJoinRequest(
+    groupId: string,
+    requestId: string,
+    requestingUserId: string,
+    dto: DecideJoinRequestDto,
+  ): Promise<GroupJoinRequest> {
+    await this.assertOwnerAndGet(groupId, requestingUserId);
+
+    const request = await this.joinRequestModel.findOne({
+      where: { id: requestId, groupId },
+    });
+    if (!request) {
+      throw new NotFoundException('Join request not found');
+    }
+    if (request.status !== GroupJoinRequestStatus.PENDING) {
+      throw new BadRequestException(
+        `This request is already ${request.status.toLowerCase()}`,
+      );
+    }
+
+    const sequelize = this.joinRequestModel.sequelize!;
+    const tx = await sequelize.transaction();
+    try {
+      if (dto.action === JoinRequestDecision.APPROVE) {
+        const existing = await this.memberModel.findOne({
+          where: { groupId, userId: request.userId },
+          transaction: tx,
+        });
+        if (existing) {
+          if (existing.leftAt !== null) {
+            await existing.update({ leftAt: null }, { transaction: tx });
+          }
+        } else {
+          await this.memberModel.create(
+            {
+              groupId,
+              userId: request.userId,
+              role: GroupMemberRole.MEMBER,
+            },
+            { transaction: tx },
+          );
+        }
+        await request.update(
+          {
+            status: GroupJoinRequestStatus.APPROVED,
+            decidedById: requestingUserId,
+            decidedAt: new Date(),
+          },
+          { transaction: tx },
+        );
+      } else {
+        await request.update(
+          {
+            status: GroupJoinRequestStatus.REJECTED,
+            decidedById: requestingUserId,
+            decidedAt: new Date(),
+          },
+          { transaction: tx },
+        );
+      }
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
+
+    this.logger.log(
+      `Join request ${requestId} ${dto.action === JoinRequestDecision.APPROVE ? 'approved' : 'rejected'} for group ${groupId} by ${requestingUserId}`,
+      'GroupService',
+    );
+
+    const approved = dto.action === JoinRequestDecision.APPROVE;
+    await this.notificationService
+      .notify({
+        userId: request.userId,
+        type: approved
+          ? NotificationType.GROUP_JOIN_REQUEST_APPROVED
+          : NotificationType.GROUP_JOIN_REQUEST_REJECTED,
+        title: approved
+          ? 'Your join request was approved'
+          : 'Your join request was not approved',
+        body: approved
+          ? 'You are now a member of the group.'
+          : 'The owner declined your request to join.',
+        data: { screen: 'group-detail', entityId: groupId },
+      })
+      .catch((err) => {
+        this.logger.error(
+          `[groups] notify join-request decision failed for user ${request.userId}, group ${groupId}: ${(err as Error).message}`,
+          'GroupService',
+        );
+      });
+
+    return request;
+  }
+
+  /**
+   * Get the current user's PENDING request for a group, or null.
+   *
+   * Lightweight check used by the FE to render "Request pending" instead
+   * of "Request to join" when the user revisits Discover.
+   */
+  async getMyJoinRequest(
+    groupId: string,
+    userId: string,
+  ): Promise<GroupJoinRequest | null> {
+    return this.joinRequestModel.findOne({
+      where: {
+        groupId,
+        userId,
+        status: GroupJoinRequestStatus.PENDING,
+      },
+    });
+  }
+
+  /**
+   * Cancel the current user's own PENDING request.
+   *
+   * No-op if no pending request exists (returns silently — idempotent).
+   */
+  async cancelMyJoinRequest(groupId: string, userId: string): Promise<void> {
+    const request = await this.joinRequestModel.findOne({
+      where: {
+        groupId,
+        userId,
+        status: GroupJoinRequestStatus.PENDING,
+      },
+    });
+    if (!request) return;
+
+    await request.update({
+      status: GroupJoinRequestStatus.CANCELLED,
+      decidedAt: new Date(),
+    });
+
+    this.logger.log(
+      `Join request ${request.id} cancelled by user ${userId} (group ${groupId})`,
+      'GroupService',
+    );
+  }
+
+  /**
+   * Return the list of group ids the user is an active member of.
+   *
+   * Used by PostService to build the cross-group feed without depending
+   * on the GroupMember model directly.
+   */
+  async findMyGroupIds(userId: string): Promise<string[]> {
+    const memberships = await this.memberModel.findAll({
+      where: { userId, leftAt: null },
+      attributes: ['groupId'],
+    });
+    return memberships.map((m) => m.groupId);
   }
 
   // =====================================================

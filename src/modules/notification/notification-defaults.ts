@@ -82,6 +82,10 @@ export const NOTIFICATION_DEFAULTS: Record<
   // Removal / ownership transfer is consequential → email.
   [NotificationType.GROUP_MEMBER_REMOVED]: IN_APP_AND_EMAIL,
   [NotificationType.GROUP_OWNERSHIP_TRANSFERRED]: IN_APP_AND_EMAIL,
+  // Join requests — owner needs to act; user wants to know the outcome.
+  [NotificationType.GROUP_JOIN_REQUEST_RECEIVED]: IN_APP_AND_EMAIL,
+  [NotificationType.GROUP_JOIN_REQUEST_APPROVED]: IN_APP_AND_EMAIL,
+  [NotificationType.GROUP_JOIN_REQUEST_REJECTED]: IN_APP_AND_EMAIL,
 
   // ── Payments & invoicing ─────────────────────────────────
   // Money matters → email always on by default.

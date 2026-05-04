@@ -17,6 +17,7 @@ import { ModerationDecision } from './dto/moderate-post.dto';
 import { SearchIndexService } from '../search/search-index.service';
 import { NotificationService } from '../notification/notification.service';
 import { CloudinaryService } from '../../common/services/cloudinary.service';
+import { GroupService } from '../group/group.service';
 import { makeSilentLogger } from '../../../test/helpers/sequelize-mocks';
 
 interface PostModelMock {
@@ -77,6 +78,7 @@ describe('PostService', () => {
     buildPostFolder: jest.Mock;
     deleteFolder: jest.Mock;
   };
+  let groupService: { findMyGroupIds: jest.Mock };
 
   const tx = {
     commit: jest.fn().mockResolvedValue(undefined),
@@ -143,6 +145,9 @@ describe('PostService', () => {
         ),
       deleteFolder: jest.fn().mockResolvedValue(undefined),
     };
+    groupService = {
+      findMyGroupIds: jest.fn().mockResolvedValue([]),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -155,6 +160,7 @@ describe('PostService', () => {
         { provide: SearchIndexService, useValue: searchIndex },
         { provide: NotificationService, useValue: notificationService },
         { provide: CloudinaryService, useValue: cloudinaryService },
+        { provide: GroupService, useValue: groupService },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: makeSilentLogger() },
       ],
     }).compile();

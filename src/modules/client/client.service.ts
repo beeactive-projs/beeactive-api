@@ -46,6 +46,7 @@ export interface ClientUserSnapshot {
   lastName: string;
   email: string;
   avatarId: number | null;
+  avatarUrl: string | null;
 }
 
 export interface GroupMembershipSnapshot {
@@ -402,6 +403,7 @@ export class ClientService {
             lastName: clientUser.lastName,
             email: clientUser.email,
             avatarId: clientUser.avatarId ?? null,
+            avatarUrl: clientUser.avatarUrl ?? null,
           }
         : null,
       groupMemberships: [],
@@ -426,6 +428,7 @@ export class ClientService {
             lastName: row.client.lastName,
             email: row.client.email,
             avatarId: row.client.avatarId ?? null,
+            avatarUrl: row.client.avatarUrl ?? null,
           }
         : null,
       groupMemberships: [],

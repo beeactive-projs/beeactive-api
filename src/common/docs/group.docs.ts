@@ -90,28 +90,93 @@ export const GroupDocs = {
   } as ApiEndpointOptions,
 
   selfJoin: {
-    summary: 'Join a group',
+    summary: 'Join a public group (or request to join)',
     description:
-      'Self-join a public group. Only works if the group is public and its joinPolicy is OPEN. ' +
-      'For INVITE_ONLY groups, the user needs an invitation or join link.',
+      "Self-join a public group. Branches on the group's joinPolicy:\n" +
+      '- OPEN     → instant membership; returns { status: "JOINED", member }.\n' +
+      '- APPROVAL → creates (or returns existing) PENDING request; returns ' +
+      '  { status: "PENDING", request }. Owner is notified.\n' +
+      '- INVITE_ONLY → 403; user needs an invite or join link.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Joined successfully',
-        example: { message: 'You have joined the group' },
+        description: 'Joined or pending',
+        example: {
+          status: 'PENDING',
+          message:
+            'Your request to join has been sent. The owner will review it.',
+          request: {
+            id: 'request-uuid',
+            groupId: 'group-uuid',
+            userId: 'user-uuid',
+            status: 'PENDING',
+          },
+        },
       },
-      {
-        status: 400,
-        description: 'Already a member',
-      },
+      { status: 400, description: 'Already a member' },
       {
         status: 403,
-        description:
-          'Group is not public or join policy requires invitation/approval',
+        description: 'Group is not public or requires an invitation',
       },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  listJoinRequests: {
+    summary: 'List pending join requests (owner only)',
+    description:
+      'Returns paginated PENDING join requests for the group, including ' +
+      'the requesting user. Owner only.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Requests listed' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  decideJoinRequest: {
+    summary: 'Approve or reject a pending join request (owner only)',
+    description:
+      'Body: { action: "APPROVE" | "REJECT" }. APPROVE atomically marks ' +
+      'the request APPROVED and creates a GroupMember row. REJECT marks ' +
+      'the request REJECTED with no membership. The requesting user is ' +
+      'notified either way.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Decision applied' },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  getMyJoinRequest: {
+    summary: 'Get my pending join request for a group',
+    description:
+      "Returns the current user's PENDING join request for this group, " +
+      'or null if none. Used by the FE to render "Request pending" ' +
+      'instead of "Request to join".',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Pending request (or null)' },
+      ApiStandardResponses.Unauthorized,
+    ],
+  } as ApiEndpointOptions,
+
+  cancelMyJoinRequest: {
+    summary: 'Cancel my pending join request',
+    description:
+      "Marks the user's PENDING request CANCELLED. Idempotent — no-op " +
+      'if no pending request exists.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Request cancelled' },
+      ApiStandardResponses.Unauthorized,
     ],
   } as ApiEndpointOptions,
 
