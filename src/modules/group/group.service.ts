@@ -436,6 +436,7 @@ export class GroupService {
         lastName: member.user.lastName,
         email: member.user.email,
         avatarId: member.user.avatarId,
+        avatarUrl: member.user.avatarUrl,
       },
       role: member.role,
       // Kept for backwards compat with FE that hasn't migrated to `role`.
