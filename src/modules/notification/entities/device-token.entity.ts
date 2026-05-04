@@ -46,7 +46,12 @@ export enum DevicePlatform {
  */
 @Table({
   tableName: 'device_token',
-  timestamps: false,
+  // `timestamps: true` so Sequelize handles createdAt → created_at
+  // translation in queries. We don't have an updated_at column —
+  // `last_seen_at` and `revoked_at` are mutated explicitly. So
+  // updatedAt is disabled.
+  timestamps: true,
+  updatedAt: false,
   underscored: true,
 })
 export class DeviceToken extends Model {

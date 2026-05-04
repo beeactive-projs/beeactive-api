@@ -1,0 +1,50 @@
+/**
+ * Catalog of notification events. Lives in its own file to avoid a
+ * circular import between `notification.service.ts` and
+ * `notification-defaults.ts` (the service imports the defaults map,
+ * which is keyed by these enum values).
+ *
+ * Used as the typed key for the in-code defaults map AND as the
+ * value stored in `notification.type` (VARCHAR, not a Postgres ENUM).
+ * Adding a new type is a zero-migration change — just add the value
+ * here and an entry in NOTIFICATION_DEFAULTS.
+ */
+export enum NotificationType {
+  // ── Sessions ─────────────────────────────────────────────
+  SESSION_REMINDER_24H = 'SESSION_REMINDER_24H',
+  SESSION_REMINDER_1H = 'SESSION_REMINDER_1H',
+  SESSION_CANCELLED = 'SESSION_CANCELLED',
+  SESSION_RESCHEDULED = 'SESSION_RESCHEDULED',
+  SESSION_STATUS_CHANGED = 'SESSION_STATUS_CHANGED',
+  PARTICIPANT_JOINED = 'PARTICIPANT_JOINED',
+  PARTICIPANT_LEFT = 'PARTICIPANT_LEFT',
+  // ── Client / coaching ────────────────────────────────────
+  CLIENT_REQUEST_RECEIVED = 'CLIENT_REQUEST_RECEIVED',
+  CLIENT_REQUEST_ACCEPTED = 'CLIENT_REQUEST_ACCEPTED',
+  CLIENT_INVITATION_RECEIVED = 'CLIENT_INVITATION_RECEIVED',
+  // ── Groups ───────────────────────────────────────────────
+  GROUP_INVITATION_RECEIVED = 'GROUP_INVITATION_RECEIVED',
+  GROUP_INVITATION_ACCEPTED = 'GROUP_INVITATION_ACCEPTED',
+  GROUP_MEMBER_JOINED = 'GROUP_MEMBER_JOINED',
+  GROUP_MEMBER_LEFT = 'GROUP_MEMBER_LEFT',
+  GROUP_MEMBER_REMOVED = 'GROUP_MEMBER_REMOVED',
+  GROUP_OWNERSHIP_TRANSFERRED = 'GROUP_OWNERSHIP_TRANSFERRED',
+  // ── Payments & Invoicing ─────────────────────────────────
+  INVOICE_CREATED = 'INVOICE_CREATED',
+  INVOICE_DUE_SOON = 'INVOICE_DUE_SOON',
+  INVOICE_OVERDUE = 'INVOICE_OVERDUE',
+  INVOICE_PAID = 'INVOICE_PAID',
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
+  SUBSCRIPTION_CREATED = 'SUBSCRIPTION_CREATED',
+  SUBSCRIPTION_CANCELED = 'SUBSCRIPTION_CANCELED',
+  PAYOUT_SENT = 'PAYOUT_SENT',
+  STRIPE_ACCOUNT_READY = 'STRIPE_ACCOUNT_READY',
+  STRIPE_ACCOUNT_RESTRICTED = 'STRIPE_ACCOUNT_RESTRICTED',
+  DISPUTE_OPENED = 'DISPUTE_OPENED',
+  REFUND_ISSUED = 'REFUND_ISSUED',
+  // ── Posts ────────────────────────────────────────────────
+  POST_NEW_COMMENT = 'POST_NEW_COMMENT',
+  POST_PENDING_APPROVAL = 'POST_PENDING_APPROVAL',
+  POST_APPROVED = 'POST_APPROVED',
+  POST_REJECTED = 'POST_REJECTED',
+}

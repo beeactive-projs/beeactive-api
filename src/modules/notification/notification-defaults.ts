@@ -1,0 +1,126 @@
+import { NotificationType } from './notification-types';
+import { ChannelPreferences } from './entities/notification-preference.entity';
+
+/**
+ * System defaults — what channels each notification type uses when
+ * the user has NOT set an override in `notification_preference`.
+ *
+ * Editing this map is a no-migration change: existing user overrides
+ * still take precedence; users who haven't touched their preferences
+ * will see the new behavior immediately.
+ *
+ * Channel meanings:
+ *   in_app  — always recommended (cheap, non-intrusive, persists in bell)
+ *   email   — anything the user might want a written record of
+ *   push    — time-sensitive ("happening now/soon")
+ *   sms     — reserved for high-urgency money/account events; off by default
+ *
+ * Defaults skew conservative for noisy categories (group activity,
+ * post engagement) and aggressive for things that affect the user's
+ * money or schedule.
+ */
+
+const ON_EVERYTHING_BUT_SMS: ChannelPreferences = {
+  in_app: true,
+  email: true,
+  push: true,
+  sms: false,
+};
+
+const IN_APP_AND_EMAIL: ChannelPreferences = {
+  in_app: true,
+  email: true,
+  push: false,
+  sms: false,
+};
+
+const IN_APP_ONLY: ChannelPreferences = {
+  in_app: true,
+  email: false,
+  push: false,
+  sms: false,
+};
+
+const IN_APP_AND_PUSH: ChannelPreferences = {
+  in_app: true,
+  email: false,
+  push: true,
+  sms: false,
+};
+
+export const NOTIFICATION_DEFAULTS: Record<
+  NotificationType,
+  ChannelPreferences
+> = {
+  // ── Sessions ─────────────────────────────────────────────
+  // Reminders are time-sensitive → push on. 24h gets email too
+  // (planning ahead); 1h is push-only (you're about to start).
+  [NotificationType.SESSION_REMINDER_24H]: ON_EVERYTHING_BUT_SMS,
+  [NotificationType.SESSION_REMINDER_1H]: IN_APP_AND_PUSH,
+  // Cancellation / reschedule affects user's plans → email + push.
+  [NotificationType.SESSION_CANCELLED]: ON_EVERYTHING_BUT_SMS,
+  [NotificationType.SESSION_RESCHEDULED]: ON_EVERYTHING_BUT_SMS,
+  // Status changes (started/completed) are informational only.
+  [NotificationType.SESSION_STATUS_CHANGED]: IN_APP_ONLY,
+  // Roster churn is in-app only — too noisy to email about.
+  [NotificationType.PARTICIPANT_JOINED]: IN_APP_ONLY,
+  [NotificationType.PARTICIPANT_LEFT]: IN_APP_ONLY,
+
+  // ── Client / coaching relationships ──────────────────────
+  // These are "someone wants to work with you / accepted" —
+  // worth an email so it's not lost in app silence.
+  [NotificationType.CLIENT_REQUEST_RECEIVED]: IN_APP_AND_EMAIL,
+  [NotificationType.CLIENT_REQUEST_ACCEPTED]: IN_APP_AND_EMAIL,
+  [NotificationType.CLIENT_INVITATION_RECEIVED]: IN_APP_AND_EMAIL,
+
+  // ── Groups & invitations ─────────────────────────────────
+  [NotificationType.GROUP_INVITATION_RECEIVED]: IN_APP_AND_EMAIL,
+  [NotificationType.GROUP_INVITATION_ACCEPTED]: IN_APP_AND_EMAIL,
+  // Member churn is noisy in active groups → in-app only.
+  [NotificationType.GROUP_MEMBER_JOINED]: IN_APP_ONLY,
+  [NotificationType.GROUP_MEMBER_LEFT]: IN_APP_ONLY,
+  // Removal / ownership transfer is consequential → email.
+  [NotificationType.GROUP_MEMBER_REMOVED]: IN_APP_AND_EMAIL,
+  [NotificationType.GROUP_OWNERSHIP_TRANSFERRED]: IN_APP_AND_EMAIL,
+
+  // ── Payments & invoicing ─────────────────────────────────
+  // Money matters → email always on by default.
+  [NotificationType.INVOICE_CREATED]: IN_APP_AND_EMAIL,
+  [NotificationType.INVOICE_DUE_SOON]: IN_APP_AND_EMAIL,
+  [NotificationType.INVOICE_OVERDUE]: ON_EVERYTHING_BUT_SMS,
+  [NotificationType.INVOICE_PAID]: IN_APP_AND_EMAIL,
+  [NotificationType.PAYMENT_FAILED]: ON_EVERYTHING_BUT_SMS,
+  [NotificationType.SUBSCRIPTION_CREATED]: IN_APP_AND_EMAIL,
+  [NotificationType.SUBSCRIPTION_CANCELED]: IN_APP_AND_EMAIL,
+  [NotificationType.PAYOUT_SENT]: IN_APP_AND_EMAIL,
+  // Connect onboarding state — instructor needs to act.
+  [NotificationType.STRIPE_ACCOUNT_READY]: IN_APP_AND_EMAIL,
+  [NotificationType.STRIPE_ACCOUNT_RESTRICTED]: ON_EVERYTHING_BUT_SMS,
+  // Disputes / refunds — instructor must respond on a deadline.
+  [NotificationType.DISPUTE_OPENED]: ON_EVERYTHING_BUT_SMS,
+  [NotificationType.REFUND_ISSUED]: IN_APP_AND_EMAIL,
+
+  // ── Posts ────────────────────────────────────────────────
+  [NotificationType.POST_NEW_COMMENT]: IN_APP_ONLY,
+  [NotificationType.POST_PENDING_APPROVAL]: IN_APP_AND_EMAIL,
+  [NotificationType.POST_APPROVED]: IN_APP_ONLY,
+  [NotificationType.POST_REJECTED]: IN_APP_AND_EMAIL,
+};
+
+/**
+ * Resolve a user's effective channel preferences for a type:
+ * user override (from DB) wins; missing keys fall back to the
+ * system default; missing whole row falls back to defaults entirely.
+ */
+export function resolveChannels(
+  type: NotificationType,
+  override: ChannelPreferences | null,
+): Required<ChannelPreferences> {
+  const base = NOTIFICATION_DEFAULTS[type] ?? IN_APP_ONLY;
+  return {
+    in_app: override?.in_app ?? base.in_app ?? true,
+    email: override?.email ?? base.email ?? false,
+    push: override?.push ?? base.push ?? false,
+    sms: override?.sms ?? base.sms ?? false,
+  };
+}

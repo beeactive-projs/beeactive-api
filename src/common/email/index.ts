@@ -30,3 +30,5 @@ export { clientRequestToInstructorTemplate } from './client/request-to-instructo
 export { clientRequestAcceptedTemplate } from './client/request-accepted.template';
 export { clientRequestDeclinedTemplate } from './client/request-declined.template';
 export { collaborationEndedTemplate } from './client/collaboration-ended.template';
+
+export { genericNotificationTemplate } from './notification/generic.template';

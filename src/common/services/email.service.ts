@@ -12,6 +12,7 @@ import {
   collaborationEndedTemplate,
   emailVerificationTemplate,
   feedbackConfirmationTemplate,
+  genericNotificationTemplate,
   invitationAcceptedTemplate,
   invitationTemplate,
   invoiceSendTemplate,
@@ -93,10 +94,13 @@ export class EmailService {
     email: string,
     verificationToken: string,
   ): Promise<void> {
-    // In dev: link goes to API GET endpoint directly
-    // In prod: link goes to frontend which calls the API
+    // In dev: link goes to API GET endpoint directly (returns inline
+    // success/failure HTML — no FE needed for solo backend testing).
+    // In prod: link goes to the FE, which calls POST /auth/verify-email
+    // and renders a proper page. The FE route lives under /auth so
+    // it sits alongside /auth/login, /auth/reset-password, etc.
     const verifyLink = this.isProduction
-      ? `${this.frontendUrl}/verify-email?token=${verificationToken}`
+      ? `${this.frontendUrl}/auth/verify-email?token=${verificationToken}`
       : `${this.apiUrl}/auth/verify-email?token=${verificationToken}`;
 
     const subject = 'Verify your MotionHive email';
@@ -501,6 +505,85 @@ export class EmailService {
       recipientRole,
     });
     await this.send(to, subject, html);
+  }
+
+  // =====================================================
+  // NOTIFICATION SYSTEM
+  // =====================================================
+
+  /**
+   * Generic notification email used by NotificationService when a
+   * notification's email channel is enabled. Renders the same title/body
+   * stored on the in-app row, with an optional CTA link.
+   *
+   * Returns a status object so the caller can record per-channel outcome
+   * on the notification_receipt row. This differs from other send methods
+   * (which never throw) because the notification system needs to audit
+   * delivery.
+   */
+  async sendNotificationEmail(params: {
+    to: string;
+    title: string;
+    body: string;
+    ctaUrl?: string;
+    ctaLabel?: string;
+  }): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const html = genericNotificationTemplate({
+      title: params.title,
+      body: params.body,
+      ctaUrl: params.ctaUrl,
+      ctaLabel: params.ctaLabel,
+    });
+    return this.sendWithStatus(params.to, params.title, html);
+  }
+
+  /**
+   * Internal variant of `send()` that surfaces success/failure instead
+   * of swallowing errors. Used by `sendNotificationEmail` so the
+   * notification receipt can record the per-channel outcome.
+   */
+  private async sendWithStatus(
+    to: string,
+    subject: string,
+    html: string,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const from = `${this.fromName} <${this.fromEmail}>`;
+
+    if (!this.resend) {
+      this.logger.log(
+        `[EMAIL - DEV MODE] To: ${to} | Subject: ${subject} | From: ${from}`,
+        'EmailService',
+      );
+      return { ok: true };
+    }
+
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from,
+        to: [to],
+        subject,
+        html,
+      });
+      if (error) {
+        this.logger.error(
+          `Failed to send notification email to ${to}: ${error.message}`,
+          'EmailService',
+        );
+        return { ok: false, reason: error.message };
+      }
+      this.logger.log(
+        `Notification email sent to ${to} | "${subject}" | ID: ${data?.id}`,
+        'EmailService',
+      );
+      return { ok: true };
+    } catch (err) {
+      const reason = (err as Error).message;
+      this.logger.error(
+        `Failed to send notification email to ${to}: ${reason}`,
+        'EmailService',
+      );
+      return { ok: false, reason };
+    }
   }
 
   // =====================================================

@@ -50,6 +50,13 @@ export interface BlogPostResponse {
   authorName: string;
   /** Computed: first letter of first + last name. */
   authorInitials: string;
+  /**
+   * Cloudinary URL of the registered author's profile picture, when
+   * present. Null for guest-authored posts (no user join) and for
+   * registered authors who haven't uploaded an avatar. The FE falls
+   * back to the initials circle when this is null.
+   */
+  authorAvatarUrl: string | null;
   readTime: number;
   tags: string[] | null;
   language: string;
@@ -73,14 +80,19 @@ export class BlogService {
    * - Registered author: `firstName lastName` from the joined user.
    *   Initials = first letter of each. Falls back to email-local-part
    *   if names are missing (rare but possible if user sets blanks).
+   *   `authorAvatarUrl` is the user's uploaded Cloudinary URL when
+   *   present; null otherwise (the FE falls back to initials).
    * - Guest contributor: byline = `guestAuthorName`. Initials derived
    *   from the byline (first letters of the first two words).
+   *   `authorAvatarUrl` is always null for guests — we have no
+   *   identity to attach an avatar to.
    *
    * Pure — does not hit the DB. Caller must have eager-loaded `author`.
    */
   private resolveByline(post: BlogPost): {
     authorName: string;
     authorInitials: string;
+    authorAvatarUrl: string | null;
   } {
     if (post.author) {
       const first = post.author.firstName?.trim() ?? '';
@@ -89,7 +101,11 @@ export class BlogService {
       const initials =
         ((first[0] ?? '') + (last[0] ?? '')).toUpperCase() ||
         name.slice(0, 2).toUpperCase();
-      return { authorName: name, authorInitials: initials };
+      return {
+        authorName: name,
+        authorInitials: initials,
+        authorAvatarUrl: post.author.avatarUrl ?? null,
+      };
     }
     const guest = post.guestAuthorName ?? 'Guest contributor';
     const parts = guest.split(/\s+/).filter(Boolean);
@@ -99,6 +115,7 @@ export class BlogService {
     return {
       authorName: guest,
       authorInitials: initials || guest.slice(0, 2).toUpperCase(),
+      authorAvatarUrl: null,
     };
   }
 
@@ -109,26 +126,31 @@ export class BlogService {
    * underlying join.
    */
   private toResponse(post: BlogPost): BlogPostResponse {
-    const { authorName, authorInitials } = this.resolveByline(post);
+    const { authorName, authorInitials, authorAvatarUrl } =
+      this.resolveByline(post);
     const json = post.toJSON();
     delete json.author;
     delete json.deletedAt;
     return {
-      ...(json as Omit<BlogPostResponse, 'authorName' | 'authorInitials'>),
+      ...(json as Omit<
+        BlogPostResponse,
+        'authorName' | 'authorInitials' | 'authorAvatarUrl'
+      >),
       authorName,
       authorInitials,
+      authorAvatarUrl,
     };
   }
 
   /**
    * Eager-load shape for `author` — only the columns needed for the
-   * byline. Keeps the join cheap and avoids leaking unrelated user
-   * fields into a public-blog response.
+   * byline (name + initials + avatar). Keeps the join cheap and avoids
+   * leaking unrelated user fields into a public-blog response.
    */
   private readonly authorInclude = {
     model: User,
     as: 'author',
-    attributes: ['id', 'firstName', 'lastName', 'email'],
+    attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
     required: false,
   };
 

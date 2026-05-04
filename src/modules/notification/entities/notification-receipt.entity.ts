@@ -53,7 +53,13 @@ export interface DeliveredChannels {
  */
 @Table({
   tableName: 'notification_receipt',
-  timestamps: false,
+  // `timestamps: true` is required for Sequelize to translate
+  // `order: ['createdAt', ...]` → `ORDER BY created_at`. We don't
+  // have an updated_at column on this table (receipts are append-mostly,
+  // mutations live in delivered/viewed/read/clicked/dismissed_at), so
+  // we disable updatedAt explicitly.
+  timestamps: true,
+  updatedAt: false,
   underscored: true,
 })
 export class NotificationReceipt extends Model {

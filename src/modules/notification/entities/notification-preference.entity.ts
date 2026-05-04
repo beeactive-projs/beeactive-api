@@ -35,7 +35,11 @@ export interface ChannelPreferences {
  */
 @Table({
   tableName: 'notification_preference',
-  timestamps: false,
+  // `timestamps: true` so Sequelize translates `updatedAt` queries to
+  // the underscored column name. The DB has `updated_at` but no
+  // `created_at`, so we disable createdAt explicitly.
+  timestamps: true,
+  createdAt: false,
   underscored: true,
 })
 export class NotificationPreference extends Model {
