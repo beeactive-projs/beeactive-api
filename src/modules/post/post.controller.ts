@@ -132,6 +132,15 @@ export class PostController {
     );
   }
 
+  @Get(':postId')
+  @ApiEndpoint(PostDocs.getPost)
+  async getPost(
+    @Request() req: AuthenticatedRequest,
+    @Param('postId') postId: string,
+  ) {
+    return this.postService.getPostById(req.user.id, postId);
+  }
+
   @Patch(':postId')
   @ApiEndpoint({ ...PostDocs.updatePost, body: UpdatePostDto })
   async updatePost(

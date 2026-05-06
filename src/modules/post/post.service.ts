@@ -386,6 +386,38 @@ export class PostService {
     return buildPaginatedResponse(items, count, page, limit);
   }
 
+  /**
+   * Single-post fetch used by the photo viewer / deep-link surfaces.
+   * Same visibility rules as the feed: caller must be an active member of
+   * the post's group, post must be APPROVED. Returns the same FeedItem
+   * shape the feeds emit, with the `group` association populated so the
+   * FE can render the "Posted in X" badge.
+   */
+  async getPostById(userId: string, postId: string): Promise<FeedItem> {
+    await this.assertCanViewPost(userId, postId);
+
+    const post = await this.postModel.findByPk(postId, {
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+        },
+        {
+          model: Group,
+          as: 'group',
+          attributes: ['id', 'name', 'logoUrl'],
+        },
+      ],
+    });
+    if (!post) throw new NotFoundException('Post not found');
+
+    const [items] = await this.hydrateFeedItems([post], userId, {
+      includeGroup: true,
+    });
+    return items;
+  }
+
   async getPendingForGroup(
     userId: string,
     groupId: string,

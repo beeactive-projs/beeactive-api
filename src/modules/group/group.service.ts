@@ -825,18 +825,27 @@ export class GroupService {
     }
 
     const existingMember = await this.memberModel.findOne({
-      where: { groupId, userId, leftAt: null },
+      where: { groupId, userId },
     });
-    if (existingMember) {
+    if (existingMember && existingMember.leftAt === null) {
       throw new BadRequestException('You are already a member of this group');
     }
 
     if (group.joinPolicy === JoinPolicy.OPEN) {
-      const member = await this.memberModel.create({
-        groupId,
-        userId,
-        role: GroupMemberRole.MEMBER,
-      });
+      let member: GroupMember;
+      if (existingMember) {
+        await existingMember.update({
+          leftAt: null,
+          role: GroupMemberRole.MEMBER,
+        });
+        member = existingMember;
+      } else {
+        member = await this.memberModel.create({
+          groupId,
+          userId,
+          role: GroupMemberRole.MEMBER,
+        });
+      }
       this.logger.log(
         `User ${userId} self-joined group ${group.name} (${groupId})`,
         'GroupService',

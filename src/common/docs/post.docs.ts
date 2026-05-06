@@ -67,6 +67,22 @@ export const PostDocs = {
     ],
   } as ApiEndpointOptions,
 
+  getPost: {
+    summary: 'Get a single post by id',
+    description:
+      'Returns one hydrated post (author, reactionCount, commentCount, ' +
+      'caller`s own reaction) plus its `group` association so the FE can ' +
+      'render group context. Caller must be an active member of the ' +
+      'post`s group, and the post must be APPROVED.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Post returned' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
   getGroupPending: {
     summary: 'List pending posts awaiting moderation',
     description:
