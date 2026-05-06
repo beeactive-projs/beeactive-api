@@ -24,10 +24,16 @@ import { StripeService } from './stripe.service';
 import { CustomerService } from './customer.service';
 import { OrphanedWebhookError } from './webhook-errors';
 import { EmailService } from '../../../common/services/email.service';
+import { NotificationService } from '../../notification/notification.service';
+import { NotificationOutbox } from '../../notification/notification-outbox';
+import { formatMoney } from '../../notification/format';
 import {
-  NotificationService,
-  NotificationType,
-} from '../../notification/notification.service';
+  invoiceCreatedForClient,
+  invoicePaidForClient,
+  invoicePaidForInstructor,
+  invoiceMarkedPaidForInstructor,
+  invoicePaymentFailedForClient,
+} from '../notifications';
 import {
   buildPaginatedResponse,
   getOffset,
@@ -739,10 +745,7 @@ export class InvoiceService {
           .filter(Boolean)
           .join(' ')
           .trim() || 'Your instructor';
-      const amountLabel = this.formatAmount(
-        invoice.amountDueCents,
-        invoice.currency,
-      );
+      const amountLabel = formatMoney(invoice.amountDueCents, invoice.currency);
       const dueDateLabel = invoice.dueDate
         ? new Date(invoice.dueDate).toLocaleDateString('en-GB', {
             day: '2-digit',
@@ -779,6 +782,21 @@ export class InvoiceService {
       );
     }
     await invoice.save();
+
+    // INVOICE_CREATED — fires when an invoice is finalized + sent to
+    // the client (DRAFT → OPEN transition). We deliberately don't
+    // notify on createOneOff() with sendImmediately=false because
+    // a draft hasn't actually been sent yet — the client shouldn't
+    // see it in their bell until the instructor commits to delivery.
+    //
+    // Skipped for guest invoices (no userId to address) — those rely
+    // on the email-only delivery path.
+    if (invoice.clientId) {
+      await this.notificationService.notify(
+        invoiceCreatedForClient(invoice.clientId, invoice),
+      );
+    }
+
     return this.enrich(invoice);
   }
 
@@ -797,12 +815,6 @@ export class InvoiceService {
       where: { stripeCustomerId: invoice.stripeCustomerId },
     });
     return sc?.email ?? null;
-  }
-
-  private formatAmount(amountCents: number, currency: string): string {
-    const amount = amountCents / 100;
-    const code = currency.toUpperCase();
-    return `${amount.toFixed(2)} ${code}`;
   }
 
   async voidInvoice(
@@ -910,13 +922,9 @@ export class InvoiceService {
     invoice.amountRemainingCents = 0;
     await invoice.save();
 
-    await this.notificationService.notify({
-      userId: instructorId,
-      type: NotificationType.INVOICE_PAID,
-      title: 'Invoice marked paid',
-      body: `Invoice ${invoice.number ?? invoice.id} marked as paid out of band.`,
-      data: { screen: 'instructor-invoices', entityId: invoice.id },
-    });
+    await this.notificationService.notify(
+      invoiceMarkedPaidForInstructor(instructorId, invoice),
+    );
     return this.enrich(invoice);
   }
 
@@ -931,10 +939,18 @@ export class InvoiceService {
    * Returns null when the local row is missing (race) so the caller can
    * decide whether to log + ignore (Phase 1 stub for sub-generated
    * invoices that don't exist locally yet) or treat as orphaned.
+   *
+   * `outbox` is the post-commit notification queue from the webhook
+   * handler. Notifications go in there instead of being fired
+   * directly — see modules/notification/notification-outbox.ts. The
+   * parameter is optional so non-webhook callers (tests, future cron)
+   * can omit it; when missing, notifications are dropped silently
+   * (the tests cover that behaviour explicitly).
    */
   async syncFromStripeInvoice(
     stripeInvoice: Stripe.Invoice,
     tx: Transaction,
+    outbox?: NotificationOutbox,
   ): Promise<Invoice | null> {
     let local = await this.invoiceModel.findOne({
       where: { stripeInvoiceId: stripeInvoice.id },
@@ -991,23 +1007,13 @@ export class InvoiceService {
     }
     await local.save({ transaction: tx });
 
-    // Fire notification only on the transition INTO paid — never on subsequent re-deliveries.
+    // Fire notification only on the transition INTO paid — never on
+    // subsequent re-deliveries. Queued in the outbox so we don't send
+    // a "payment received" email if the webhook tx later rolls back.
     if (!wasPaid && local.status === InvoiceStatus.PAID) {
-      await this.notificationService.notify({
-        userId: local.instructorId,
-        type: NotificationType.INVOICE_PAID,
-        title: 'Invoice paid',
-        body: `Invoice ${local.number ?? local.id} was paid by your client.`,
-        data: { screen: 'instructor-invoices', entityId: local.id },
-      });
+      outbox?.add(invoicePaidForInstructor(local.instructorId, local));
       if (local.clientId) {
-        await this.notificationService.notify({
-          userId: local.clientId,
-          type: NotificationType.INVOICE_PAID,
-          title: 'Payment received',
-          body: 'Thanks — your payment has been processed.',
-          data: { screen: 'client-invoices', entityId: local.id },
-        });
+        outbox?.add(invoicePaidForClient(local.clientId, local.id));
       }
     }
     return local;
@@ -1016,10 +1022,14 @@ export class InvoiceService {
   /**
    * Handle invoice.payment_failed — flip to past_due-equivalent and notify
    * the client. Stripe Smart Retries owns the actual retry schedule.
+   *
+   * Notifications go into the outbox (post-commit) — see
+   * syncFromStripeInvoice's comment for the rationale.
    */
   async handlePaymentFailed(
     stripeInvoice: Stripe.Invoice,
     tx: Transaction,
+    outbox?: NotificationOutbox,
   ): Promise<void> {
     const local = await this.invoiceModel.findOne({
       where: { stripeInvoiceId: stripeInvoice.id },
@@ -1038,13 +1048,7 @@ export class InvoiceService {
       stripeInvoice.amount_remaining ?? local.amountRemainingCents;
     await local.save({ transaction: tx });
     if (local.clientId) {
-      await this.notificationService.notify({
-        userId: local.clientId,
-        type: NotificationType.PAYMENT_FAILED,
-        title: 'Payment failed',
-        body: 'Your invoice payment failed. Please update your card and retry.',
-        data: { screen: 'client-invoices', entityId: local.id },
-      });
+      outbox?.add(invoicePaymentFailedForClient(local.clientId, local.id));
     }
   }
 

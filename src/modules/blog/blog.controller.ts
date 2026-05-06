@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  ParseUUIDPipe,
   Query,
   Request,
   Res,
@@ -18,7 +19,6 @@ import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { BlogService } from './blog.service';
-import { ConfigService } from '@nestjs/config';
 import { CreateBlogPostDto } from './dto/create-blog-post.dto';
 import { UpdateBlogPostDto } from './dto/update-blog-post.dto';
 import { BlogQueryDto } from './dto/blog-query.dto';
@@ -50,18 +50,7 @@ import type { AuthenticatedRequest } from '../../common/types/authenticated-requ
 @ApiTags('Blog')
 @Controller('blog')
 export class BlogController {
-  constructor(
-    private readonly blogService: BlogService,
-    private readonly configService: ConfigService,
-  ) {}
-
-  // Process-local sitemap cache. Regenerated at most once per hour.
-  // Prevents attackers from forcing a fresh 10k-row scan + XML build on
-  // every request (the global 100 req/60s throttle alone allowed ~6k
-  // regenerations per hour, which is both expensive and pointless —
-  // the sitemap barely changes).
-  private sitemapCache: { xml: string; expiresAt: number } | null = null;
-  private static readonly SITEMAP_TTL_MS = 60 * 60 * 1000;
+  constructor(private readonly blogService: BlogService) {}
 
   // =====================================================
   // PUBLIC (no auth)
@@ -69,68 +58,10 @@ export class BlogController {
 
   @Get('sitemap.xml')
   async sitemap(@Res() res: Response) {
-    const now = Date.now();
-    if (!this.sitemapCache || this.sitemapCache.expiresAt <= now) {
-      this.sitemapCache = {
-        xml: await this.buildSitemapXml(),
-        expiresAt: now + BlogController.SITEMAP_TTL_MS,
-      };
-    }
-
+    const xml = await this.blogService.getSitemapXml();
     res.setHeader('Content-Type', 'application/xml');
     res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.send(this.sitemapCache.xml);
-  }
-
-  private async buildSitemapXml(): Promise<string> {
-    const posts = await this.blogService.getSitemapSlugs();
-    const BASE = this.configService.get<string>(
-      'FRONTEND_URL',
-      'https://motionhive.fit',
-    );
-
-    const staticUrls = [
-      { loc: `${BASE}/`, priority: '1.0', changefreq: 'weekly' },
-      { loc: `${BASE}/about`, priority: '0.7', changefreq: 'monthly' },
-      { loc: `${BASE}/blog`, priority: '0.9', changefreq: 'daily' },
-      {
-        loc: `${BASE}/legal/terms-of-service`,
-        priority: '0.3',
-        changefreq: 'yearly',
-      },
-      {
-        loc: `${BASE}/legal/privacy-policy`,
-        priority: '0.3',
-        changefreq: 'yearly',
-      },
-    ];
-
-    const staticXml = staticUrls
-      .map(
-        (u) => `  <url>
-    <loc>${u.loc}</loc>
-    <changefreq>${u.changefreq}</changefreq>
-    <priority>${u.priority}</priority>
-  </url>`,
-      )
-      .join('\n');
-
-    const blogXml = posts
-      .map(
-        (p) => `  <url>
-    <loc>${BASE}/blog/${p.slug}</loc>
-    <lastmod>${p.updatedAt.toISOString().split('T')[0]}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>`,
-      )
-      .join('\n');
-
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${staticXml}
-${blogXml}
-</urlset>`;
+    res.send(xml);
   }
 
   @Get()
@@ -169,7 +100,7 @@ ${blogXml}
   @Roles('ADMIN', 'SUPER_ADMIN', 'WRITER')
   @ApiEndpoint(BlogDocs.getForEdit)
   async getForEdit(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.blogService.findByIdForEdit(id, {
@@ -203,7 +134,7 @@ ${blogXml}
   @Roles('ADMIN', 'SUPER_ADMIN', 'WRITER')
   @ApiEndpoint({ ...BlogDocs.update, body: UpdateBlogPostDto })
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateBlogPostDto,
     @Request() req: AuthenticatedRequest,
   ) {
@@ -217,7 +148,10 @@ ${blogXml}
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN', 'WRITER')
   @ApiEndpoint(BlogDocs.delete)
-  async delete(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+  async delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
     await this.blogService.delete(id, {
       userId: req.user.id,
       roles: req.user.roles,

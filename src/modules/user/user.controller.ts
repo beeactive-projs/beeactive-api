@@ -45,21 +45,7 @@ export class UserController {
   @Get('me')
   @ApiEndpoint(UserDocs.getProfile)
   getProfile(@Request() req: AuthenticatedRequest) {
-    return {
-      id: req.user.id,
-      email: req.user.email,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-      phone: req.user.phone,
-      avatarId: req.user.avatarId,
-      avatarUrl: req.user.avatarUrl,
-      language: req.user.language,
-      timezone: req.user.timezone,
-      isActive: req.user.isActive,
-      isEmailVerified: req.user.isEmailVerified,
-      roles: req.user.roles,
-      createdAt: req.user.createdAt,
-    };
+    return UserService.toProfileDto(req.user);
   }
 
   /**
@@ -106,17 +92,7 @@ export class UserController {
     @Body() dto: UpdateUserDto,
   ) {
     const user = await this.userService.updateUser(req.user.id, dto);
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
-      avatarId: user.avatarId,
-      avatarUrl: user.avatarUrl,
-      language: user.language,
-      timezone: user.timezone,
-    };
+    return UserService.toProfileDto(user, { slim: true });
   }
 
   /**

@@ -4,6 +4,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
 import { AnalyticsService } from './analytics.service';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
+import { AnalyticsDocs } from '../../common/docs/analytics.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
@@ -24,25 +25,13 @@ export class AnalyticsController {
   @Get('instructor/summary')
   @UseGuards(RolesGuard)
   @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
-  @ApiEndpoint({
-    summary: 'Instructor summary',
-    description:
-      'Key metrics for the last 30 days: sessions, attendance rate, clients, groups.',
-    auth: true,
-    responses: [{ status: 200, description: 'Instructor analytics summary' }],
-  })
+  @ApiEndpoint(AnalyticsDocs.getInstructorSummary)
   async getInstructorSummary(@Request() req: AuthenticatedRequest) {
     return this.analyticsService.getInstructorSummary(req.user.id);
   }
 
   @Get('me/activity')
-  @ApiEndpoint({
-    summary: 'My activity',
-    description:
-      'User activity summary for the last 30 days: attended sessions, attendance rate, groups.',
-    auth: true,
-    responses: [{ status: 200, description: 'User activity summary' }],
-  })
+  @ApiEndpoint(AnalyticsDocs.getUserActivity)
   async getUserActivity(@Request() req: AuthenticatedRequest) {
     return this.analyticsService.getUserActivity(req.user.id);
   }
@@ -50,13 +39,7 @@ export class AnalyticsController {
   @Get('admin/platform')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
-  @ApiEndpoint({
-    summary: 'Platform statistics',
-    description:
-      'Platform-wide stats: users, instructors, groups, sessions. Admin only.',
-    auth: true,
-    responses: [{ status: 200, description: 'Platform statistics' }],
-  })
+  @ApiEndpoint(AnalyticsDocs.getPlatformStats)
   async getPlatformStats() {
     return this.analyticsService.getPlatformStats();
   }

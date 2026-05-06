@@ -85,19 +85,30 @@ src/
 `module.ts` + `controller.ts` + `service.ts` + `entities/` + `dto/`. Controllers are thin; business logic lives in services.
 
 ### Key Patterns
-- **`@ApiEndpoint()`** decorator centralizes Swagger docs — doc objects live in `common/docs/*.docs.ts`
+- **`@ApiEndpoint()`** decorator centralizes Swagger docs — doc objects live in `common/docs/*.docs.ts` (one per module). Inline `@ApiEndpoint({...})` blocks are a code smell; add a docs file instead.
 - **Guards**: `AuthGuard('jwt')` + `RolesGuard` + `PermissionsGuard`
-- **DTOs**: class-validator for input, PaginationDto for lists
+- **DTOs**: class-validator for input, `PaginationDto` for lists. List DTOs that paginate **MUST** `extends PaginationDto` — do not redeclare `page`/`limit`. `@Query('foo')` raw strings are reserved for token/slug-shaped params; everything else gets a DTO.
+- **`ParseUUIDPipe`** on every UUID `@Param` — bare `@Param('id') id: string` lets a malformed UUID 500 in Sequelize. Always: `@Param('id', ParseUUIDPipe) id: string`.
 - **Entities**: Sequelize models with CHAR(36) UUID PKs, `underscored: true`
 - **Soft deletes**: paranoid mode on user, group, session, blog_post
 - **Transactions**: all multi-table operations wrap in a transaction. Webhook handlers receive `tx` from the caller and **every ORM call inside MUST pass `{ transaction: tx }`**. Controller-level services may call Stripe before saving locally (Stripe is source of truth; webhooks reconcile drift).
 - **Pagination**: PrimeNG-compatible via `buildPaginatedResponse(data, totalItems, page, limit)` → `{ items, total, page, pageSize }`. This shape is a **frontend contract** — do not change.
-- **Notifications**: use `NotificationService.notify()` / `notifyMany()` everywhere. Currently logs only; Phase 2 will deliver.
+- **Service constructor style**: every constructor parameter is `private readonly`. Logger goes last, just before the closing paren. Mixing `private` and `private readonly` in the same constructor is drift to be cleaned, not maintained.
+- **Thin controllers**: controllers do request unwrap → service call → response. No HTML rendering, no caching state, no field-picking, no DTO-shape branching, no query-string parsing/clamping (use a DTO with `@Min/@Max` instead). When a controller method grows past ~10 lines of work, push it into the service.
+- **Notifications**:
+  - Producers call `notificationService.notify(builder(...))` — never object literals at the call site. Builders live in `<module>/notifications.ts` and take **primitive** arguments (id, name, cents, currency), never Sequelize entities (avoids partial-load bugs).
+  - Shared formatters in `notification/format.ts`: `formatMoney(cents, currency)`, `formatDueDate(date)`.
+  - `data.screen` must map to a real FE route; tabbed pages use `data.queryParams` (e.g. `screen: 'profile', queryParams: { tab: 'memberships' }`) instead of `entityId`.
+  - Place `notify()` calls **after** the surrounding tx commits (search `// notify-after-commit` for examples). Never inside the tx callback — `notify()` opens its own tx and a rollback would orphan the alert.
+  - For webhook flows you don't own the tx of, use `NotificationOutbox` + `outbox.add(builder(...))` + `outbox.flush()` post-commit / `outbox.discard()` on rollback. See `notification/notification-outbox.ts`.
 - **Stripe**:
   - `StripeService.buildFeeParams()` for `application_fee_amount` — **omits the field entirely when 0**, never passes an explicit `0`
   - `StripeService.buildIdempotencyKey()` required on all write operations
   - Webhook raw body preserved via `express.raw()` middleware scoped to `/webhooks/stripe` in main.ts
   - `webhook_event` table has UNIQUE on `stripe_event_id` → idempotent replays
+- **Email idempotency**: BullMQ enqueues with `jobId = receipt.id`, AND the worker checks `receiptService.isChannelDelivered(receiptId, 'email')` before sending. Both layers are needed — jobId dedups re-enqueue, the receipt check dedups worker retries (Resend has no idempotency-key support).
+- **OAuth idempotency**: `social_account` has UNIQUE on `(provider, provider_user_id)`. `userService.findOrCreateFromOAuth` swallows a `UniqueConstraintError` on insert (concurrent-callback race) and returns the existing row.
+- **Shared singletons**: `EmailService` is exported from a `@Global() EmailModule` registered in AppModule. Don't list `EmailService` as a provider in feature modules — just inject it.
 
 ### RBAC
 Roles: `SUPER_ADMIN`, `ADMIN`, `SUPPORT`, `INSTRUCTOR`, `WRITER`, `USER`
@@ -174,8 +185,8 @@ Full schema in `src/config/env.validation.ts` (Joi, `abortEarly: false`).
 - **Group invitation acceptance** — requires a registered account (invitations can be sent to any email but recipient must sign up first).
 - **No batch invite** endpoint.
 - **Sessions ↔ venues** — `session.venue_id` exists at the DB level but the FE session create/edit form doesn't surface a venue picker yet.
-- **Incomplete modules**: `health` (controller-only, no service logic), `role` (service-only, no controller, empty `constants/` dir), `notification` (Phase 1 stub).
-- **Test coverage**: 9 suites / 78 tests (crypto, auth.service, user.service, 3 payment services, webhook-handler, profile, venue, html-utils, etc.). Still thin — no controller-level integration tests.
+- **Incomplete modules**: `role` (service-only, no controller, empty `constants/` dir), `notification` (Phase 1 stub for delivery; in-app + email channels live, push/SMS not yet).
+- **Test coverage**: 27 suites / ~284 tests (auth, user, post, group, client, invitation, payment connect/invoice/stripe/subscription/webhook-handler, notification + receipt + preference + device-token + outbox + debug controller, jobs.service, email-send.worker, crypto, html-utils). Notably still missing: session, blog, profile, venue, analytics, feedback, waitlist, search.
 
 ## Coding Conventions
 - File names: **kebab-case** (`create-user.dto.ts`)

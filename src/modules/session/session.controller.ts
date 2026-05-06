@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  ParseUUIDPipe,
   Query,
   UseGuards,
   Request,
@@ -22,6 +23,7 @@ import { CloneSessionDto } from './dto/clone-session.dto';
 import { RescheduleSessionDto } from './dto/reschedule-session.dto';
 import { DiscoverSessionsDto } from './dto/discover-sessions.dto';
 import { GenerateInstancesDto } from './dto/generate-instances.dto';
+import { RecurrencePreviewQueryDto } from './dto/recurrence-preview.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { SessionDocs } from '../../common/docs/session.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -111,14 +113,17 @@ export class SessionController {
 
   @Get(':id')
   @ApiEndpoint(SessionDocs.getById)
-  async getById(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+  async getById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
     return this.sessionService.getById(id, req.user.id);
   }
 
   @Patch(':id')
   @ApiEndpoint({ ...SessionDocs.update, body: UpdateSessionDto })
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: UpdateSessionDto,
   ) {
@@ -127,7 +132,10 @@ export class SessionController {
 
   @Delete(':id')
   @ApiEndpoint(SessionDocs.delete)
-  async delete(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+  async delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
     await this.sessionService.delete(id, req.user.id);
     return { message: 'Session deleted successfully' };
   }
@@ -137,7 +145,7 @@ export class SessionController {
   @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint({ ...SessionDocs.cloneSession, body: CloneSessionDto })
   async cloneSession(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: CloneSessionDto,
   ) {
@@ -149,14 +157,15 @@ export class SessionController {
   @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint(SessionDocs.recurrencePreview)
   async getRecurrencePreview(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
-    @Query('weeks') weeks?: string,
+    @Query() query: RecurrencePreviewQueryDto,
   ) {
-    const numWeeks = weeks
-      ? Math.min(52, Math.max(1, parseInt(weeks, 10) || 12))
-      : 12;
-    return this.sessionService.getRecurrencePreview(id, req.user.id, numWeeks);
+    return this.sessionService.getRecurrencePreview(
+      id,
+      req.user.id,
+      query.weeks ?? 12,
+    );
   }
 
   @Post(':id/generate-instances')
@@ -164,7 +173,7 @@ export class SessionController {
   @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint({ ...SessionDocs.generateInstances, body: GenerateInstancesDto })
   async generateInstances(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: GenerateInstancesDto,
   ) {
@@ -187,7 +196,7 @@ export class SessionController {
     body: RescheduleSessionDto,
   })
   async reschedule(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: RescheduleSessionDto,
   ) {
@@ -207,7 +216,7 @@ export class SessionController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiEndpoint(SessionDocs.joinSession)
   async joinSession(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.sessionService.joinSession(id, req.user.id);
@@ -217,7 +226,7 @@ export class SessionController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiEndpoint(SessionDocs.leaveSession)
   async leaveSession(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     await this.sessionService.leaveSession(id, req.user.id);
@@ -227,7 +236,7 @@ export class SessionController {
   @Post(':id/confirm')
   @ApiEndpoint(SessionDocs.confirmRegistration)
   async confirmRegistration(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.sessionService.confirmRegistration(id, req.user.id);
@@ -236,7 +245,7 @@ export class SessionController {
   @Post(':id/checkin')
   @ApiEndpoint(SessionDocs.selfCheckIn)
   async selfCheckIn(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.sessionService.selfCheckIn(id, req.user.id);
@@ -248,8 +257,8 @@ export class SessionController {
     body: UpdateParticipantStatusDto,
   })
   async updateParticipantStatus(
-    @Param('id') sessionId: string,
-    @Param('userId') participantUserId: string,
+    @Param('id', ParseUUIDPipe) sessionId: string,
+    @Param('userId', ParseUUIDPipe) participantUserId: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: UpdateParticipantStatusDto,
   ) {

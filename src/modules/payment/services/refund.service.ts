@@ -14,10 +14,9 @@ import type { Stripe } from 'stripe-types';
 import { Payment, PaymentStatus } from '../entities/payment.entity';
 import { StripeService } from './stripe.service';
 import { OrphanedWebhookError } from './webhook-errors';
-import {
-  NotificationService,
-  NotificationType,
-} from '../../notification/notification.service';
+import { NotificationService } from '../../notification/notification.service';
+import { NotificationOutbox } from '../../notification/notification-outbox';
+import { refundIssuedForClient } from '../notifications';
 import { CreateRefundDto } from '../dto/create-refund.dto';
 
 const MAX_REFUND_WINDOW_DAYS = 14;
@@ -105,13 +104,14 @@ export class RefundService {
     await payment.save();
 
     if (payment.clientId) {
-      await this.notificationService.notify({
-        userId: payment.clientId,
-        type: NotificationType.REFUND_ISSUED,
-        title: 'Refund processed',
-        body: `A refund of ${(refundAmount / 100).toFixed(2)} ${payment.currency} has been issued.`,
-        data: { screen: 'client-payments', entityId: payment.id },
-      });
+      await this.notificationService.notify(
+        refundIssuedForClient(
+          payment.clientId,
+          refundAmount,
+          payment.currency,
+          payment.invoiceId,
+        ),
+      );
     }
 
     this.logger.log(
@@ -128,6 +128,11 @@ export class RefundService {
   async syncRefundFromWebhook(
     charge: Stripe.Charge,
     tx: Transaction,
+    // Reserved for future post-commit refund notifications (e.g.
+    // tell the instructor when a charge is refunded by Stripe Smart
+    // Retries failure). Today we only notify on the request-driven
+    // refund path in `issueRefund()`.
+    _outbox?: NotificationOutbox,
   ): Promise<void> {
     const payment = await this.paymentModel.findOne({
       where: { stripeChargeId: charge.id },

@@ -14,7 +14,6 @@ import { NotificationPreference } from './entities/notification-preference.entit
 import { DeviceToken } from './entities/device-token.entity';
 import { User } from '../user/entities/user.entity';
 import { RoleModule } from '../role/role.module';
-import { EmailService } from '../../common/services/email.service';
 
 /**
  * Notification Module — Phase 2
@@ -28,9 +27,8 @@ import { EmailService } from '../../common/services/email.service';
  *   - NotificationPreferenceService  — settings page reads/writes
  *   - DeviceTokenService             — push registration storage
  *
- * REST controllers ship in Phase 3. EmailService is provided locally
- * because it isn't exported from a shared module elsewhere — every
- * consumer module declares it the same way.
+ * REST controllers ship in Phase 3. EmailService comes in via the
+ * @Global EmailModule registered in AppModule.
  */
 @Global()
 @Module({
@@ -57,7 +55,6 @@ import { EmailService } from '../../common/services/email.service';
     NotificationReceiptService,
     NotificationPreferenceService,
     DeviceTokenService,
-    EmailService,
   ],
   exports: [
     NotificationService,

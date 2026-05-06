@@ -39,8 +39,8 @@ export class NotificationController {
     @Query() query: ListNotificationsDto,
   ) {
     return this.receipts.listForUser(req.user.id, {
-      page: query.page,
-      limit: query.limit,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
       unreadOnly: query.unreadOnly,
     });
   }

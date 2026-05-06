@@ -18,8 +18,13 @@ import { User } from '../../user/entities/user.entity';
 import { StripeService } from './stripe.service';
 import { CustomerService } from './customer.service';
 import { EmailService } from '../../../common/services/email.service';
-import { NotificationService } from '../../notification/notification.service';
 import {
+  NotificationService,
+  NotificationType,
+} from '../../notification/notification.service';
+import { NotificationOutbox } from '../../notification/notification-outbox';
+import {
+  fakeTx,
   makeModelMock,
   makeSilentLogger,
   type ModelMock,
@@ -308,5 +313,495 @@ describe('InvoiceService.updateDraft', () => {
     const update = stripeMock.stripe.invoices.update.mock.calls[0][1];
     expect(typeof update.due_date).toBe('number');
     expect(update.due_date).toBe(Math.floor(new Date(future).getTime() / 1000));
+  });
+});
+
+// =====================================================================
+// Phase 7 wiring — notification side effects
+// =====================================================================
+//
+// These tests guard the producer wiring added in Phase 7:
+//   1. INVOICE_CREATED on sendInvoice() (DRAFT → OPEN transition).
+//   2. INVOICE_PAID via outbox in syncFromStripeInvoice() (paid transition only).
+//   3. PAYMENT_FAILED via outbox in handlePaymentFailed().
+//
+// We test the *queue side* (was outbox.add called?) separately from
+// the *delivery side* (does outbox.flush actually call notify?), which
+// is covered by notification-outbox.spec.ts. Keeping the two layers
+// independent makes regressions easier to localize.
+describe('InvoiceService — Phase 7 notification wiring', () => {
+  let service: InvoiceService;
+  let invoiceModel: ModelMock;
+  let stripeAccountModel: ModelMock;
+  let userModel: ModelMock;
+  let stripeCustomerModel: ModelMock;
+  let stripeMock: {
+    stripe: {
+      invoices: {
+        finalizeInvoice: jest.Mock;
+        sendInvoice: jest.Mock;
+        retrieve: jest.Mock;
+      };
+    };
+    buildIdempotencyKey: jest.Mock;
+    buildFeeParams: jest.Mock;
+  };
+  let notificationMock: { notify: jest.Mock };
+  let outbox: NotificationOutbox;
+
+  function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
+    const base = {
+      id: 'inv-1',
+      instructorId: 'user-1',
+      clientId: 'client-1',
+      stripeInvoiceId: 'in_test',
+      stripeCustomerId: 'cus_test',
+      currency: 'EUR',
+      amountDueCents: 1000,
+      amountPaidCents: 0,
+      amountRemainingCents: 1000,
+      applicationFeeCents: 0,
+      dueDate: null,
+      description: null,
+      number: null,
+      hostedInvoiceUrl: null,
+      invoicePdf: null,
+      status: InvoiceStatus.DRAFT,
+      finalizedAt: null,
+      paidAt: null,
+      voidedAt: null,
+      save: jest.fn().mockResolvedValue(undefined),
+      toJSON: function () {
+        const {
+          save: _s,
+          toJSON: _t,
+          ...rest
+        } = this as Record<string, unknown>;
+        return rest;
+      },
+      ...overrides,
+    };
+    return base as unknown as Invoice;
+  }
+
+  beforeEach(async () => {
+    invoiceModel = makeModelMock();
+    stripeAccountModel = makeModelMock();
+    userModel = makeModelMock();
+    stripeCustomerModel = makeModelMock();
+    stripeCustomerModel.findAll = jest.fn().mockResolvedValue([]);
+    stripeAccountModel.findOne.mockResolvedValue({
+      userId: 'user-1',
+      stripeAccountId: 'acct_test',
+      platformFeeBps: 0,
+    });
+    stripeCustomerModel.findOne.mockResolvedValue({ email: 'client@x.com' });
+    userModel.findByPk.mockResolvedValue({
+      id: 'client-1',
+      email: 'client@x.com',
+      firstName: 'Casey',
+      lastName: 'Client',
+    });
+
+    stripeMock = {
+      stripe: {
+        invoices: {
+          finalizeInvoice: jest.fn().mockResolvedValue({
+            hosted_invoice_url: 'https://invoice.stripe.com/test',
+            invoice_pdf: 'https://invoice.stripe.com/test.pdf',
+            number: 'INV-001',
+          }),
+          sendInvoice: jest.fn().mockResolvedValue({}),
+          retrieve: jest
+            .fn()
+            .mockResolvedValue({ amount_due: 1000, amount_remaining: 1000 }),
+        },
+      },
+      buildIdempotencyKey: jest.fn(
+        (resource, id, op) => `${resource}:${id}:${op}`,
+      ),
+      buildFeeParams: jest.fn().mockReturnValue({}),
+    };
+
+    notificationMock = { notify: jest.fn().mockResolvedValue(undefined) };
+    outbox = new NotificationOutbox(
+      notificationMock as unknown as NotificationService,
+    );
+
+    const sequelizeMock = {
+      transaction: jest.fn(
+        (cb: (tx: { LOCK: { UPDATE: string } }) => unknown) =>
+          Promise.resolve(cb({ LOCK: { UPDATE: 'UPDATE' } })),
+      ),
+      models: {
+        User: {
+          findAll: jest.fn().mockResolvedValue([]),
+          findByPk: userModel.findByPk,
+        },
+      },
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        InvoiceService,
+        { provide: getModelToken(Invoice), useValue: invoiceModel },
+        { provide: getModelToken(Payment), useValue: makeModelMock() },
+        { provide: getModelToken(StripeAccount), useValue: stripeAccountModel },
+        {
+          provide: getModelToken(StripeCustomer),
+          useValue: stripeCustomerModel,
+        },
+        { provide: getModelToken(Subscription), useValue: makeModelMock() },
+        { provide: getModelToken(User), useValue: userModel },
+        { provide: Sequelize, useValue: sequelizeMock },
+        { provide: StripeService, useValue: stripeMock },
+        { provide: CustomerService, useValue: {} },
+        { provide: EmailService, useValue: {} },
+        { provide: NotificationService, useValue: notificationMock },
+        { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: makeSilentLogger() },
+      ],
+    }).compile();
+
+    service = moduleRef.get(InvoiceService);
+  });
+
+  describe('sendInvoice — INVOICE_CREATED notification', () => {
+    it('fires INVOICE_CREATED to client on DRAFT → OPEN transition', async () => {
+      invoiceModel.findByPk.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.DRAFT }),
+      );
+
+      await service.sendInvoice('user-1', 'inv-1');
+
+      expect(notificationMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'client-1',
+          type: NotificationType.INVOICE_CREATED,
+          title: 'New invoice',
+          data: expect.objectContaining({
+            screen: 'profile/invoices',
+            entityId: 'inv-1',
+          }),
+        }),
+      );
+    });
+
+    it('formats body with due date when present', async () => {
+      const dueDate = new Date('2026-12-31T00:00:00.000Z');
+      invoiceModel.findByPk.mockResolvedValue(
+        makeInvoice({
+          status: InvoiceStatus.DRAFT,
+          dueDate,
+          amountDueCents: 5000,
+          currency: 'EUR',
+        }),
+      );
+
+      await service.sendInvoice('user-1', 'inv-1');
+
+      const call = notificationMock.notify.mock.calls[0][0] as {
+        body: string;
+      };
+      // Amount is rendered with locale formatting. Just check structure.
+      expect(call.body).toMatch(/due/i);
+      expect(call.body).toMatch(/2026/);
+    });
+
+    it('formats body without due date when missing', async () => {
+      invoiceModel.findByPk.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.DRAFT, dueDate: null }),
+      );
+
+      await service.sendInvoice('user-1', 'inv-1');
+
+      const call = notificationMock.notify.mock.calls[0][0] as {
+        body: string;
+      };
+      expect(call.body).toMatch(/open to view details/i);
+      expect(call.body).not.toMatch(/due/i);
+    });
+
+    it('does NOT fire INVOICE_CREATED for guest invoice (clientId=null)', async () => {
+      invoiceModel.findByPk.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.DRAFT, clientId: null }),
+      );
+      // Guest path: no User.findByPk, just stripe customer email.
+      userModel.findByPk.mockResolvedValue(null);
+
+      await service.sendInvoice('user-1', 'inv-1');
+
+      expect(notificationMock.notify).not.toHaveBeenCalled();
+    });
+
+    it('still fires INVOICE_CREATED when re-sending an already OPEN invoice', async () => {
+      // Re-sending an already-finalized invoice doesn't transition status,
+      // but the spec says "fires when invoice is finalized + sent". An OPEN
+      // invoice has been sent before, so re-sending is also a "sent" event.
+      // (We deliberately do NOT dedup here — it's the FE's job to disable
+      // the button after first send if that's the desired UX.)
+      invoiceModel.findByPk.mockResolvedValue(
+        makeInvoice({
+          status: InvoiceStatus.OPEN,
+          hostedInvoiceUrl: 'https://x',
+        }),
+      );
+
+      await service.sendInvoice('user-1', 'inv-1');
+
+      expect(notificationMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ type: NotificationType.INVOICE_CREATED }),
+      );
+    });
+  });
+
+  describe('syncFromStripeInvoice — INVOICE_PAID via outbox', () => {
+    it('queues INVOICE_PAID for instructor on transition into paid', async () => {
+      invoiceModel.findOne.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.OPEN }),
+      );
+
+      await service.syncFromStripeInvoice(
+        {
+          id: 'in_test',
+          status: 'paid',
+          amount_due: 1000,
+          amount_paid: 1000,
+          amount_remaining: 0,
+          number: 'INV-001',
+        } as never,
+        fakeTx as never,
+        outbox,
+      );
+
+      // Pre-flush — notify must NOT have been called yet.
+      expect(notificationMock.notify).not.toHaveBeenCalled();
+      expect(outbox.size()).toBeGreaterThan(0);
+
+      await outbox.flush();
+
+      expect(notificationMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+          type: NotificationType.INVOICE_PAID,
+          title: 'Invoice paid',
+        }),
+      );
+    });
+
+    it('queues a SECOND INVOICE_PAID for the client when present', async () => {
+      invoiceModel.findOne.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.OPEN, clientId: 'client-1' }),
+      );
+
+      await service.syncFromStripeInvoice(
+        {
+          id: 'in_test',
+          status: 'paid',
+          amount_due: 1000,
+          amount_paid: 1000,
+          amount_remaining: 0,
+          number: 'INV-001',
+        } as never,
+        fakeTx as never,
+        outbox,
+      );
+      await outbox.flush();
+
+      const calls = notificationMock.notify.mock.calls.map(
+        (c) => c[0] as { userId: string; title: string },
+      );
+      expect(calls).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            userId: 'user-1',
+            title: 'Invoice paid',
+          }),
+          expect.objectContaining({
+            userId: 'client-1',
+            title: 'Payment received',
+          }),
+        ]),
+      );
+    });
+
+    it('does NOT queue INVOICE_PAID when invoice was already paid (idempotent webhook replay)', async () => {
+      invoiceModel.findOne.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.PAID }),
+      );
+
+      await service.syncFromStripeInvoice(
+        {
+          id: 'in_test',
+          status: 'paid',
+          amount_due: 1000,
+          amount_paid: 1000,
+          amount_remaining: 0,
+        } as never,
+        fakeTx as never,
+        outbox,
+      );
+      await outbox.flush();
+
+      expect(notificationMock.notify).not.toHaveBeenCalled();
+    });
+
+    it('does NOT queue INVOICE_PAID when invoice is still open after sync', async () => {
+      invoiceModel.findOne.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.OPEN }),
+      );
+
+      await service.syncFromStripeInvoice(
+        {
+          id: 'in_test',
+          status: 'open',
+          amount_due: 1000,
+          amount_paid: 0,
+          amount_remaining: 1000,
+        } as never,
+        fakeTx as never,
+        outbox,
+      );
+      await outbox.flush();
+
+      expect(notificationMock.notify).not.toHaveBeenCalled();
+    });
+
+    it('outbox.discard() before flush prevents the email entirely (rollback semantics)', async () => {
+      invoiceModel.findOne.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.OPEN }),
+      );
+
+      await service.syncFromStripeInvoice(
+        {
+          id: 'in_test',
+          status: 'paid',
+          amount_due: 1000,
+          amount_paid: 1000,
+          amount_remaining: 0,
+        } as never,
+        fakeTx as never,
+        outbox,
+      );
+
+      // Tx rolled back.
+      outbox.discard();
+      await outbox.flush();
+
+      expect(notificationMock.notify).not.toHaveBeenCalled();
+    });
+
+    it('works when outbox is undefined (legacy / non-webhook callers do not break)', async () => {
+      invoiceModel.findOne.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.OPEN }),
+      );
+
+      await expect(
+        service.syncFromStripeInvoice(
+          {
+            id: 'in_test',
+            status: 'paid',
+            amount_due: 1000,
+            amount_paid: 1000,
+            amount_remaining: 0,
+          } as never,
+          fakeTx as never,
+        ),
+      ).resolves.toBeDefined();
+
+      // No outbox → no notify call (acceptable; webhook flow always
+      // passes one). This guards against null-pointer crashes.
+      expect(notificationMock.notify).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handlePaymentFailed — PAYMENT_FAILED via outbox', () => {
+    it('queues PAYMENT_FAILED to client', async () => {
+      invoiceModel.findOne.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.OPEN, clientId: 'client-1' }),
+      );
+
+      await service.handlePaymentFailed(
+        {
+          id: 'in_test',
+          status: 'open',
+          amount_due: 1000,
+          amount_paid: 0,
+          amount_remaining: 1000,
+        } as never,
+        fakeTx as never,
+        outbox,
+      );
+      await outbox.flush();
+
+      expect(notificationMock.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'client-1',
+          type: NotificationType.PAYMENT_FAILED,
+          title: 'Payment failed',
+          data: expect.objectContaining({
+            screen: 'profile/invoices',
+            entityId: 'inv-1',
+          }),
+        }),
+      );
+    });
+
+    it('skips notification for guest invoice (no clientId)', async () => {
+      invoiceModel.findOne.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.OPEN, clientId: null }),
+      );
+
+      await service.handlePaymentFailed(
+        {
+          id: 'in_test',
+          status: 'open',
+          amount_due: 1000,
+          amount_paid: 0,
+          amount_remaining: 1000,
+        } as never,
+        fakeTx as never,
+        outbox,
+      );
+      await outbox.flush();
+
+      expect(notificationMock.notify).not.toHaveBeenCalled();
+    });
+
+    it('returns early without queuing when local invoice is missing', async () => {
+      invoiceModel.findOne.mockResolvedValue(null);
+
+      await service.handlePaymentFailed(
+        { id: 'in_unknown', status: 'open' } as never,
+        fakeTx as never,
+        outbox,
+      );
+
+      expect(outbox.size()).toBe(0);
+      await outbox.flush();
+      expect(notificationMock.notify).not.toHaveBeenCalled();
+    });
+
+    it('outbox.discard() before flush prevents the failure email (rollback semantics)', async () => {
+      invoiceModel.findOne.mockResolvedValue(
+        makeInvoice({ status: InvoiceStatus.OPEN, clientId: 'client-1' }),
+      );
+
+      await service.handlePaymentFailed(
+        {
+          id: 'in_test',
+          status: 'open',
+          amount_due: 1000,
+          amount_paid: 0,
+          amount_remaining: 1000,
+        } as never,
+        fakeTx as never,
+        outbox,
+      );
+
+      outbox.discard();
+      await outbox.flush();
+
+      expect(notificationMock.notify).not.toHaveBeenCalled();
+    });
   });
 });

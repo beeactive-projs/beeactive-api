@@ -1,7 +1,7 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
-import { BullModule } from '@nestjs/bull';
+import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -22,6 +22,8 @@ import { InvitationModule } from './modules/invitation/invitation.module';
 import { ClientModule } from './modules/client/client.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { EmailModule } from './common/services/email.module';
+import { JobsModule } from './modules/jobs/jobs.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { WaitlistModule } from './modules/waitlist/waitlist.module';
@@ -70,16 +72,30 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
       useFactory: getDatabaseConfig,
     }),
 
-    // Redis/Bull Queue Configuration (only when REDIS_HOST is set)
+    // Redis / BullMQ Queue Configuration. Only registered when
+    // REDIS_HOST is set so a developer without Redis running locally
+    // can still boot — JobsModule then falls back to a no-op
+    // implementation and logs a warning. In production REDIS_HOST is
+    // required (enforced in env.validation.ts).
     ...(process.env.REDIS_HOST
       ? [
           BullModule.forRootAsync({
             imports: [ConfigModule],
             inject: [ConfigService],
             useFactory: (configService: ConfigService) => ({
-              redis: {
-                host: configService.get('REDIS_HOST'),
+              connection: {
+                host: configService.get<string>('REDIS_HOST'),
                 port: configService.get<number>('REDIS_PORT'),
+                password: configService.get<string>('REDIS_PASSWORD'),
+                // TLS is required by Redis Cloud and other managed
+                // providers; local Docker Redis runs without it. We
+                // pass an empty object instead of `true` because some
+                // managed providers reject unverified certs unless
+                // we leave the rejectUnauthorized default in place.
+                tls:
+                  configService.get<string>('REDIS_TLS') === 'true'
+                    ? {}
+                    : undefined,
               },
             }),
           }),
@@ -103,6 +119,10 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     // Event Emitter (for pub/sub within the app)
     EventEmitterModule.forRoot(),
 
+    // Shared singletons (declared @Global() so any feature module
+    // can inject without listing them in its own imports[]).
+    EmailModule,
+
     // Feature Modules
     HealthModule, // Health checks
     UserModule, // User management
@@ -114,7 +134,8 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     InvitationModule, // Invitation management
     ClientModule, // Instructor-Client relationships
     BlogModule, // Blog posts + Cloudinary image uploads
-    NotificationModule, // Notification system (Phase 1 — dummy/logger)
+    NotificationModule, // Notification system (in-app + email delivery)
+    JobsModule, // BullMQ workers (Phase 6+) — async email/push/SMS delivery
     AnalyticsModule, // Analytics & reporting
     FeedbackModule, // User feedback (bugs, suggestions)
     WaitlistModule, // Pre-launch waitlist signups

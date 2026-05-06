@@ -10,8 +10,8 @@ import { EmailService } from '../../common/services/email.service';
 export class FeedbackService {
   constructor(
     @InjectModel(Feedback)
-    private feedbackModel: typeof Feedback,
-    private emailService: EmailService,
+    private readonly feedbackModel: typeof Feedback,
+    private readonly emailService: EmailService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}

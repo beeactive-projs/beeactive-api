@@ -10,6 +10,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
+import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
+import { SearchDocs } from '../../common/docs/search.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { SearchQueryDto } from './dto/search-query.dto';
@@ -41,6 +43,7 @@ export class SearchController {
 
   @Get()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiEndpoint(SearchDocs.search)
   async search(
     @Request() req: AuthenticatedRequest,
     @Query() dto: SearchQueryDto,
@@ -70,6 +73,7 @@ export class SearchController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN')
   @Throttle({ default: { limit: 2, ttl: 60_000 } })
+  @ApiEndpoint(SearchDocs.reindex)
   async reindex() {
     return this._searchIndexService.reindexAll();
   }

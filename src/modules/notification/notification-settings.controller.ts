@@ -15,15 +15,20 @@ import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { NotificationSettingsDocs } from '../../common/docs/notification.docs';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
 import { NotificationPreferenceService } from './services/notification-preference.service';
-import { NotificationType } from './notification-types';
+import { NotificationCategory } from './notification-categories';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 /**
- * NotificationSettingsController — the settings tab in /profile.
+ * NotificationSettingsController — the Notifications tab in /profile.
  *
- * Mounted under /users/me/notification-settings (a dedicated controller
- * keeps notification concerns colocated with the rest of the
- * notification module rather than scattering them across UserController).
+ * Mounted under /users/me/notification-settings. The user-facing
+ * surface is category-grouped (~6 rows × 1 channel = email). The
+ * service explodes a category-level edit into per-type writes under
+ * the hood, so power-user surfaces could later expose per-type
+ * granularity without a schema change.
+ *
+ * Note: in-app, push, and SMS channels aren't part of the API today.
+ * In-app is always on by design; push and SMS aren't implemented yet.
  */
 @ApiTags('Notifications')
 @Controller('users/me/notification-settings')
@@ -43,16 +48,17 @@ export class NotificationSettingsController {
     @Request() req: AuthenticatedRequest,
     @Body() dto: UpdatePreferencesDto,
   ) {
-    return this.preferences.bulkUpdate(req.user.id, dto.items);
+    return this.preferences.updateCategoriesForUser(req.user.id, dto.items);
   }
 
-  @Delete(':type/reset')
+  @Delete(':category/reset')
   @ApiEndpoint(NotificationSettingsDocs.resetType)
-  resetType(
+  resetCategory(
     @Request() req: AuthenticatedRequest,
-    @Param('type', new ParseEnumPipe(NotificationType)) type: NotificationType,
+    @Param('category', new ParseEnumPipe(NotificationCategory))
+    category: NotificationCategory,
   ) {
-    return this.preferences.resetToDefault(req.user.id, type);
+    return this.preferences.resetToDefault(req.user.id, category);
   }
 
   @Delete()

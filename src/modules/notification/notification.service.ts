@@ -24,6 +24,7 @@ import { resolveChannels } from './notification-defaults';
 import { NotificationType } from './notification-types';
 import { User } from '../user/entities/user.entity';
 import { EmailService } from '../../common/services/email.service';
+import { JobsService } from '../jobs/jobs.service';
 
 // Re-export so existing call sites that import NotificationType from
 // notification.service keep working without churn.
@@ -77,6 +78,7 @@ export class NotificationService {
     private readonly sequelize: Sequelize,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
+    private readonly jobs: JobsService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -247,22 +249,50 @@ export class NotificationService {
       : ('skipped:preference_off' as DeliveredChannelStatus);
 
     // ── email ───────────────────────────────────────────────
+    // Phase 6+: email delivery moved off the request path to a
+    // BullMQ worker. We enqueue here and the worker writes the
+    // final 'sent'/'failed:...' status onto delivered_channels via
+    // NotificationReceiptService.recordChannelOutcome.
+    //
+    // We use the receipt id as the BullMQ jobId so re-running this
+    // path for the same notification (idempotent producer retries)
+    // doesn't enqueue duplicate sends.
     if (!channels.email) {
       delivered.email = 'skipped:preference_off';
     } else if (!userEmail) {
       delivered.email = 'skipped:no_email';
     } else {
       const ctaUrl = this.buildCtaUrl(notification.data);
-      const status = await this.emailService.sendNotificationEmail({
-        to: userEmail,
-        title: notification.title,
-        body: notification.body,
-        ctaUrl,
-        ctaLabel: ctaUrl ? (ctaLabel ?? 'Open MotionHive') : undefined,
-      });
-      delivered.email = status.ok
-        ? 'sent'
-        : (`failed:${status.reason.slice(0, 200)}` as DeliveredChannelStatus);
+      const enqueued = await this.jobs.enqueue(
+        'notifications.email_send',
+        {
+          receiptId: receipt.id,
+          to: userEmail,
+          title: notification.title,
+          body: notification.body,
+          ctaUrl,
+          ctaLabel: ctaUrl ? (ctaLabel ?? 'Open MotionHive') : undefined,
+        },
+        { jobId: `email_send.${receipt.id}` },
+      );
+      // `enqueued === null` means Redis isn't configured (dev mode
+      // without REDIS_HOST). Fall back to a synchronous send so
+      // emails still go out — this is the dev-friendly degradation
+      // path documented on JobsService.
+      if (enqueued === null) {
+        const status = await this.emailService.sendNotificationEmail({
+          to: userEmail,
+          title: notification.title,
+          body: notification.body,
+          ctaUrl,
+          ctaLabel: ctaUrl ? (ctaLabel ?? 'Open MotionHive') : undefined,
+        });
+        delivered.email = status.ok
+          ? 'sent'
+          : (`failed:${status.reason.slice(0, 200)}` as DeliveredChannelStatus);
+      } else {
+        delivered.email = 'queued';
+      }
     }
 
     // ── push / sms ──────────────────────────────────────────
@@ -283,6 +313,10 @@ export class NotificationService {
   /**
    * Build the CTA URL for the email channel from notification.data.
    * Returns undefined when there's nothing to link to.
+   *
+   * Mirrors the FE bell handler's logic: path segments come from
+   * `screen` + optional `entityId`; tabbed pages forward `queryParams`
+   * (e.g. `/profile?tab=memberships`) which can't be expressed via path.
    */
   private buildCtaUrl(data: NotificationData | null): string | undefined {
     if (!data?.screen) return undefined;
@@ -290,6 +324,16 @@ export class NotificationService {
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
     const segments = [data.screen];
     if (data.entityId) segments.push(data.entityId);
-    return `${frontendUrl}/${segments.join('/')}`;
+    let url = `${frontendUrl}/${segments.join('/')}`;
+    const qp = data.queryParams;
+    if (qp && typeof qp === 'object') {
+      const params = new URLSearchParams();
+      for (const [k, v] of Object.entries(qp)) {
+        if (typeof v === 'string') params.append(k, v);
+      }
+      const qs = params.toString();
+      if (qs) url = `${url}?${qs}`;
+    }
+    return url;
   }
 }

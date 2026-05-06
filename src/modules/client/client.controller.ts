@@ -1,10 +1,10 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -136,7 +136,7 @@ export class ClientController {
   })
   async leaveInstructor(
     @Request() req: AuthenticatedRequest,
-    @Param('instructorId') instructorId: string,
+    @Param('instructorId', ParseUUIDPipe) instructorId: string,
   ) {
     return this.clientService.leaveInstructor(req.user.id, instructorId);
   }
@@ -211,22 +211,7 @@ export class ClientController {
     @Request() req: AuthenticatedRequest,
     @Body() dto: CreateClientRequestDto,
   ) {
-    if (dto.userId) {
-      const request = await this.clientService.sendClientInvitation(
-        req.user.id,
-        dto.userId,
-        dto.message,
-      );
-      return { message: 'Invitation sent to existing user', request };
-    }
-    if (!dto.email) {
-      throw new BadRequestException('Provide either userId or email.');
-    }
-    return this.clientService.sendClientInvitationByEmail(
-      req.user.id,
-      dto.email,
-      dto.message,
-    );
+    return this.clientService.sendInvitationFromDto(req.user.id, dto);
   }
 
   /**
@@ -241,7 +226,7 @@ export class ClientController {
   @ApiEndpoint(ClientDocs.resendInvitation)
   async resendInvitation(
     @Request() req: AuthenticatedRequest,
-    @Param('requestId') requestId: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
   ) {
     return this.clientService.resendInvitation(req.user.id, requestId);
   }
@@ -256,7 +241,7 @@ export class ClientController {
   @ApiEndpoint(ClientDocs.requestToBeClient)
   async requestToBeClient(
     @Request() req: AuthenticatedRequest,
-    @Param('instructorId') instructorId: string,
+    @Param('instructorId', ParseUUIDPipe) instructorId: string,
     @Body() dto: RequestClientDto,
   ) {
     return this.clientService.requestToBeClient(
@@ -289,7 +274,7 @@ export class ClientController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(ClientDocs.acceptRequest)
   async acceptRequest(
-    @Param('requestId') requestId: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.clientService.acceptRequest(requestId, req.user.id);
@@ -303,7 +288,7 @@ export class ClientController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(ClientDocs.declineRequest)
   async declineRequest(
-    @Param('requestId') requestId: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.clientService.declineRequest(requestId, req.user.id);
@@ -317,7 +302,7 @@ export class ClientController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(ClientDocs.cancelRequest)
   async cancelRequest(
-    @Param('requestId') requestId: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.clientService.cancelRequest(requestId, req.user.id);
@@ -333,7 +318,7 @@ export class ClientController {
   @ApiEndpoint({ ...ClientDocs.updateClient, body: UpdateClientDto })
   async updateClient(
     @Request() req: AuthenticatedRequest,
-    @Param('clientId') clientId: string,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
     @Body() dto: UpdateClientDto,
   ) {
     return this.clientService.updateClient(req.user.id, clientId, dto);
@@ -350,7 +335,7 @@ export class ClientController {
   @ApiEndpoint(ClientDocs.archiveClient)
   async archiveClient(
     @Request() req: AuthenticatedRequest,
-    @Param('clientId') clientId: string,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
   ) {
     return this.clientService.updateClient(req.user.id, clientId, {
       status: InstructorClientStatus.ARCHIVED,

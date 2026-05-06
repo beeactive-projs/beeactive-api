@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { ConfigService } from '@nestjs/config';
 import { Op, fn, col, WhereOptions } from 'sequelize';
 import { BlogPost } from './entities/blog-post.entity';
 import { CreateBlogPostDto } from './dto/create-blog-post.dto';
@@ -68,10 +69,19 @@ export interface BlogPostResponse {
 
 @Injectable()
 export class BlogService {
+  // Process-local sitemap cache. Regenerated at most once per hour.
+  // Prevents an attacker from forcing a fresh 10k-row scan + XML build
+  // on every request (the global 100 req/60s throttle alone allows
+  // ~6k regenerations per hour, which is both expensive and pointless
+  // — the sitemap barely changes).
+  private sitemapCache: { xml: string; expiresAt: number } | null = null;
+  private static readonly SITEMAP_TTL_MS = 60 * 60 * 1000;
+
   constructor(
     @InjectModel(BlogPost)
-    private blogPostModel: typeof BlogPost,
-    private cloudinaryService: CloudinaryService,
+    private readonly blogPostModel: typeof BlogPost,
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -427,6 +437,73 @@ export class BlogService {
       limit: 10_000,
     });
     return posts.map((p) => ({ slug: p.slug, updatedAt: p.updatedAt }));
+  }
+
+  /**
+   * Build (or return cached) sitemap XML for crawlers. The result is
+   * cached for one hour so a flood of crawler hits doesn't trigger a
+   * fresh 10k-row scan + string-build on every request.
+   */
+  async getSitemapXml(): Promise<string> {
+    const now = Date.now();
+    if (!this.sitemapCache || this.sitemapCache.expiresAt <= now) {
+      this.sitemapCache = {
+        xml: await this.buildSitemapXml(),
+        expiresAt: now + BlogService.SITEMAP_TTL_MS,
+      };
+    }
+    return this.sitemapCache.xml;
+  }
+
+  private async buildSitemapXml(): Promise<string> {
+    const posts = await this.getSitemapSlugs();
+    const BASE = this.configService.get<string>(
+      'FRONTEND_URL',
+      'https://motionhive.fit',
+    );
+
+    const staticUrls = [
+      { loc: `${BASE}/`, priority: '1.0', changefreq: 'weekly' },
+      { loc: `${BASE}/about`, priority: '0.7', changefreq: 'monthly' },
+      { loc: `${BASE}/blog`, priority: '0.9', changefreq: 'daily' },
+      {
+        loc: `${BASE}/legal/terms-of-service`,
+        priority: '0.3',
+        changefreq: 'yearly',
+      },
+      {
+        loc: `${BASE}/legal/privacy-policy`,
+        priority: '0.3',
+        changefreq: 'yearly',
+      },
+    ];
+
+    const staticXml = staticUrls
+      .map(
+        (u) => `  <url>
+    <loc>${u.loc}</loc>
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+  </url>`,
+      )
+      .join('\n');
+
+    const blogXml = posts
+      .map(
+        (p) => `  <url>
+    <loc>${BASE}/blog/${p.slug}</loc>
+    <lastmod>${p.updatedAt.toISOString().split('T')[0]}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>`,
+      )
+      .join('\n');
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${staticXml}
+${blogXml}
+</urlset>`;
   }
 
   private assertCanEdit(post: BlogPost, auth: AuthContext): void {

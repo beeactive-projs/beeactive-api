@@ -3,11 +3,11 @@ import { SequelizeModule } from '@nestjs/sequelize';
 import { Group } from './entities/group.entity';
 import { GroupMember } from './entities/group-member.entity';
 import { GroupJoinRequest } from './entities/group-join-request.entity';
+import { User } from '../user/entities/user.entity';
 import { GroupController } from './group.controller';
 import { GroupService } from './group.service';
 import { RoleModule } from '../role/role.module';
 import { InstructorClient } from '../client/entities/instructor-client.entity';
-import { EmailService } from '../../common/services/email.service';
 import { CryptoService } from '../../common/services/crypto.service';
 import { SearchModule } from '../search/search.module';
 
@@ -31,12 +31,13 @@ import { SearchModule } from '../search/search.module';
       GroupMember,
       GroupJoinRequest,
       InstructorClient,
+      User,
     ]),
     RoleModule,
     SearchModule,
   ],
   controllers: [GroupController],
-  providers: [GroupService, EmailService, CryptoService],
+  providers: [GroupService, CryptoService],
   exports: [GroupService],
 })
 export class GroupModule {}

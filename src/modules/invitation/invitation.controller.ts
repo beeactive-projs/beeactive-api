@@ -5,6 +5,7 @@ import {
   Delete,
   Body,
   Param,
+  ParseUUIDPipe,
   Query,
   UseGuards,
   Request,
@@ -80,21 +81,27 @@ export class InvitationController {
 
   @Post(':id/cancel')
   @ApiEndpoint(InvitationDocs.cancel)
-  async cancel(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+  async cancel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
     return this.invitationService.cancel(id, req.user.id);
   }
 
   @Post(':id/resend')
   @Throttle({ default: { limit: 3, ttl: 3600000 } })
   @ApiEndpoint(InvitationDocs.resend)
-  async resend(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+  async resend(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
     return this.invitationService.resend(id, req.user.id);
   }
 
   @Get('group/:id')
   @ApiEndpoint(InvitationDocs.getGroupInvitations)
   async getGroupInvitations(
-    @Param('id') groupId: string,
+    @Param('id', ParseUUIDPipe) groupId: string,
     @Request() req: AuthenticatedRequest,
     @Query() pagination: PaginationDto,
   ) {

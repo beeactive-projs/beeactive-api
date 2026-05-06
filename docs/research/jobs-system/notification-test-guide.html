@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Notification System — Hands-on Testing Guide</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --panel-2: #1c2230;
+    --border: #2a3142;
+    --text: #e6e8ee;
+    --text-dim: #9ba3b4;
+    --accent: #ffb627;
+    --accent-2: #6ea8ff;
+    --green: #7fd1a3;
+    --red: #ff7a90;
+    --purple: #c4a7ff;
+    --code-bg: #0b0d12;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+    font-size: 13px;
+  }
+  nav.toc h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin: 18px 8px 8px;
+  }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a {
+    display: block;
+    padding: 6px 8px;
+    color: var(--text-dim);
+    text-decoration: none;
+    border-radius: 4px;
+  }
+  nav.toc a:hover { background: var(--panel-2); color: var(--text); }
+  main {
+    max-width: 940px;
+    padding: 40px 48px 80px;
+  }
+  h1 { font-size: 32px; margin: 0 0 8px; color: var(--accent); }
+  h2 {
+    font-size: 22px;
+    margin: 48px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+    scroll-margin-top: 24px;
+  }
+  h3 {
+    font-size: 17px;
+    margin: 28px 0 10px;
+    color: var(--accent-2);
+    scroll-margin-top: 24px;
+  }
+  h4 { font-size: 14px; margin: 16px 0 6px; color: var(--accent); }
+  p { margin: 0 0 12px; }
+  .lede { color: var(--text-dim); font-size: 16px; margin-bottom: 28px; }
+  ul, ol { padding-left: 24px; margin: 0 0 12px; }
+  li { margin-bottom: 4px; }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background: var(--panel-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--accent);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    overflow-x: auto;
+    margin: 8px 0 16px;
+    line-height: 1.5;
+    font-size: 13px;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .step {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent-2);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin: 16px 0;
+  }
+  .step-num {
+    display: inline-block;
+    background: var(--accent-2);
+    color: var(--bg);
+    width: 24px;
+    height: 24px;
+    text-align: center;
+    line-height: 24px;
+    border-radius: 50%;
+    font-weight: 700;
+    margin-right: 8px;
+    font-size: 12px;
+  }
+  .step h3 {
+    margin: 0 0 8px;
+    color: var(--text);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+  }
+  .expected {
+    margin-top: 8px;
+    padding: 10px 14px;
+    background: rgba(127, 209, 163, 0.08);
+    border-left: 2px solid var(--green);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+  }
+  .expected strong { color: var(--green); }
+  .why {
+    margin-top: 8px;
+    padding: 10px 14px;
+    background: rgba(196, 167, 255, 0.08);
+    border-left: 2px solid var(--purple);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .why strong { color: var(--purple); }
+  .warn {
+    margin-top: 8px;
+    padding: 10px 14px;
+    background: rgba(255, 122, 144, 0.08);
+    border-left: 2px solid var(--red);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+  }
+  .warn strong { color: var(--red); }
+  .verb {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 8px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  .verb.GET { background: rgba(110, 168, 255, 0.18); color: var(--accent-2); }
+  .verb.POST { background: rgba(127, 209, 163, 0.18); color: var(--green); }
+  .verb.PATCH { background: rgba(255, 182, 39, 0.18); color: var(--accent); }
+  .verb.DELETE { background: rgba(255, 122, 144, 0.18); color: var(--red); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--panel-2); color: var(--text-dim); font-size: 11px; text-transform: uppercase; }
+  .copy-block {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 12px 0;
+  }
+  .copy-block h4 { margin-top: 0; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Setup</h2>
+  <a href="#prereqs">Prerequisites</a>
+  <a href="#tokens">Get your tokens</a>
+  <a href="#shell-setup">Shell setup (one time)</a>
+  <a href="#sanity">Sanity check</a>
+
+  <h2>Module 1 — Bell basics</h2>
+  <a href="#m1-1">1.1 Empty bell</a>
+  <a href="#m1-2">1.2 Fire your first notification</a>
+  <a href="#m1-3">1.3 See it in the bell</a>
+  <a href="#m1-4">1.4 Mark as read</a>
+
+  <h2>Module 2 — Channels</h2>
+  <a href="#m2-1">2.1 Default channels per type</a>
+  <a href="#m2-2">2.2 See your preferences</a>
+  <a href="#m2-3">2.3 Override email off</a>
+  <a href="#m2-4">2.4 Verify the override</a>
+  <a href="#m2-5">2.5 Reset to default</a>
+
+  <h2>Module 3 — Dedup &amp; data</h2>
+  <a href="#m3-1">3.1 Fingerprint dedup</a>
+  <a href="#m3-2">3.2 Severity + icon</a>
+  <a href="#m3-3">3.3 CTA URL building</a>
+
+  <h2>Module 4 — Funnel timestamps</h2>
+  <a href="#m4-1">4.1 The 5 timestamps</a>
+  <a href="#m4-2">4.2 Mark batch as viewed</a>
+  <a href="#m4-3">4.3 Mark as clicked</a>
+  <a href="#m4-4">4.4 Dismiss</a>
+
+  <h2>Module 5 — List behavior</h2>
+  <a href="#m5-1">5.1 Pagination</a>
+  <a href="#m5-2">5.2 unreadOnly filter</a>
+  <a href="#m5-3">5.3 Mark-all-read</a>
+
+  <h2>Module 6 — Devices</h2>
+  <a href="#m6-1">6.1 Register WEB</a>
+  <a href="#m6-2">6.2 Register IOS</a>
+  <a href="#m6-3">6.3 Same device twice</a>
+  <a href="#m6-4">6.4 Heartbeat + revoke</a>
+
+  <h2>Module 7 — Security</h2>
+  <a href="#m7-1">7.1 No JWT = 401</a>
+  <a href="#m7-2">7.2 Other user's receipt = 404</a>
+  <a href="#m7-3">7.3 Non-admin debug = 403</a>
+  <a href="#m7-4">7.4 Bad enum = 400</a>
+  <a href="#m7-5">7.5 Throttler kicks in</a>
+
+  <h2>Module 8 — Edge cases</h2>
+  <a href="#m8-1">8.1 deliver_at in future</a>
+  <a href="#m8-2">8.2 expire_at in past</a>
+  <a href="#m8-3">8.3 Failed email</a>
+  <a href="#m8-4">8.4 Reset all settings</a>
+
+  <h2>Reference</h2>
+  <a href="#cheatsheet">Endpoint cheat sheet</a>
+  <a href="#types">All notification types</a>
+  <a href="#cleanup">Cleanup commands</a>
+</nav>
+
+<main>
+
+<h1>Hands-on Testing Guide</h1>
+<p class="lede">
+A guided tour through every notification endpoint. Run these in order — each one builds on the previous. Each step shows the curl command, what to expect back, and the "why" so you understand what's being exercised. Aimed at one person with a terminal + the API running locally.
+</p>
+
+<!-- ========== SETUP ========== -->
+<h2 id="prereqs">Prerequisites</h2>
+
+<ol>
+  <li>Postgres running in Docker (already up — <code>my-postgres</code>)</li>
+  <li>API running: <code>npm run start:dev</code> in a separate terminal</li>
+  <li><code>curl</code> and a working shell (zsh or bash both fine)</li>
+  <li>Optional: <code>jq</code> for prettier JSON output (<code>brew install jq</code>)</li>
+</ol>
+
+<p>If <code>jq</code> isn't installed, every <code>curl</code> here works as-is — it just prints raw JSON.</p>
+
+<h2 id="tokens">Get your tokens</h2>
+
+<p>Two seeded accounts you'll use throughout:</p>
+
+<table>
+  <thead><tr><th>Role</th><th>Email</th><th>Password</th></tr></thead>
+  <tbody>
+    <tr><td>SUPER_ADMIN</td><td><code>superadmin@motionhive.fit</code></td><td><code>Test1234!</code></td></tr>
+    <tr><td>USER (recipient)</td><td><code>user@motionhive.fit</code></td><td><code>Test1234!</code></td></tr>
+  </tbody>
+</table>
+
+<p>Login as both — the response contains <code>accessToken</code>:</p>
+
+<pre><code><span style="color:#7fd1a3"># Login as SUPER_ADMIN</span>
+curl -sX POST http://localhost:3800/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"superadmin@motionhive.fit","password":"Test1234!"}'
+
+<span style="color:#7fd1a3"># Login as the regular user</span>
+curl -sX POST http://localhost:3800/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@motionhive.fit","password":"Test1234!"}'</code></pre>
+
+<p>Copy the <code>accessToken</code> from each response.</p>
+
+<h2 id="shell-setup">Shell setup (one time)</h2>
+
+<p>Set these as shell variables — every step in the guide reuses them. Open a fresh terminal and run:</p>
+
+<pre><code>export BASE="http://localhost:3800"
+export ADMIN_TOKEN="<span style="color:#ffb627">paste-the-superadmin-accessToken-here</span>"
+export USER_TOKEN="<span style="color:#ffb627">paste-the-user-accessToken-here</span>"
+export USER_ID="570ea197-4ac0-4e58-a8c1-bff06c6f945f"      <span style="color:#6b7283"># user@motionhive.fit</span>
+export ADMIN_ID="f2ffc358-7c7e-49e7-a9fd-0ab0816ea35f"     <span style="color:#6b7283"># superadmin@motionhive.fit</span>
+
+<span style="color:#7fd1a3"># Helper: short auth headers</span>
+auth_user()  { echo "Authorization: Bearer $USER_TOKEN"; }
+auth_admin() { echo "Authorization: Bearer $ADMIN_TOKEN"; }</code></pre>
+
+<p>Tokens expire after a few days — if you start getting 401s, log in again and re-export.</p>
+
+<h2 id="sanity">Sanity check</h2>
+
+<div class="step">
+  <h3><span class="step-num">0</span> API is alive</h3>
+  <pre><code>curl -s "$BASE/health"</code></pre>
+  <div class="expected"><strong>Expect:</strong> JSON with <code>status: "ok"</code> or similar — anything 2xx means we're good.</div>
+</div>
+
+<!-- ========== MODULE 1 ========== -->
+<h2 id="module-1">Module 1 — Bell basics</h2>
+<p>Goal: understand the producer → notification → bell loop.</p>
+
+<div class="step" id="m1-1">
+  <h3><span class="step-num">1.1</span> <span class="verb GET">GET</span> empty unread count</h3>
+  <pre><code>curl -s -H "$(auth_user)" "$BASE/notifications/unread-count"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>{"count":0}</code> (assuming no leftover notifications)</div>
+  <div class="why"><strong>Why:</strong> Establishes the baseline. The bell badge in the FE will show this number. Note: even if you have notifications from prior tests, this is fine — just remember the starting count.</div>
+</div>
+
+<div class="step" id="m1-2">
+  <h3><span class="step-num">1.2</span> <span class="verb POST">POST</span> fire a notification (admin → user)</h3>
+  <pre><code>curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId":"'$USER_ID'",
+    "type":"INVOICE_PAID",
+    "title":"Your first test notification",
+    "body":"This is the body. It can be longer text that the bell shows in the dropdown.",
+    "data":{"screen":"invoice","entityId":"inv-001"}
+  }'</code></pre>
+  <div class="expected"><strong>Expect:</strong> JSON with <code>notificationId</code>, <code>receiptId</code>, <code>deduped: false</code>, and a <code>delivered</code> object showing each channel's status. <code>inApp</code> and <code>email</code> should both be <code>"sent"</code> (INVOICE_PAID has both enabled by default).</div>
+  <div class="why"><strong>Why:</strong> The debug endpoint is the only way to fire a notification through the pipeline before we wire real producers. Same code path a real <code>invoice.service.ts</code> would call. Save the <code>receiptId</code> you get back — you'll use it in 1.4.</div>
+  <div class="warn"><strong>Save it:</strong> <code>export RID="paste-the-receiptId-here"</code></div>
+</div>
+
+<div class="step" id="m1-3">
+  <h3><span class="step-num">1.3</span> <span class="verb GET">GET</span> see it in the bell</h3>
+  <pre><code>curl -s -H "$(auth_user)" "$BASE/notifications?page=1&amp;limit=10"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>{"items":[{...}],"total":1,"page":1,"pageSize":10}</code> with one entry containing the title/body/data you just sent.</div>
+  <div class="why"><strong>Why:</strong> This is what the FE bell dropdown will fetch. Notice the response is a flat shape (joined notification + receipt fields together) — the FE doesn't have to navigate two levels.</div>
+</div>
+
+<div class="step" id="m1-4">
+  <h3><span class="step-num">1.4</span> <span class="verb PATCH">PATCH</span> mark as read</h3>
+  <pre><code>curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+  -X PATCH "$BASE/notifications/$RID/read" \
+  -H "$(auth_user)"
+
+<span style="color:#7fd1a3"># Verify the count dropped</span>
+curl -s -H "$(auth_user)" "$BASE/notifications/unread-count"</code></pre>
+  <div class="expected"><strong>Expect:</strong> First call → <code>HTTP 204</code> (no body). Second call → unread count is one less than before.</div>
+  <div class="why"><strong>Why:</strong> The FE will call this when the user clicks a notification. <code>read_at</code> is set to <code>now()</code>; idempotent (calling twice is fine).</div>
+</div>
+
+<!-- ========== MODULE 2 ========== -->
+<h2 id="module-2">Module 2 — Channels &amp; preferences</h2>
+<p>Goal: understand how the system decides which channels to use per notification type.</p>
+
+<div class="step" id="m2-1">
+  <h3><span class="step-num">2.1</span> Channel defaults are per-type</h3>
+  <p>Each notification type has different default channels. From <code>notification-defaults.ts</code>:</p>
+  <table>
+    <thead><tr><th>Type</th><th>Defaults</th></tr></thead>
+    <tbody>
+      <tr><td><code>INVOICE_PAID</code></td><td>in_app + email</td></tr>
+      <tr><td><code>SESSION_REMINDER_24H</code></td><td>in_app + email + push</td></tr>
+      <tr><td><code>SESSION_REMINDER_1H</code></td><td>in_app + push (no email — too late to be useful)</td></tr>
+      <tr><td><code>GROUP_MEMBER_JOINED</code></td><td>in_app only (too noisy for email)</td></tr>
+      <tr><td><code>PAYMENT_FAILED</code></td><td>in_app + email + push (urgent)</td></tr>
+      <tr><td><code>DISPUTE_OPENED</code></td><td>in_app + email + push (deadline-driven)</td></tr>
+    </tbody>
+  </table>
+  <p>Try firing different types to see the <code>delivered</code> object change:</p>
+  <pre><code>curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{"userId":"'$USER_ID'","type":"GROUP_MEMBER_JOINED","title":"Group test","body":"x"}'</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>email</code> shows <code>"skipped:preference_off"</code> because GROUP_MEMBER_JOINED has email disabled by default.</div>
+</div>
+
+<div class="step" id="m2-2">
+  <h3><span class="step-num">2.2</span> <span class="verb GET">GET</span> see your effective preferences</h3>
+  <pre><code>curl -s -H "$(auth_user)" "$BASE/users/me/notification-settings" | head -c 1000</code></pre>
+  <div class="expected"><strong>Expect:</strong> An array with one entry per known type. Each entry has <code>{ type, channels: { in_app, email, push, sms }, isCustomized }</code>. <code>isCustomized</code> is <code>false</code> for all of them right now (no overrides yet).</div>
+  <div class="why"><strong>Why:</strong> This is what the FE settings tab will render. It merges system defaults with the user's overrides — you see the <em>effective</em> state per type.</div>
+</div>
+
+<div class="step" id="m2-3">
+  <h3><span class="step-num">2.3</span> <span class="verb PATCH">PATCH</span> override email OFF for INVOICE_PAID</h3>
+  <pre><code>curl -s -X PATCH "$BASE/users/me/notification-settings" \
+  -H "$(auth_user)" -H "Content-Type: application/json" \
+  -d '{
+    "items":[
+      {"type":"INVOICE_PAID","channels":{"in_app":true,"email":false,"push":false,"sms":false}}
+    ]
+  }'</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>{"written":1}</code></div>
+</div>
+
+<div class="step" id="m2-4">
+  <h3><span class="step-num">2.4</span> Verify the override took effect</h3>
+  <pre><code><span style="color:#7fd1a3"># See your settings — INVOICE_PAID should now show isCustomized: true</span>
+curl -s -H "$(auth_user)" "$BASE/users/me/notification-settings" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print([x for x in d if x['type']=='INVOICE_PAID'])"
+
+<span style="color:#7fd1a3"># Fire another INVOICE_PAID — email should now skip</span>
+curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{"userId":"'$USER_ID'","type":"INVOICE_PAID","title":"After override","body":"email should be off now"}'</code></pre>
+  <div class="expected"><strong>Expect:</strong> The settings show <code>isCustomized: true</code> for INVOICE_PAID. The new notification's <code>email</code> shows <code>"skipped:preference_off"</code>.</div>
+  <div class="why"><strong>Why:</strong> Sparse override pattern — the DB only stores rows the user has changed. Missing rows fall back to defaults. Means saving "I'm fine with the defaults" is a no-op.</div>
+</div>
+
+<div class="step" id="m2-5">
+  <h3><span class="step-num">2.5</span> <span class="verb DELETE">DELETE</span> reset INVOICE_PAID to default</h3>
+  <pre><code>curl -s -X DELETE "$BASE/users/me/notification-settings/INVOICE_PAID/reset" \
+  -H "$(auth_user)"
+
+<span style="color:#7fd1a3"># Fire again — email should send again</span>
+curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{"userId":"'$USER_ID'","type":"INVOICE_PAID","title":"After reset","body":"email back on"}'</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>{"removed":1}</code>, then the new notification has <code>email: "sent"</code> again.</div>
+</div>
+
+<!-- ========== MODULE 3 ========== -->
+<h2 id="module-3">Module 3 — Dedup &amp; data</h2>
+
+<div class="step" id="m3-1">
+  <h3><span class="step-num">3.1</span> Fingerprint dedup — same key, no second alert</h3>
+  <pre><code>curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{"userId":"'$USER_ID'","type":"GROUP_MEMBER_JOINED","title":"Dedup A","body":"first","fingerprint":"my-test-key-1"}'
+
+<span style="color:#7fd1a3"># Same fingerprint, different title/body — should be ignored</span>
+curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{"userId":"'$USER_ID'","type":"GROUP_MEMBER_JOINED","title":"Dedup B","body":"second","fingerprint":"my-test-key-1"}'</code></pre>
+  <div class="expected"><strong>Expect:</strong> First call returns <code>deduped: false</code>. Second call returns <code>deduped: true</code> AND the same <code>notificationId</code>/<code>receiptId</code> as the first.</div>
+  <div class="why"><strong>Why:</strong> Producers sometimes fire <code>notify()</code> multiple times for the same logical event (e.g. webhook retried). Fingerprint dedup ensures only one notification reaches the user. Computed as a sha256 of whatever the producer chooses — typically <code>${eventType}.${entityId}.${date}</code>.</div>
+</div>
+
+<div class="step" id="m3-2">
+  <h3><span class="step-num">3.2</span> Severity drives icon + color</h3>
+  <pre><code>curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{"userId":"'$USER_ID'","type":"PAYMENT_FAILED","title":"Card declined","body":"Update your card","severity":"error"}'
+
+curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{"userId":"'$USER_ID'","type":"INVOICE_PAID","title":"All paid up","body":"Thanks!","severity":"success"}'</code></pre>
+  <div class="expected"><strong>Expect:</strong> Both succeed. List the bell and you'll see each row with its <code>severity</code> field — the FE will use this to pick an icon (red ✗ for error, green ✓ for success, blue ℹ for info).</div>
+</div>
+
+<div class="step" id="m3-3">
+  <h3><span class="step-num">3.3</span> The CTA URL in the email</h3>
+  <pre><code>curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{
+    "userId":"'$USER_ID'",
+    "type":"INVOICE_PAID",
+    "title":"Click-through test",
+    "body":"Look at the email — it has a button.",
+    "data":{"screen":"invoice","entityId":"inv-cta-test"},
+    "ctaLabel":"View invoice"
+  }'</code></pre>
+  <div class="expected"><strong>Expect:</strong> If you have <code>RESEND_API_KEY</code> set, an email arrives with a button labeled "View invoice" linking to <code>FRONTEND_URL/invoice/inv-cta-test</code>. If no Resend key, look for the <code>[EMAIL - DEV MODE]</code> log line in the API output.</div>
+  <div class="why"><strong>Why:</strong> The CTA URL is built server-side from <code>data.screen</code> + <code>data.entityId</code> + <code>FRONTEND_URL</code>. Producers don't need to know the FE routing structure — they just say "this is about screen X, entity Y" and the email worker knows how to compose the link.</div>
+</div>
+
+<!-- ========== MODULE 4 ========== -->
+<h2 id="module-4">Module 4 — The funnel timestamps</h2>
+<p>Each receipt has 5 timestamps that progress through the user-engagement funnel. Let's exercise each one.</p>
+
+<div class="step" id="m4-1">
+  <h3><span class="step-num">4.1</span> Inspect the funnel state in DB</h3>
+  <p>The FE will work with the API responses, but it's helpful to see the underlying DB rows once. Open a new terminal:</p>
+  <pre><code>docker exec -it my-postgres psql -U postgres -d beeactive -c "
+  SELECT id, delivered_at, viewed_at, read_at, clicked_at, dismissed_at
+  FROM notification_receipt
+  WHERE user_id = '$USER_ID'
+  ORDER BY created_at DESC LIMIT 5;
+"</code></pre>
+  <div class="why"><strong>Why:</strong> All 5 timestamps start <code>NULL</code> except <code>delivered_at</code> (set when the receipt is created). The other 4 fill in as the user interacts with the notification.</div>
+</div>
+
+<div class="step" id="m4-2">
+  <h3><span class="step-num">4.2</span> <span class="verb PATCH">PATCH</span> mark a batch as viewed</h3>
+  <p>Get a few recent receipt IDs first:</p>
+  <pre><code>curl -s -H "$(auth_user)" "$BASE/notifications?limit=3" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(','.join(['\"' + i['id'] + '\"' for i in d['items']]))"</code></pre>
+  <p>Then mark them viewed (replace the IDs with what you got back):</p>
+  <pre><code>curl -s -X PATCH "$BASE/notifications/viewed" \
+  -H "$(auth_user)" -H "Content-Type: application/json" \
+  -d '{"ids":["<span style="color:#ffb627">id-1</span>","<span style="color:#ffb627">id-2</span>","<span style="color:#ffb627">id-3</span>"]}'</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>{"updated":3}</code> (or fewer if some were already viewed).</div>
+  <div class="why"><strong>Why:</strong> When the FE bell dropdown opens, it sends the IDs of all visible notifications to mark them <em>viewed</em> — but NOT read. This gives us analytics ("X% of notifications get viewed but not clicked") without changing the unread badge.</div>
+</div>
+
+<div class="step" id="m4-3">
+  <h3><span class="step-num">4.3</span> <span class="verb PATCH">PATCH</span> mark as clicked (sets clicked + read in one shot)</h3>
+  <pre><code>curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+  -X PATCH "$BASE/notifications/<span style="color:#ffb627">$RID</span>/clicked" \
+  -H "$(auth_user)"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>HTTP 204</code>. Re-query the DB row — both <code>clicked_at</code> and <code>read_at</code> are now set.</div>
+  <div class="why"><strong>Why:</strong> When the user clicks the notification's CTA, the FE calls this endpoint AND navigates to the deep link. We set both timestamps in one save — clicking implies reading.</div>
+</div>
+
+<div class="step" id="m4-4">
+  <h3><span class="step-num">4.4</span> <span class="verb PATCH">PATCH</span> dismiss (X-out without reading)</h3>
+  <pre><code>curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+  -X PATCH "$BASE/notifications/<span style="color:#ffb627">$RID</span>/dismiss" \
+  -H "$(auth_user)"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>HTTP 204</code>. The notification is filtered out of the unread count and (when <code>unreadOnly=true</code>) the list.</div>
+  <div class="why"><strong>Why:</strong> Some users want to clear notifications without "reading" them — the X button. Tracking this separately from <em>read</em> lets us see if certain notification types get dismissed a lot (signal that the user doesn't find them useful).</div>
+</div>
+
+<!-- ========== MODULE 5 ========== -->
+<h2 id="module-5">Module 5 — List behavior</h2>
+
+<div class="step" id="m5-1">
+  <h3><span class="step-num">5.1</span> Pagination</h3>
+  <pre><code><span style="color:#7fd1a3"># First, fire ~5 notifications so we have content</span>
+for i in 1 2 3 4 5; do
+  curl -s -X POST "$BASE/admin/debug/notify" \
+    -H "$(auth_admin)" -H "Content-Type: application/json" \
+    -d "{\"userId\":\"$USER_ID\",\"type\":\"GROUP_MEMBER_JOINED\",\"title\":\"Page $i\",\"body\":\"Test $i\"}" \
+    -o /dev/null
+done
+
+<span style="color:#7fd1a3"># Page 1, 2 per page</span>
+curl -s -H "$(auth_user)" "$BASE/notifications?page=1&amp;limit=2"
+echo ""
+<span style="color:#7fd1a3"># Page 2, 2 per page</span>
+curl -s -H "$(auth_user)" "$BASE/notifications?page=2&amp;limit=2"</code></pre>
+  <div class="expected"><strong>Expect:</strong> Each response has <code>{ items: [2 entries], total: N, page, pageSize }</code>. Different items in page 1 vs page 2.</div>
+  <div class="warn"><strong>Note:</strong> <code>limit</code> is capped at 100 (try <code>?limit=999</code> to see the 400 error).</div>
+</div>
+
+<div class="step" id="m5-2">
+  <h3><span class="step-num">5.2</span> <code>unreadOnly=true</code> filter</h3>
+  <pre><code><span style="color:#7fd1a3"># With unread-only: only items where read_at IS NULL AND dismissed_at IS NULL</span>
+curl -s -H "$(auth_user)" "$BASE/notifications?unreadOnly=true&amp;limit=20"
+
+<span style="color:#7fd1a3"># Without: everything visible</span>
+curl -s -H "$(auth_user)" "$BASE/notifications?limit=20"</code></pre>
+  <div class="expected"><strong>Expect:</strong> The first call returns fewer items than the second — the dismissed/read ones are filtered out.</div>
+</div>
+
+<div class="step" id="m5-3">
+  <h3><span class="step-num">5.3</span> <span class="verb PATCH">PATCH</span> mark all as read</h3>
+  <pre><code>curl -s -X PATCH "$BASE/notifications/read-all" -H "$(auth_user)"
+curl -s -H "$(auth_user)" "$BASE/notifications/unread-count"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>{"updated":N}</code> followed by <code>{"count":0}</code>.</div>
+</div>
+
+<!-- ========== MODULE 6 ========== -->
+<h2 id="module-6">Module 6 — Devices</h2>
+<p>The push worker doesn't exist yet (Phase 6+), but the registration endpoints do. Let's test the storage.</p>
+
+<div class="step" id="m6-1">
+  <h3><span class="step-num">6.1</span> <span class="verb POST">POST</span> register a fake Web Push subscription</h3>
+  <pre><code>curl -s -X POST "$BASE/devices/register" \
+  -H "$(auth_user)" -H "Content-Type: application/json" \
+  -d '{
+    "platform":"WEB",
+    "subscription":{
+      "endpoint":"https://fcm.googleapis.com/fcm/send/test-chrome-001",
+      "keys":{"p256dh":"BKx-fake-public-key-for-testing","auth":"fake-auth-secret"}
+    },
+    "deviceLabel":"Chrome on Mac"
+  }'</code></pre>
+  <div class="expected"><strong>Expect:</strong> A device row with <code>platform: "WEB"</code>, <code>token</code> being the JSON-stringified subscription, <code>endpointHash</code> being a 64-char sha256.</div>
+  <div class="why"><strong>Why:</strong> In production, the FE will get a real subscription from <code>navigator.serviceWorker.pushManager.subscribe()</code> and send it here. The schema accepts both formats (object for WEB, string for FCM).</div>
+</div>
+
+<div class="step" id="m6-2">
+  <h3><span class="step-num">6.2</span> <span class="verb POST">POST</span> register a fake iOS device (FCM token)</h3>
+  <pre><code>curl -s -X POST "$BASE/devices/register" \
+  -H "$(auth_user)" -H "Content-Type: application/json" \
+  -d '{
+    "platform":"IOS",
+    "tokenString":"fake-fcm-token-for-iphone-1234567890",
+    "deviceLabel":"iPhone 15"
+  }'</code></pre>
+  <div class="expected"><strong>Expect:</strong> Another device row, <code>platform: "IOS"</code>, <code>token</code> is the raw FCM string.</div>
+  <p>Now list — you should see both devices:</p>
+  <pre><code>curl -s -H "$(auth_user)" "$BASE/devices"</code></pre>
+</div>
+
+<div class="step" id="m6-3">
+  <h3><span class="step-num">6.3</span> Same device twice → upsert (idempotent)</h3>
+  <pre><code><span style="color:#7fd1a3"># Run the WEB registration from 6.1 again — same endpoint URL</span>
+curl -s -X POST "$BASE/devices/register" \
+  -H "$(auth_user)" -H "Content-Type: application/json" \
+  -d '{
+    "platform":"WEB",
+    "subscription":{
+      "endpoint":"https://fcm.googleapis.com/fcm/send/test-chrome-001",
+      "keys":{"p256dh":"new-key-after-rotation","auth":"new-auth"}
+    },
+    "deviceLabel":"Chrome on Mac (updated)"
+  }'
+
+<span style="color:#7fd1a3"># List — should still be 2 devices, not 3. The first one was updated in place.</span>
+curl -s -H "$(auth_user)" "$BASE/devices" | python3 -c "import sys,json; print(f'Count: {len(json.load(sys.stdin))}')"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>Count: 2</code>. Looking at the WEB device, the <code>deviceLabel</code> and <code>token</code> reflect the new values.</div>
+  <div class="why"><strong>Why:</strong> Browsers can rotate subscription keys. Same device → upsert by <code>endpoint_hash</code>, bump <code>last_seen_at</code>. No duplicates.</div>
+</div>
+
+<div class="step" id="m6-4">
+  <h3><span class="step-num">6.4</span> Heartbeat + revoke</h3>
+  <p>Get the WEB device ID, then exercise heartbeat + revoke:</p>
+  <pre><code>export DEV_ID=$(curl -s -H "$(auth_user)" "$BASE/devices" \
+  | python3 -c "import sys,json; print([d['id'] for d in json.load(sys.stdin) if d['platform']=='WEB'][0])")
+
+<span style="color:#7fd1a3"># Heartbeat — bumps last_seen_at</span>
+curl -s -o /dev/null -w "Heartbeat: HTTP %{http_code}\n" \
+  -X PATCH "$BASE/devices/$DEV_ID/seen" -H "$(auth_user)"
+
+<span style="color:#7fd1a3"># Revoke — sets revoked_at</span>
+curl -s -o /dev/null -w "Revoke: HTTP %{http_code}\n" \
+  -X DELETE "$BASE/devices/$DEV_ID" -H "$(auth_user)"
+
+<span style="color:#7fd1a3"># List — WEB should be gone (revoked filter), IOS still there</span>
+curl -s -H "$(auth_user)" "$BASE/devices"</code></pre>
+  <div class="expected"><strong>Expect:</strong> Both calls return <code>HTTP 204</code>. Final list shows only the IOS device.</div>
+</div>
+
+<!-- ========== MODULE 7 ========== -->
+<h2 id="module-7">Module 7 — Security &amp; validation</h2>
+
+<div class="step" id="m7-1">
+  <h3><span class="step-num">7.1</span> Without a JWT → 401</h3>
+  <pre><code>curl -s -o /dev/null -w "HTTP %{http_code}\n" "$BASE/notifications/unread-count"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>HTTP 401</code></div>
+</div>
+
+<div class="step" id="m7-2">
+  <h3><span class="step-num">7.2</span> Other user's receipt → 404 (not 403)</h3>
+  <pre><code><span style="color:#7fd1a3"># Get a receipt belonging to user@</span>
+export RID=$(curl -s -H "$(auth_user)" "$BASE/notifications?limit=1" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['items'][0]['id'])")
+
+<span style="color:#7fd1a3"># Admin tries to mark it read — 404, not 403</span>
+curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+  -X PATCH "$BASE/notifications/$RID/read" -H "$(auth_admin)"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>HTTP 404</code></div>
+  <div class="why"><strong>Why:</strong> 403 would tell the attacker "this resource exists but you can't access it" — leaks information. 404 says "doesn't exist for you" — same response as if the ID was random garbage.</div>
+</div>
+
+<div class="step" id="m7-3">
+  <h3><span class="step-num">7.3</span> Non-admin trying the debug endpoint → 403</h3>
+  <pre><code>curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+  -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_user)" -H "Content-Type: application/json" \
+  -d '{"userId":"'$USER_ID'","type":"INVOICE_PAID","title":"x","body":"x"}'</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>HTTP 403</code> — RolesGuard rejects.</div>
+</div>
+
+<div class="step" id="m7-4">
+  <h3><span class="step-num">7.4</span> Validation kicks in</h3>
+  <pre><code><span style="color:#7fd1a3"># Bad type</span>
+curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{"userId":"'$USER_ID'","type":"NOT_A_REAL_TYPE","title":"x","body":"y"}'
+
+<span style="color:#7fd1a3"># Bad UUID for userId</span>
+curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d '{"userId":"not-a-uuid","type":"INVOICE_PAID","title":"x","body":"y"}'
+
+<span style="color:#7fd1a3"># Bad enum on settings reset</span>
+curl -s -X DELETE "$BASE/users/me/notification-settings/FAKE_TYPE/reset" \
+  -H "$(auth_user)"
+
+<span style="color:#7fd1a3"># Body too long (the title cap is 200)</span>
+curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d "{\"userId\":\"$USER_ID\",\"type\":\"INVOICE_PAID\",\"title\":\"$(printf 'A%.0s' {1..300})\",\"body\":\"x\"}"</code></pre>
+  <div class="expected"><strong>Expect:</strong> All return <code>HTTP 400</code> with a <code>message</code> array explaining what's wrong.</div>
+</div>
+
+<div class="step" id="m7-5">
+  <h3><span class="step-num">7.5</span> Throttler kicks in</h3>
+  <p>The debug endpoint is throttled at 5 calls per minute. Run it 6 times rapidly:</p>
+  <pre><code>for i in 1 2 3 4 5 6 7; do
+  curl -s -o /dev/null -w "Call $i: HTTP %{http_code}\n" \
+    -X POST "$BASE/admin/debug/notify" \
+    -H "$(auth_admin)" -H "Content-Type: application/json" \
+    -d "{\"userId\":\"$USER_ID\",\"type\":\"INVOICE_PAID\",\"title\":\"Throttle $i\",\"body\":\"x\",\"fingerprint\":\"throttle-$i\"}"
+done</code></pre>
+  <div class="expected"><strong>Expect:</strong> First 5 calls return 201; calls 6 and 7 return <code>429</code> (Too Many Requests). Wait 60s and you can call again.</div>
+</div>
+
+<!-- ========== MODULE 8 ========== -->
+<h2 id="module-8">Module 8 — Edge cases</h2>
+
+<div class="step" id="m8-1">
+  <h3><span class="step-num">8.1</span> Notification scheduled for the future</h3>
+  <p>The debug endpoint doesn't expose <code>deliver_at</code>, so we'll set it directly in the DB:</p>
+  <pre><code><span style="color:#7fd1a3"># 1. Create a normal notification</span>
+NOTIF=$(curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d "{\"userId\":\"$USER_ID\",\"type\":\"INVOICE_PAID\",\"title\":\"Future delivery\",\"body\":\"shouldn't show yet\"}")
+NID=$(echo "$NOTIF" | python3 -c "import sys,json; print(json.load(sys.stdin)['notificationId'])")
+
+<span style="color:#7fd1a3"># 2. Push its deliver_at to 1 hour in the future</span>
+docker exec -it my-postgres psql -U postgres -d beeactive -c \
+  "UPDATE notification SET deliver_at = NOW() + INTERVAL '1 hour' WHERE id = '$NID';"
+
+<span style="color:#7fd1a3"># 3. List — this notification should NOT appear</span>
+curl -s -H "$(auth_user)" "$BASE/notifications?limit=20" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('Future notif present:', any(i['notificationId']=='$NID' for i in d['items']))"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>Future notif present: False</code> — the JOIN filter excludes notifications with <code>deliver_at &gt; now</code>.</div>
+  <div class="why"><strong>Why:</strong> Lets producers schedule notifications in advance ("session reminder at 9am tomorrow"). The bell only shows what's currently due.</div>
+</div>
+
+<div class="step" id="m8-2">
+  <h3><span class="step-num">8.2</span> Expired notification disappears</h3>
+  <pre><code>NOTIF=$(curl -s -X POST "$BASE/admin/debug/notify" \
+  -H "$(auth_admin)" -H "Content-Type: application/json" \
+  -d "{\"userId\":\"$USER_ID\",\"type\":\"GROUP_MEMBER_JOINED\",\"title\":\"Expiring\",\"body\":\"x\"}")
+NID=$(echo "$NOTIF" | python3 -c "import sys,json; print(json.load(sys.stdin)['notificationId'])")
+
+<span style="color:#7fd1a3"># Set expire_at in the past</span>
+docker exec -it my-postgres psql -U postgres -d beeactive -c \
+  "UPDATE notification SET expire_at = NOW() - INTERVAL '1 day' WHERE id = '$NID';"
+
+curl -s -H "$(auth_user)" "$BASE/notifications?limit=20" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('Expired notif present:', any(i['notificationId']=='$NID' for i in d['items']))"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>Expired notif present: False</code> — the row is still in the DB but the bell skips it.</div>
+</div>
+
+<div class="step" id="m8-3">
+  <h3><span class="step-num">8.3</span> Email failure is recorded, in-app still works</h3>
+  <p>Hard to simulate a Resend failure without messing with the env, but you can verify the audit field works by inspecting <code>delivered_channels</code> after a normal send:</p>
+  <pre><code>docker exec -it my-postgres psql -U postgres -d beeactive -c \
+  "SELECT delivered_channels FROM notification_receipt WHERE user_id = '$USER_ID' ORDER BY created_at DESC LIMIT 5;"</code></pre>
+  <div class="expected"><strong>Expect:</strong> Each row has the JSONB audit. Successful sends show <code>{"email":"sent",...}</code>. Failed ones would show <code>{"email":"failed:&lt;reason&gt;",...}</code>.</div>
+  <div class="why"><strong>Why:</strong> When a user complains "I didn't get the email", check this field. <code>"sent"</code> = problem is on Resend's side or their inbox. <code>"failed:..."</code> = we know why. <code>"skipped:preference_off"</code> = they turned it off themselves.</div>
+</div>
+
+<div class="step" id="m8-4">
+  <h3><span class="step-num">8.4</span> Reset all preferences at once</h3>
+  <pre><code><span style="color:#7fd1a3"># Make some overrides first</span>
+curl -s -X PATCH "$BASE/users/me/notification-settings" \
+  -H "$(auth_user)" -H "Content-Type: application/json" \
+  -d '{"items":[
+    {"type":"INVOICE_PAID","channels":{"email":false}},
+    {"type":"GROUP_MEMBER_JOINED","channels":{"in_app":false}}
+  ]}'
+
+<span style="color:#7fd1a3"># Wipe them all in one shot</span>
+curl -s -X DELETE "$BASE/users/me/notification-settings" -H "$(auth_user)"
+
+<span style="color:#7fd1a3"># Verify isCustomized = false everywhere</span>
+curl -s -H "$(auth_user)" "$BASE/users/me/notification-settings" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('Customized count:', sum(1 for x in d if x['isCustomized']))"</code></pre>
+  <div class="expected"><strong>Expect:</strong> <code>{"removed":2}</code> then <code>Customized count: 0</code>.</div>
+</div>
+
+<!-- ========== REFERENCE ========== -->
+<h2 id="cheatsheet">Endpoint cheat sheet</h2>
+
+<table>
+  <thead><tr><th>Verb</th><th>Path</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><span class="verb GET">GET</span></td><td><code>/notifications</code></td><td>?page, ?limit (max 100), ?unreadOnly</td></tr>
+    <tr><td><span class="verb GET">GET</span></td><td><code>/notifications/unread-count</code></td><td>Bell badge</td></tr>
+    <tr><td><span class="verb PATCH">PATCH</span></td><td><code>/notifications/read-all</code></td><td>Bulk mark read</td></tr>
+    <tr><td><span class="verb PATCH">PATCH</span></td><td><code>/notifications/viewed</code></td><td>Body: { ids: [] }, max 100</td></tr>
+    <tr><td><span class="verb PATCH">PATCH</span></td><td><code>/notifications/:id/read</code></td><td>204</td></tr>
+    <tr><td><span class="verb PATCH">PATCH</span></td><td><code>/notifications/:id/clicked</code></td><td>204; sets clicked_at + read_at</td></tr>
+    <tr><td><span class="verb PATCH">PATCH</span></td><td><code>/notifications/:id/dismiss</code></td><td>204</td></tr>
+    <tr><td><span class="verb DELETE">DELETE</span></td><td><code>/notifications/:id</code></td><td>204; hard delete</td></tr>
+    <tr><td><span class="verb GET">GET</span></td><td><code>/users/me/notification-settings</code></td><td>Merged view of all 30 types</td></tr>
+    <tr><td><span class="verb PATCH">PATCH</span></td><td><code>/users/me/notification-settings</code></td><td>Bulk upsert; max 200 items</td></tr>
+    <tr><td><span class="verb DELETE">DELETE</span></td><td><code>/users/me/notification-settings/:type/reset</code></td><td>Reset one type</td></tr>
+    <tr><td><span class="verb DELETE">DELETE</span></td><td><code>/users/me/notification-settings</code></td><td>Reset all overrides</td></tr>
+    <tr><td><span class="verb POST">POST</span></td><td><code>/devices/register</code></td><td>Throttled 60/min</td></tr>
+    <tr><td><span class="verb GET">GET</span></td><td><code>/devices</code></td><td>Active only</td></tr>
+    <tr><td><span class="verb DELETE">DELETE</span></td><td><code>/devices/:id</code></td><td>204; sets revoked_at</td></tr>
+    <tr><td><span class="verb PATCH">PATCH</span></td><td><code>/devices/:id/seen</code></td><td>204; bump last_seen_at</td></tr>
+    <tr><td><span class="verb POST">POST</span></td><td><code>/admin/debug/notify</code></td><td>SUPER_ADMIN, throttled 5/min</td></tr>
+  </tbody>
+</table>
+
+<h2 id="types">All 30 notification types</h2>
+<p>Use any of these as the <code>type</code> field in the debug endpoint:</p>
+
+<pre><code><span style="color:#9ba3b4"># Sessions</span>
+SESSION_REMINDER_24H, SESSION_REMINDER_1H, SESSION_CANCELLED,
+SESSION_RESCHEDULED, SESSION_STATUS_CHANGED,
+PARTICIPANT_JOINED, PARTICIPANT_LEFT
+
+<span style="color:#9ba3b4"># Coaching</span>
+CLIENT_REQUEST_RECEIVED, CLIENT_REQUEST_ACCEPTED,
+CLIENT_INVITATION_RECEIVED
+
+<span style="color:#9ba3b4"># Groups</span>
+GROUP_INVITATION_RECEIVED, GROUP_INVITATION_ACCEPTED,
+GROUP_MEMBER_JOINED, GROUP_MEMBER_LEFT,
+GROUP_MEMBER_REMOVED, GROUP_OWNERSHIP_TRANSFERRED
+
+<span style="color:#9ba3b4"># Payments</span>
+INVOICE_CREATED, INVOICE_DUE_SOON, INVOICE_OVERDUE,
+INVOICE_PAID, PAYMENT_FAILED,
+SUBSCRIPTION_CREATED, SUBSCRIPTION_CANCELED,
+PAYOUT_SENT, STRIPE_ACCOUNT_READY, STRIPE_ACCOUNT_RESTRICTED,
+DISPUTE_OPENED, REFUND_ISSUED
+
+<span style="color:#9ba3b4"># Posts</span>
+POST_NEW_COMMENT, POST_PENDING_APPROVAL,
+POST_APPROVED, POST_REJECTED</code></pre>
+
+<h2 id="cleanup">Cleanup commands</h2>
+
+<p>If you want to wipe your test data and start over:</p>
+
+<pre><code><span style="color:#7fd1a3"># Delete all notifications + receipts you've created</span>
+docker exec -it my-postgres psql -U postgres -d beeactive -c "
+  DELETE FROM notification_receipt WHERE user_id = '570ea197-4ac0-4e58-a8c1-bff06c6f945f';
+  DELETE FROM notification WHERE id NOT IN (SELECT DISTINCT notification_id FROM notification_receipt);
+"
+
+<span style="color:#7fd1a3"># Delete all preference overrides</span>
+docker exec -it my-postgres psql -U postgres -d beeactive -c \
+  "DELETE FROM notification_preference WHERE user_id = '570ea197-4ac0-4e58-a8c1-bff06c6f945f';"
+
+<span style="color:#7fd1a3"># Delete all device tokens</span>
+docker exec -it my-postgres psql -U postgres -d beeactive -c \
+  "DELETE FROM device_token WHERE user_id = '570ea197-4ac0-4e58-a8c1-bff06c6f945f';"
+
+<span style="color:#7fd1a3"># Verify clean state</span>
+curl -s -H "$(auth_user)" "$BASE/notifications/unread-count"
+curl -s -H "$(auth_user)" "$BASE/devices"</code></pre>
+
+<p style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px;">
+  When you're done exploring, see the <a href="./notification-tutorial.html" style="color: var(--accent-2);">tutorial</a> for the architecture explanation, or hit <a href="http://localhost:3800/api/docs" style="color: var(--accent-2);">Swagger</a> for the auto-generated API browser.
+</p>
+
+</main>
+</div>
+</body>
+</html>

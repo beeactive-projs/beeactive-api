@@ -17,6 +17,7 @@ import {
   NotificationService,
   NotificationType,
 } from '../../notification/notification.service';
+import { NotificationOutbox } from '../../notification/notification-outbox';
 import {
   fakeTx,
   makeModelMock,
@@ -75,6 +76,13 @@ describe('ConnectService', () => {
     buildIdempotencyKey: jest.Mock;
   };
   let notificationMock: { notify: jest.Mock };
+  // The webhook flow now collects post-commit notifications in an
+  // outbox; we instantiate a real NotificationOutbox wired to the
+  // mock notify(), then assert against `notify` after `outbox.flush()`.
+  // This catches both "did the producer push a notify into the outbox"
+  // and "does flush correctly drain the outbox" — closer to production
+  // than asserting the producer called notify() directly.
+  let outbox: NotificationOutbox;
   let subscriptionMock: { cancelAllActiveAtPeriodEndForInstructor: jest.Mock };
   let configMock: { get: jest.Mock };
 
@@ -96,6 +104,9 @@ describe('ConnectService', () => {
       ),
     };
     notificationMock = { notify: jest.fn().mockResolvedValue(undefined) };
+    outbox = new NotificationOutbox(
+      notificationMock as unknown as NotificationService,
+    );
     subscriptionMock = {
       cancelAllActiveAtPeriodEndForInstructor: jest.fn().mockResolvedValue(0),
     };
@@ -269,7 +280,12 @@ describe('ConnectService', () => {
           requirements: { currently_due: [], disabled_reason: null },
         } as never,
         fakeTx as never,
+        outbox,
       );
+      // Notifications are deferred until after the surrounding tx
+      // commits. Flush manually since there's no real transaction
+      // wrapper in the unit test.
+      await outbox.flush();
 
       expect(row.chargesEnabled).toBe(true);
       expect(row.onboardingCompletedAt).toBeInstanceOf(Date);
@@ -300,7 +316,9 @@ describe('ConnectService', () => {
           requirements: { currently_due: [], disabled_reason: null },
         } as never,
         fakeTx as never,
+        outbox,
       );
+      await outbox.flush();
 
       expect(notificationMock.notify).not.toHaveBeenCalled();
     });
@@ -327,7 +345,9 @@ describe('ConnectService', () => {
           },
         } as never,
         fakeTx as never,
+        outbox,
       );
+      await outbox.flush();
 
       expect(row.disabledReason).toBe('requirements.past_due');
       expect(notificationMock.notify).toHaveBeenCalledWith(
@@ -359,7 +379,8 @@ describe('ConnectService', () => {
         3,
       );
 
-      await service.handleDeauthorized('acct_test', fakeTx as never);
+      await service.handleDeauthorized('acct_test', fakeTx as never, outbox);
+      await outbox.flush();
 
       // 1) Subscriptions cancelled
       expect(
@@ -397,7 +418,8 @@ describe('ConnectService', () => {
         0,
       );
 
-      await service.handleDeauthorized('acct_test', fakeTx as never);
+      await service.handleDeauthorized('acct_test', fakeTx as never, outbox);
+      await outbox.flush();
 
       expect(row.destroy).toHaveBeenCalled();
       expect(notificationMock.notify).toHaveBeenCalledWith(

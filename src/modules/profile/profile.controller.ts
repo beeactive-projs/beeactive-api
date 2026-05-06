@@ -5,6 +5,7 @@ import {
   Patch,
   Body,
   Param,
+  ParseUUIDPipe,
   Query,
   UseGuards,
   Request,
@@ -52,7 +53,7 @@ export class ProfileController {
 
   @Get('instructors/:id')
   @ApiEndpoint(ProfileDocs.getInstructorPublicProfile)
-  async getInstructorPublicProfile(@Param('id') id: string) {
+  async getInstructorPublicProfile(@Param('id', ParseUUIDPipe) id: string) {
     return this.profileService.getInstructorPublicProfile(id);
   }
 

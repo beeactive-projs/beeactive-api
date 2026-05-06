@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -106,7 +107,7 @@ export class PostController {
   @ApiEndpoint(PostDocs.getGroupFeed)
   async getGroupFeed(
     @Request() req: AuthenticatedRequest,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Query() pagination: PaginationDto,
   ) {
     return this.postService.getGroupFeed(
@@ -121,7 +122,7 @@ export class PostController {
   @ApiEndpoint(PostDocs.getGroupPending)
   async getGroupPending(
     @Request() req: AuthenticatedRequest,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Query() pagination: PaginationDto,
   ) {
     return this.postService.getPendingForGroup(
@@ -145,7 +146,7 @@ export class PostController {
   @ApiEndpoint({ ...PostDocs.updatePost, body: UpdatePostDto })
   async updatePost(
     @Request() req: AuthenticatedRequest,
-    @Param('postId') postId: string,
+    @Param('postId', ParseUUIDPipe) postId: string,
     @Body() dto: UpdatePostDto,
   ) {
     return this.postService.updatePost(req.user.id, postId, dto);
@@ -155,7 +156,7 @@ export class PostController {
   @ApiEndpoint(PostDocs.deletePost)
   async deletePost(
     @Request() req: AuthenticatedRequest,
-    @Param('postId') postId: string,
+    @Param('postId', ParseUUIDPipe) postId: string,
   ) {
     return this.postService.deletePost(req.user.id, postId);
   }
@@ -164,7 +165,7 @@ export class PostController {
   @ApiEndpoint({ ...PostDocs.moderatePost, body: ModeratePostDto })
   async moderatePost(
     @Request() req: AuthenticatedRequest,
-    @Param('postId') postId: string,
+    @Param('postId', ParseUUIDPipe) postId: string,
     @Body() dto: ModeratePostDto,
   ): Promise<{ ok: true }> {
     await this.postService.moderatePost(req.user.id, postId, dto);
@@ -180,7 +181,7 @@ export class PostController {
   @ApiEndpoint({ ...PostDocs.addComment, body: CreateCommentDto })
   async addComment(
     @Request() req: AuthenticatedRequest,
-    @Param('postId') postId: string,
+    @Param('postId', ParseUUIDPipe) postId: string,
     @Body() dto: CreateCommentDto,
   ) {
     return this.postService.addComment(req.user.id, postId, dto);
@@ -190,7 +191,7 @@ export class PostController {
   @ApiEndpoint(PostDocs.getComments)
   async getComments(
     @Request() req: AuthenticatedRequest,
-    @Param('postId') postId: string,
+    @Param('postId', ParseUUIDPipe) postId: string,
     @Query() pagination: PaginationDto,
   ) {
     return this.postService.getComments(
@@ -205,7 +206,7 @@ export class PostController {
   @ApiEndpoint(PostDocs.deleteComment)
   async deleteComment(
     @Request() req: AuthenticatedRequest,
-    @Param('commentId') commentId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
   ): Promise<{ ok: true }> {
     await this.postService.deleteComment(req.user.id, commentId);
     return { ok: true };
@@ -220,7 +221,7 @@ export class PostController {
   @ApiEndpoint({ ...PostDocs.toggleReaction, body: ToggleReactionDto })
   async toggleReaction(
     @Request() req: AuthenticatedRequest,
-    @Param('postId') postId: string,
+    @Param('postId', ParseUUIDPipe) postId: string,
     @Body() dto: ToggleReactionDto,
   ) {
     return this.postService.toggleReaction(req.user.id, postId, dto ?? {});

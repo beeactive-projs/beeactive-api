@@ -25,10 +25,13 @@ import { ConfigService } from '@nestjs/config';
 import { StripeService } from './stripe.service';
 import { CustomerService } from './customer.service';
 import { EmailService } from '../../../common/services/email.service';
+import { NotificationService } from '../../notification/notification.service';
+import { NotificationOutbox } from '../../notification/notification-outbox';
 import {
-  NotificationService,
-  NotificationType,
-} from '../../notification/notification.service';
+  subscriptionCreatedForClient,
+  subscriptionCancelledForClient,
+  subscriptionCancelledByClientForInstructor,
+} from '../notifications';
 import {
   buildPaginatedResponse,
   getOffset,
@@ -236,13 +239,9 @@ export class SubscriptionService {
       placeholder.trialEnd = subTs(stripeSub as unknown as SubRaw, 'trial_end');
       await placeholder.save();
 
-      await this.notificationService.notify({
-        userId: dto.clientUserId,
-        type: NotificationType.SUBSCRIPTION_CREATED,
-        title: 'New subscription',
-        body: `You have been subscribed to ${product.name}.`,
-        data: { screen: 'client-subscriptions', entityId: placeholder.id },
-      });
+      await this.notificationService.notify(
+        subscriptionCreatedForClient(dto.clientUserId, product.name),
+      );
 
       this.logger.log(
         `Subscription ${placeholder.id} (stripe ${stripeSub.id}) created (status=${stripeSub.status})`,
@@ -598,7 +597,9 @@ export class SubscriptionService {
     subscriptionId: string,
     immediate: boolean,
   ): Promise<Subscription> {
-    const sub = await this.subscriptionModel.findByPk(subscriptionId);
+    const sub = await this.subscriptionModel.findByPk(subscriptionId, {
+      include: [{ model: Product, attributes: ['id', 'name'] }],
+    });
     if (!sub) throw new NotFoundException('Subscription not found.');
     if (sub.instructorId !== instructorId) {
       throw new ForbiddenException('You do not own this subscription.');
@@ -640,15 +641,13 @@ export class SubscriptionService {
     await sub.save();
 
     if (sub.clientId) {
-      await this.notificationService.notify({
-        userId: sub.clientId,
-        type: NotificationType.SUBSCRIPTION_CANCELED,
-        title: immediate ? 'Subscription canceled' : 'Subscription will cancel',
-        body: immediate
-          ? 'Your subscription has been canceled.'
-          : 'Your subscription will cancel at the end of the current period.',
-        data: { screen: 'client-subscriptions', entityId: sub.id },
-      });
+      await this.notificationService.notify(
+        subscriptionCancelledForClient(
+          sub.clientId,
+          sub.product?.name ?? null,
+          immediate,
+        ),
+      );
     }
     return sub;
   }
@@ -666,7 +665,16 @@ export class SubscriptionService {
     clientId: string,
     subscriptionId: string,
   ): Promise<Subscription> {
-    const sub = await this.subscriptionModel.findByPk(subscriptionId);
+    const sub = await this.subscriptionModel.findByPk(subscriptionId, {
+      include: [
+        { model: Product, attributes: ['id', 'name'] },
+        {
+          model: User,
+          as: 'client',
+          attributes: ['id', 'firstName', 'lastName'],
+        },
+      ],
+    });
     if (!sub) throw new NotFoundException('Subscription not found.');
     if (sub.clientId !== clientId) {
       throw new ForbiddenException('You do not own this subscription.');
@@ -696,20 +704,23 @@ export class SubscriptionService {
 
     // Notify both parties so the instructor sees the pending cancel
     // alongside their other memberships without having to hunt for it.
-    await this.notificationService.notify({
-      userId: clientId,
-      type: NotificationType.SUBSCRIPTION_CANCELED,
-      title: 'Membership will cancel',
-      body: 'Your membership will end at the close of the current period.',
-      data: { screen: 'client-subscriptions', entityId: sub.id },
-    });
-    await this.notificationService.notify({
-      userId: sub.instructorId,
-      type: NotificationType.SUBSCRIPTION_CANCELED,
-      title: 'Membership cancelled by client',
-      body: 'A client cancelled their membership; access ends at period close.',
-      data: { screen: 'instructor-subscriptions', entityId: sub.id },
-    });
+    const clientName =
+      [sub.client?.firstName, sub.client?.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || null;
+    const productName = sub.product?.name ?? null;
+    await this.notificationService.notify(
+      subscriptionCancelledForClient(clientId, productName, false),
+    );
+    await this.notificationService.notify(
+      subscriptionCancelledByClientForInstructor(
+        sub.instructorId,
+        sub.id,
+        clientName,
+        productName,
+      ),
+    );
 
     return sub;
   }
@@ -729,6 +740,12 @@ export class SubscriptionService {
   async syncFromWebhook(
     stripeSub: Stripe.Subscription,
     tx: Transaction,
+    // Reserved for when this method needs to fire post-commit
+    // notifications (e.g. trial ending, status changed). Currently
+    // unused — the producer-driven notify calls live in `create()`,
+    // `cancel()`, and `cancelByClient()` which run outside the
+    // webhook transaction.
+    _outbox?: NotificationOutbox,
   ): Promise<void> {
     const local = await this.subscriptionModel.findOne({
       where: { stripeSubscriptionId: stripeSub.id },

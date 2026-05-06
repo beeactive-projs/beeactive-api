@@ -5,7 +5,7 @@ import {
   SequelizeHealthIndicator,
 } from '@nestjs/terminus';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
+import { HealthService } from './health.service';
 
 /**
  * Health Check Controller
@@ -22,9 +22,9 @@ import { ConfigService } from '@nestjs/config';
 @Controller('health')
 export class HealthController {
   constructor(
-    private health: HealthCheckService,
-    private db: SequelizeHealthIndicator,
-    private configService: ConfigService,
+    private readonly health: HealthCheckService,
+    private readonly db: SequelizeHealthIndicator,
+    private readonly healthService: HealthService,
   ) {}
 
   /**
@@ -94,17 +94,6 @@ export class HealthController {
     },
   })
   getAppConfig() {
-    return {
-      minimumVersion: this.configService.get('APP_MIN_VERSION') || '1.0.0',
-      latestVersion: this.configService.get('APP_LATEST_VERSION') || '1.0.0',
-      forceUpdate: false,
-      maintenanceMode: this.configService.get('MAINTENANCE_MODE') === 'true',
-      features: {
-        payments: false,
-        liveSession: false,
-        chat: false,
-        pushNotifications: false,
-      },
-    };
+    return this.healthService.getAppConfig();
   }
 }

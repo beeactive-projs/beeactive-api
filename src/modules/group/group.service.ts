@@ -14,10 +14,16 @@ import { CryptoService } from '../../common/services/crypto.service';
 import { EmailService } from '../../common/services/email.service';
 import { buildSearchTerm } from '../../common/utils/search.utils';
 import { InstructorClient } from '../client/entities/instructor-client.entity';
+import { NotificationService } from '../notification/notification.service';
 import {
-  NotificationService,
-  NotificationType,
-} from '../notification/notification.service';
+  groupMemberRemoved,
+  groupJoinRequestReceived,
+  groupJoinRequestApproved,
+  groupJoinRequestRejected,
+  groupOwnershipTransferredToNewOwner,
+  groupOwnershipTransferredFromOldOwner,
+  groupMemberRoleChanged,
+} from './notifications';
 import {
   InstructorProfile,
   type SocialLinks,
@@ -83,15 +89,17 @@ export interface SelfJoinResult {
 export class GroupService {
   constructor(
     @InjectModel(Group)
-    private groupModel: typeof Group,
+    private readonly groupModel: typeof Group,
     @InjectModel(GroupMember)
-    private memberModel: typeof GroupMember,
+    private readonly memberModel: typeof GroupMember,
     @InjectModel(GroupJoinRequest)
-    private joinRequestModel: typeof GroupJoinRequest,
+    private readonly joinRequestModel: typeof GroupJoinRequest,
     @InjectModel(InstructorClient)
-    private instructorClientModel: typeof InstructorClient,
-    private emailService: EmailService,
-    private cryptoService: CryptoService,
+    private readonly instructorClientModel: typeof InstructorClient,
+    @InjectModel(User)
+    private readonly userModel: typeof User,
+    private readonly emailService: EmailService,
+    private readonly cryptoService: CryptoService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
     private readonly searchIndexService: SearchIndexService,
@@ -504,7 +512,7 @@ export class GroupService {
     memberId: string,
     userId: string,
   ): Promise<void> {
-    await this.assertOwner(groupId, userId);
+    const group = await this.assertOwnerAndGet(groupId, userId);
 
     const member = await this.memberModel.findOne({
       where: { groupId, userId: memberId, leftAt: null },
@@ -525,13 +533,9 @@ export class GroupService {
       'GroupService',
     );
 
-    await this.notificationService.notify({
-      userId: memberId,
-      type: NotificationType.GROUP_MEMBER_REMOVED,
-      title: 'You were removed from a group',
-      body: 'A group owner removed you from the group.',
-      data: { screen: 'groups', entityId: groupId },
-    });
+    await this.notificationService.notify(
+      groupMemberRemoved(memberId, { id: group.id, name: group.name }),
+    );
   }
 
   // =====================================================
@@ -824,6 +828,10 @@ export class GroupService {
       );
     }
 
+    // Look up *any* existing membership row, including ones the user
+    // previously left. The UNIQUE index on (group_id, user_id) covers
+    // all rows regardless of leftAt, so we must revive the existing
+    // row rather than insert a new one.
     const existingMember = await this.memberModel.findOne({
       where: { groupId, userId },
     });
@@ -834,6 +842,7 @@ export class GroupService {
     if (group.joinPolicy === JoinPolicy.OPEN) {
       let member: GroupMember;
       if (existingMember) {
+        // Re-joining: clear leftAt + reset role.
         await existingMember.update({
           leftAt: null,
           role: GroupMemberRole.MEMBER,
@@ -874,14 +883,22 @@ export class GroupService {
 
     // Notify the owner. Best-effort — don't fail the request creation if
     // the notification pipeline has a hiccup.
+    const requester = await this.userModel.findByPk(userId, {
+      attributes: ['id', 'firstName', 'lastName'],
+    });
+    const requesterName =
+      [requester?.firstName, requester?.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || null;
     await this.notificationService
-      .notify({
-        userId: group.instructorId,
-        type: NotificationType.GROUP_JOIN_REQUEST_RECEIVED,
-        title: 'New request to join your group',
-        body: 'A user has requested to join your group.',
-        data: { screen: 'group-detail', entityId: groupId },
-      })
+      .notify(
+        groupJoinRequestReceived(
+          group.instructorId,
+          { id: group.id, name: group.name },
+          requesterName,
+        ),
+      )
       .catch((err) => {
         this.logger.error(
           `[groups] notify GROUP_JOIN_REQUEST_RECEIVED failed for owner ${group.instructorId}, group ${groupId}: ${(err as Error).message}`,
@@ -943,7 +960,7 @@ export class GroupService {
     requestingUserId: string,
     dto: DecideJoinRequestDto,
   ): Promise<GroupJoinRequest> {
-    await this.assertOwnerAndGet(groupId, requestingUserId);
+    const group = await this.assertOwnerAndGet(groupId, requestingUserId);
 
     const request = await this.joinRequestModel.findOne({
       where: { id: requestId, groupId },
@@ -1009,26 +1026,24 @@ export class GroupService {
     );
 
     const approved = dto.action === JoinRequestDecision.APPROVE;
-    await this.notificationService
-      .notify({
-        userId: request.userId,
-        type: approved
-          ? NotificationType.GROUP_JOIN_REQUEST_APPROVED
-          : NotificationType.GROUP_JOIN_REQUEST_REJECTED,
-        title: approved
-          ? 'Your join request was approved'
-          : 'Your join request was not approved',
-        body: approved
-          ? 'You are now a member of the group.'
-          : 'The owner declined your request to join.',
-        data: { screen: 'group-detail', entityId: groupId },
-      })
-      .catch((err) => {
-        this.logger.error(
-          `[groups] notify join-request decision failed for user ${request.userId}, group ${groupId}: ${(err as Error).message}`,
-          'GroupService',
-        );
-      });
+    const params = approved
+      ? groupJoinRequestApproved(request.userId, {
+          id: group.id,
+          name: group.name,
+        })
+      : groupJoinRequestRejected(request.userId, {
+          id: group.id,
+          name: group.name,
+        });
+    // notify-after-commit: fired AFTER the tx above resolves, so a
+    // rollback can never leave an orphan "you were approved" alert.
+    // Do NOT hoist this inside the transaction block.
+    await this.notificationService.notify(params).catch((err) => {
+      this.logger.error(
+        `[groups] notify join-request decision failed for user ${request.userId}, group ${groupId}: ${(err as Error).message}`,
+        'GroupService',
+      );
+    });
 
     return request;
   }
@@ -1176,20 +1191,29 @@ export class GroupService {
       );
     }
 
-    // Check if already a member
+    // Look up *any* existing membership row, including ones the user
+    // previously left. The UNIQUE index on (group_id, user_id) covers
+    // all rows regardless of leftAt, so we must revive the existing
+    // row rather than insert a new one.
     const existing = await this.memberModel.findOne({
-      where: { groupId: group.id, userId, leftAt: null },
+      where: { groupId: group.id, userId },
     });
 
-    if (existing) {
+    if (existing && existing.leftAt === null) {
       throw new BadRequestException('You are already a member of this group');
     }
 
-    const member = await this.memberModel.create({
-      groupId: group.id,
-      userId,
-      role: GroupMemberRole.MEMBER,
-    });
+    let member: GroupMember;
+    if (existing) {
+      await existing.update({ leftAt: null, role: GroupMemberRole.MEMBER });
+      member = existing;
+    } else {
+      member = await this.memberModel.create({
+        groupId: group.id,
+        userId,
+        role: GroupMemberRole.MEMBER,
+      });
+    }
 
     this.logger.log(
       `User ${userId} joined group ${group.name} (${group.id}) via join link`,
@@ -1329,7 +1353,7 @@ export class GroupService {
     currentOwnerId: string,
     newOwnerId: string,
   ): Promise<{ message: string }> {
-    await this.assertOwner(groupId, currentOwnerId);
+    const group = await this.assertOwnerAndGet(groupId, currentOwnerId);
 
     if (currentOwnerId === newOwnerId) {
       throw new BadRequestException('You are already the owner');
@@ -1388,23 +1412,28 @@ export class GroupService {
       'GroupService',
     );
 
-    // Notify both parties after commit. Failures here log but don't roll
-    // back the transfer — the user-visible action already succeeded.
+    // Notify both parties after commit. Failures here log but don't
+    // bubble — the transfer already succeeded; a flaky bell shouldn't
+    // turn a 200 into a 500. Each notify is independently caught so
+    // one failing recipient doesn't block the other.
+    const groupRef = { id: group.id, name: group.name };
     await Promise.all([
-      this.notificationService.notify({
-        userId: newOwnerId,
-        type: NotificationType.GROUP_OWNERSHIP_TRANSFERRED,
-        title: 'You are now the owner of a group',
-        body: 'Group ownership was transferred to you.',
-        data: { screen: 'group-detail', entityId: groupId },
-      }),
-      this.notificationService.notify({
-        userId: currentOwnerId,
-        type: NotificationType.GROUP_OWNERSHIP_TRANSFERRED,
-        title: 'Group ownership transferred',
-        body: 'You have transferred ownership of the group.',
-        data: { screen: 'group-detail', entityId: groupId },
-      }),
+      this.notificationService
+        .notify(groupOwnershipTransferredToNewOwner(newOwnerId, groupRef))
+        .catch((err: Error) =>
+          this.logger.error(
+            `[groups] notify GROUP_OWNERSHIP_TRANSFERRED (new owner) failed for ${newOwnerId}, group ${groupId}: ${err.message}`,
+            'GroupService',
+          ),
+        ),
+      this.notificationService
+        .notify(groupOwnershipTransferredFromOldOwner(currentOwnerId, groupRef))
+        .catch((err: Error) =>
+          this.logger.error(
+            `[groups] notify GROUP_OWNERSHIP_TRANSFERRED (old owner) failed for ${currentOwnerId}, group ${groupId}: ${err.message}`,
+            'GroupService',
+          ),
+        ),
     ]);
 
     return { message: 'Ownership transferred successfully' };
@@ -1502,7 +1531,7 @@ export class GroupService {
     targetUserId: string,
     dto: UpdateMemberRoleDto,
   ): Promise<GroupMember> {
-    await this.assertOwner(groupId, requestingUserId);
+    const group = await this.assertOwnerAndGet(groupId, requestingUserId);
 
     if (requestingUserId === targetUserId) {
       throw new BadRequestException(
@@ -1532,6 +1561,23 @@ export class GroupService {
     }
 
     await target.update({ role: newRole });
+
+    // Tell the affected member their role changed. Best-effort.
+    await this.notificationService
+      .notify(
+        groupMemberRoleChanged(
+          targetUserId,
+          { id: group.id, name: group.name },
+          newRole,
+        ),
+      )
+      .catch((err: Error) =>
+        this.logger.error(
+          `[groups] notify GROUP_MEMBER_ROLE_CHANGED failed for user ${targetUserId}, group ${groupId}: ${err.message}`,
+          'GroupService',
+        ),
+      );
+
     return target;
   }
 }
