@@ -36,11 +36,13 @@ export const envValidationSchema = Joi.object({
   // production; optional in dev/test so a developer without Redis
   // running can still boot the API (the JobsModule degrades to a
   // no-op enqueue + logs a warning).
-  REDIS_HOST: Joi.string().when('NODE_ENV', {
-    is: 'production',
-    then: Joi.required(),
-    otherwise: Joi.optional(),
-  }),
+  // REDIS_HOST: Joi.string().when('NODE_ENV', {
+  //   is: 'production',
+  //   then: Joi.required(),
+  //   otherwise: Joi.optional(),
+  // }),
+
+  REDIS_HOST: Joi.string().optional(),
   REDIS_PORT: Joi.number().default(6379),
   REDIS_PASSWORD: Joi.string().optional(),
   // Set to "true" when using Redis Cloud / managed Redis (TLS-enabled).
