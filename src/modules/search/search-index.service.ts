@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import type { LoggerService } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/sequelize';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { QueryTypes, Sequelize, Transaction } from 'sequelize';
 import { SearchEntityType } from './entities/search-doc.entity';
 
@@ -25,9 +27,11 @@ import { SearchEntityType } from './entities/search-doc.entity';
  */
 @Injectable()
 export class SearchIndexService {
-  private readonly logger = new Logger(SearchIndexService.name);
-
-  constructor(@InjectConnection() private readonly _sequelize: Sequelize) {}
+  constructor(
+    @InjectConnection() private readonly _sequelize: Sequelize,
+    @Inject(WINSTON_MODULE_NEST_PROVIDER)
+    private readonly logger: LoggerService,
+  ) {}
 
   // ────── User ──────
 
@@ -359,7 +363,10 @@ export class SearchIndexService {
     groups: number;
     sessions: number;
   }> {
-    this.logger.log('reindexAll: starting full search-index rebuild');
+    this.logger.log(
+      'reindexAll: starting full search-index rebuild',
+      'SearchIndexService',
+    );
 
     const result = { users: 0, instructors: 0, groups: 0, sessions: 0 };
 
@@ -402,6 +409,7 @@ export class SearchIndexService {
 
     this.logger.log(
       `reindexAll: done — ${result.users} users, ${result.instructors} instructors, ${result.groups} groups, ${result.sessions} sessions`,
+      'SearchIndexService',
     );
     return result;
   }

@@ -22,6 +22,7 @@ import { InvitationModule } from './modules/invitation/invitation.module';
 import { ClientModule } from './modules/client/client.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { EmailModule } from './common/services/email.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
@@ -117,6 +118,10 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
 
     // Event Emitter (for pub/sub within the app)
     EventEmitterModule.forRoot(),
+
+    // Shared singletons (declared @Global() so any feature module
+    // can inject without listing them in its own imports[]).
+    EmailModule,
 
     // Feature Modules
     HealthModule, // Health checks

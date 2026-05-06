@@ -66,17 +66,17 @@ export interface AuthUserResponse {
 export class AuthService {
   constructor(
     @InjectModel(RefreshToken)
-    private refreshTokenModel: typeof RefreshToken,
-    private userService: UserService,
-    private jwtService: JwtService,
-    private roleService: RoleService,
-    private profileService: ProfileService,
-    private customerService: CustomerService,
-    private configService: ConfigService,
-    private sequelize: Sequelize,
-    private emailService: EmailService,
-    private cryptoService: CryptoService,
-    private emailVerifier: EmailVerifierService,
+    private readonly refreshTokenModel: typeof RefreshToken,
+    private readonly userService: UserService,
+    private readonly jwtService: JwtService,
+    private readonly roleService: RoleService,
+    private readonly profileService: ProfileService,
+    private readonly customerService: CustomerService,
+    private readonly configService: ConfigService,
+    private readonly sequelize: Sequelize,
+    private readonly emailService: EmailService,
+    private readonly cryptoService: CryptoService,
+    private readonly emailVerifier: EmailVerifierService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -588,6 +588,27 @@ export class AuthService {
     return {
       message: 'Email verified successfully. You can now use all features.',
     };
+  }
+
+  /**
+   * GET /auth/verify-email landing-page renderer. Wraps the JSON
+   * `verifyEmail()` flow with a tiny HTML response so the link in the
+   * verification email can land in a browser without the FE having
+   * to mount a `/verify-email` route. Returns the HTML + status code
+   * the controller should reply with — keeps presentation out of the
+   * controller.
+   */
+  async verifyEmailHtml(
+    token: string,
+  ): Promise<{ status: number; html: string }> {
+    const successHtml = `<html><body style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#fef3c7;"><div style="text-align:center;padding:40px;background:white;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);"><h1 style="color:#f59e0b;">Email Verified!</h1><p>Your email has been verified successfully. You can close this page.</p></div></body></html>`;
+    const errorHtml = `<html><body style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#fef2f2;"><div style="text-align:center;padding:40px;background:white;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);"><h1 style="color:#ef4444;">Verification Failed</h1><p>This link is invalid or has expired. Please request a new verification email.</p></div></body></html>`;
+    try {
+      await this.verifyEmail({ token });
+      return { status: 200, html: successHtml };
+    } catch {
+      return { status: 400, html: errorHtml };
+    }
   }
 
   async resendVerification(resendVerificationDto: ResendVerificationDto) {

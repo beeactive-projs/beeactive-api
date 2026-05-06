@@ -46,6 +46,23 @@ export class EmailSendWorker extends BaseWorker<'notifications.email_send'> {
     payload: JobPayload<'notifications.email_send'>,
     ctx: JobContext,
   ): Promise<void> {
+    // Idempotency check — if a previous attempt for this receipt
+    // already succeeded, skip re-sending. BullMQ jobId-based dedup
+    // covers re-enqueue of the same job, but doesn't cover post-fail
+    // worker retries (BullMQ retries call handle() again with the
+    // same payload). Resend has no idempotency-key support, so we
+    // dedupe at the receipt level instead.
+    const alreadySent = await this.receiptService.isChannelDelivered(
+      payload.receiptId,
+      'email',
+    );
+    if (alreadySent) {
+      ctx.log.log(
+        `email skip (already delivered) receipt=${payload.receiptId}`,
+      );
+      return;
+    }
+
     const status = await this.emailService.sendNotificationEmail({
       to: payload.to,
       title: payload.title,

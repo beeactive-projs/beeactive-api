@@ -112,15 +112,15 @@ export interface ClientRow {
 export class ClientService {
   constructor(
     @InjectModel(InstructorClient)
-    private instructorClientModel: typeof InstructorClient,
+    private readonly instructorClientModel: typeof InstructorClient,
     @InjectModel(ClientRequest)
-    private clientRequestModel: typeof ClientRequest,
+    private readonly clientRequestModel: typeof ClientRequest,
     @InjectModel(InstructorProfile)
-    private instructorProfileModel: typeof InstructorProfile,
-    private sequelize: Sequelize,
-    private roleService: RoleService,
-    private emailService: EmailService,
-    private notificationService: NotificationService,
+    private readonly instructorProfileModel: typeof InstructorProfile,
+    private readonly sequelize: Sequelize,
+    private readonly roleService: RoleService,
+    private readonly emailService: EmailService,
+    private readonly notificationService: NotificationService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -642,6 +642,34 @@ export class ClientService {
   // =====================================================
 
   /**
+   * Dispatch an invitation to either an existing platform user or a
+   * raw email address. The DTO requires exactly one of `userId` /
+   * `email`; controller hands the DTO straight in. Centralizes the
+   * branch + response envelope so controllers stay thin.
+   */
+  async sendInvitationFromDto(
+    instructorId: string,
+    dto: { userId?: string; email?: string; message?: string },
+  ): Promise<{ message: string; request: ClientRequest }> {
+    if (dto.userId) {
+      const request = await this.sendClientInvitation(
+        instructorId,
+        dto.userId,
+        dto.message,
+      );
+      return { message: 'Invitation sent to existing user', request };
+    }
+    if (!dto.email) {
+      throw new BadRequestException('Provide either userId or email.');
+    }
+    return this.sendClientInvitationByEmail(
+      instructorId,
+      dto.email,
+      dto.message,
+    );
+  }
+
+  /**
    * Instructor sends an invitation by email
    *
    * If the email belongs to an existing user, delegates to sendClientInvitation.
@@ -873,6 +901,9 @@ export class ClientService {
         ),
       );
 
+    // notify-after-commit: the placeholder/request rows are persisted
+    // by the tx wrapped above. Do NOT hoist this inside that block —
+    // a rollback would orphan a "you were invited as a client" alert.
     await this.notificationService
       .notify(clientInvitationReceived(toUserId, instructorName))
       .catch((err: Error) =>
@@ -1116,6 +1147,8 @@ export class ClientService {
         .filter(Boolean)
         .join(' ')
         .trim() || null;
+    // notify-after-commit: request status flip + relationship upsert
+    // committed in the tx above. Do NOT hoist inside.
     await this.notificationService
       .notify(clientRequestAccepted(request.fromUserId, responderName))
       .catch((err: Error) =>

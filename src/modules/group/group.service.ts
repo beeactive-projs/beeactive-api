@@ -89,17 +89,17 @@ export interface SelfJoinResult {
 export class GroupService {
   constructor(
     @InjectModel(Group)
-    private groupModel: typeof Group,
+    private readonly groupModel: typeof Group,
     @InjectModel(GroupMember)
-    private memberModel: typeof GroupMember,
+    private readonly memberModel: typeof GroupMember,
     @InjectModel(GroupJoinRequest)
-    private joinRequestModel: typeof GroupJoinRequest,
+    private readonly joinRequestModel: typeof GroupJoinRequest,
     @InjectModel(InstructorClient)
-    private instructorClientModel: typeof InstructorClient,
+    private readonly instructorClientModel: typeof InstructorClient,
     @InjectModel(User)
-    private userModel: typeof User,
-    private emailService: EmailService,
-    private cryptoService: CryptoService,
+    private readonly userModel: typeof User,
+    private readonly emailService: EmailService,
+    private readonly cryptoService: CryptoService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
     private readonly searchIndexService: SearchIndexService,
@@ -1035,6 +1035,9 @@ export class GroupService {
           id: group.id,
           name: group.name,
         });
+    // notify-after-commit: fired AFTER the tx above resolves, so a
+    // rollback can never leave an orphan "you were approved" alert.
+    // Do NOT hoist this inside the transaction block.
     await this.notificationService.notify(params).catch((err) => {
       this.logger.error(
         `[groups] notify join-request decision failed for user ${request.userId}, group ${groupId}: ${(err as Error).message}`,

@@ -12,6 +12,7 @@ interface EmailMock {
 }
 interface ReceiptMock {
   recordChannelOutcome: jest.Mock;
+  isChannelDelivered: jest.Mock;
 }
 
 const fakeJob = (data: unknown, attempts = 0) =>
@@ -30,7 +31,12 @@ describe('EmailSendWorker', () => {
 
   beforeEach(async () => {
     email = { sendNotificationEmail: jest.fn() };
-    receipts = { recordChannelOutcome: jest.fn().mockResolvedValue(undefined) };
+    receipts = {
+      recordChannelOutcome: jest.fn().mockResolvedValue(undefined),
+      // Default: not yet delivered. Tests that exercise the
+      // already-delivered short-circuit override this per-test.
+      isChannelDelivered: jest.fn().mockResolvedValue(false),
+    };
 
     const ref = await Test.createTestingModule({
       providers: [
@@ -64,6 +70,25 @@ describe('EmailSendWorker', () => {
       'email',
       'sent',
     );
+  });
+
+  it('idempotency: skips re-sending when the receipt is already marked sent', async () => {
+    // BullMQ retry of an already-delivered receipt — we must NOT
+    // re-send (Resend has no idempotency-key support, so we dedupe
+    // at the receipt level).
+    receipts.isChannelDelivered.mockResolvedValueOnce(true);
+
+    await worker.process(
+      fakeJob({
+        receiptId: 'r-1',
+        to: 'u@example.com',
+        title: 'Hi',
+        body: 'World',
+      }),
+    );
+
+    expect(email.sendNotificationEmail).not.toHaveBeenCalled();
+    expect(receipts.recordChannelOutcome).not.toHaveBeenCalled();
   });
 
   it('on failure: records "failed:<reason>" then throws TemporaryError so BullMQ retries', async () => {

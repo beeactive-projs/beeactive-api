@@ -12,7 +12,6 @@ import { getJwtConfig } from '../../config/jwt.config';
 import { RoleModule } from '../role/role.module';
 import { ProfileModule } from '../profile/profile.module';
 import { PaymentModule } from '../payment/payment.module';
-import { EmailService } from '../../common/services/email.service';
 import { CryptoService } from '../../common/services/crypto.service';
 import { EmailVerifierService } from '../../common/services/email-verifier.service';
 
@@ -34,13 +33,7 @@ import { EmailVerifierService } from '../../common/services/email-verifier.servi
     }),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    EmailService,
-    CryptoService,
-    EmailVerifierService,
-  ],
+  providers: [AuthService, JwtStrategy, CryptoService, EmailVerifierService],
   exports: [AuthService],
 })
 export class AuthModule {}

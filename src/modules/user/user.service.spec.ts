@@ -38,7 +38,7 @@ describe('UserController getProfile (/users/me)', () => {
 
     const result = controller.getProfile(
       fakeReq as unknown as AuthenticatedRequest,
-    ) as Record<string, unknown>;
+    );
 
     expect(result).toHaveProperty('id', 'u-1');
     expect(result).toHaveProperty('email', 'jane@example.com');

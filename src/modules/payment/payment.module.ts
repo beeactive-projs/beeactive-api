@@ -3,7 +3,6 @@ import { SequelizeModule } from '@nestjs/sequelize';
 
 import { RoleModule } from '../role/role.module';
 import { User } from '../user/entities/user.entity';
-import { EmailService } from '../../common/services/email.service';
 
 // Entities
 import { StripeAccount } from './entities/stripe-account.entity';
@@ -95,7 +94,6 @@ import { PaymentPublicController } from './payment-public.controller';
     SubscriptionService,
     RefundService,
     EarningsService,
-    EmailService,
   ],
   exports: [StripeService, CustomerService],
 })

@@ -36,10 +36,10 @@ import { SearchIndexService } from '../search/search-index.service';
 export class ProfileService {
   constructor(
     @InjectModel(InstructorProfile)
-    private instructorProfileModel: typeof InstructorProfile,
-    private sequelize: Sequelize,
-    private roleService: RoleService,
-    private userService: UserService,
+    private readonly instructorProfileModel: typeof InstructorProfile,
+    private readonly sequelize: Sequelize,
+    private readonly roleService: RoleService,
+    private readonly userService: UserService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
     private readonly searchIndexService: SearchIndexService,

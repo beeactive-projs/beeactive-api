@@ -6,7 +6,7 @@ import { InvitationService } from './invitation.service';
 import { GroupModule } from '../group/group.module';
 import { GroupMember } from '../group/entities/group-member.entity';
 import { RoleModule } from '../role/role.module';
-import { CryptoService, EmailService } from '../../common/services';
+import { CryptoService } from '../../common/services';
 
 /**
  * Invitation Module
@@ -21,7 +21,7 @@ import { CryptoService, EmailService } from '../../common/services';
     RoleModule,
   ],
   controllers: [InvitationController],
-  providers: [InvitationService, CryptoService, EmailService],
+  providers: [InvitationService, CryptoService],
   exports: [InvitationService],
 })
 export class InvitationModule {}

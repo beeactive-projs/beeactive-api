@@ -1,0 +1,1961 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MotionHive API — Architecture Tour</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --panel-2: #273449;
+        --border: #334155;
+        --text: #e2e8f0;
+        --text-dim: #94a3b8;
+        --accent: #f59e0b;
+        --accent-2: #fbbf24;
+        --good: #22c55e;
+        --bad: #ef4444;
+        --code-bg: #0b1220;
+        --code-text: #e0e7ef;
+        --link: #60a5fa;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+          Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      .layout {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 32px 24px 96px;
+      }
+      header.title {
+        margin-bottom: 32px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--border);
+      }
+      header.title h1 {
+        margin: 0 0 8px;
+        font-size: 36px;
+        color: var(--accent);
+      }
+      header.title p {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: 16px;
+      }
+      nav.toc {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px 24px;
+        margin-bottom: 40px;
+      }
+      nav.toc h2 {
+        margin: 0 0 12px;
+        font-size: 14px;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        letter-spacing: 0.06em;
+      }
+      nav.toc ol {
+        margin: 0;
+        padding-left: 20px;
+        columns: 2;
+        column-gap: 32px;
+      }
+      nav.toc a {
+        color: var(--link);
+        text-decoration: none;
+      }
+      nav.toc a:hover {
+        text-decoration: underline;
+      }
+      h2.section {
+        margin-top: 64px;
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--accent);
+        color: var(--accent-2);
+        font-size: 26px;
+      }
+      h3 {
+        margin-top: 32px;
+        color: var(--accent-2);
+        font-size: 19px;
+      }
+      h4 {
+        margin-top: 24px;
+        color: var(--text);
+        font-size: 16px;
+      }
+      p {
+        margin: 12px 0;
+      }
+      .lead {
+        background: var(--panel);
+        border-left: 4px solid var(--accent);
+        padding: 14px 18px;
+        margin: 16px 0;
+        border-radius: 4px;
+      }
+      code {
+        font-family:
+          'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
+        background: var(--panel-2);
+        color: var(--accent-2);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.92em;
+      }
+      pre {
+        background: var(--code-bg);
+        color: var(--code-text);
+        padding: 16px 20px;
+        border-radius: 8px;
+        overflow-x: auto;
+        font-size: 13px;
+        line-height: 1.55;
+        margin: 16px 0;
+        border: 1px solid var(--border);
+      }
+      pre code {
+        background: transparent;
+        color: inherit;
+        padding: 0;
+        font-size: inherit;
+      }
+      .file-path {
+        display: inline-block;
+        background: var(--panel-2);
+        color: var(--accent-2);
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-family: 'JetBrains Mono', Menlo, monospace;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+      .callout {
+        margin: 16px 0;
+        padding: 14px 18px;
+        border-radius: 6px;
+        border-left: 4px solid;
+      }
+      .callout.warn {
+        background: #2a1f0d;
+        border-color: var(--accent);
+      }
+      .callout.bad {
+        background: #2a0d0d;
+        border-color: var(--bad);
+      }
+      .callout.good {
+        background: #0c2418;
+        border-color: var(--good);
+      }
+      .callout.info {
+        background: #0d1f2a;
+        border-color: var(--link);
+      }
+      .callout strong {
+        color: var(--accent-2);
+      }
+      .diagram {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 24px;
+        margin: 20px 0;
+      }
+      .diagram pre {
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin: 0;
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0;
+        background: var(--panel);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      th,
+      td {
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        background: var(--panel-2);
+        color: var(--accent-2);
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      tr:last-child td {
+        border-bottom: none;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-right: 4px;
+      }
+      .pill.green {
+        background: #134e2e;
+        color: #86efac;
+      }
+      .pill.red {
+        background: #4e1313;
+        color: #fca5a5;
+      }
+      .pill.blue {
+        background: #1e3a5f;
+        color: #93c5fd;
+      }
+      .pill.amber {
+        background: #4e3a13;
+        color: #fcd34d;
+      }
+      hr.divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 48px 0;
+      }
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .two-col h4 {
+        margin-top: 0;
+      }
+      a {
+        color: var(--link);
+      }
+      .footnote {
+        font-size: 13px;
+        color: var(--text-dim);
+        margin-top: 8px;
+      }
+      .keycap {
+        display: inline-block;
+        padding: 1px 6px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        font-family: 'JetBrains Mono', Menlo, monospace;
+        font-size: 12px;
+      }
+      .arrow {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      ul li,
+      ol li {
+        margin-bottom: 6px;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--accent-2);
+        font-weight: 600;
+        margin: 12px 0;
+      }
+      details {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px 18px;
+        margin: 12px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <header class="title">
+        <h1>MotionHive API — Architecture Tour</h1>
+        <p>
+          A guided walkthrough of how the backend is structured, how its pieces
+          wire together, and how the jobs / notification system flows end-to-end.
+          Written for someone new to TypeScript and NestJS.
+        </p>
+      </header>
+
+      <nav class="toc">
+        <h2>Contents</h2>
+        <ol>
+          <li><a href="#ts-basics">1. TypeScript basics</a></li>
+          <li><a href="#nest-basics">2. NestJS in 5 minutes</a></li>
+          <li><a href="#di">3. Dependency injection</a></li>
+          <li><a href="#decorators">4. Decorators (the @ symbols)</a></li>
+          <li><a href="#layout">5. Project layout</a></li>
+          <li><a href="#module-anatomy">6. Anatomy of a module</a></li>
+          <li><a href="#request-lifecycle">7. Request lifecycle</a></li>
+          <li><a href="#auth">8. Authentication & authorization</a></li>
+          <li><a href="#db">9. Database (Sequelize)</a></li>
+          <li><a href="#transactions">10. Transactions</a></li>
+          <li><a href="#notifications">11. Notification system</a></li>
+          <li><a href="#jobs">12. Jobs system (BullMQ)</a></li>
+          <li><a href="#stripe">13. Stripe webhooks</a></li>
+          <li><a href="#email">14. Email delivery</a></li>
+          <li><a href="#tests">15. Tests</a></li>
+          <li><a href="#cheatsheet">16. Cheat sheet</a></li>
+        </ol>
+      </nav>
+
+      <!-- 1. TypeScript basics ============================================= -->
+      <h2 id="ts-basics" class="section">1. TypeScript basics</h2>
+
+      <p>
+        TypeScript is JavaScript with types. The compiler checks at build-time
+        that you're not accidentally passing a string where a number is
+        expected. At runtime, everything becomes regular JavaScript.
+      </p>
+
+      <h3>Things you'll see in this codebase</h3>
+
+      <h4>Type annotations</h4>
+
+      <pre><code>// `name` must be a string. `age` must be a number. Returns a string.
+function greet(name: string, age: number): string {
+  return `Hi ${name}, you are ${age}.`;
+}
+
+// `findById` returns a `User` OR `null` (the `| null` is a union).
+async function findById(id: string): Promise&lt;User | null&gt; {
+  return userModel.findByPk(id);
+}</code></pre>
+
+      <h4>Interfaces & types</h4>
+
+      <pre><code>// An interface describes the shape of an object.
+interface NotifyParams {
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data?: NotificationData;   // ?: means optional
+}
+
+// `type` is similar but more flexible. Used for unions:
+type SocialProvider = 'GOOGLE' | 'FACEBOOK' | 'APPLE';</code></pre>
+
+      <h4>Classes</h4>
+
+      <pre><code>class GroupService {
+  // `private readonly` = this field can only be assigned in the
+  // constructor, and only this class can read it.
+  constructor(private readonly groupModel: typeof Group) {}
+
+  async findById(id: string): Promise&lt;Group | null&gt; {
+    return this.groupModel.findByPk(id);
+  }
+}</code></pre>
+
+      <h4>Generics</h4>
+
+      <pre><code>// `T` is a placeholder for whatever type the caller passes.
+// This lets the same function work with User, Group, anything.
+function buildPaginatedResponse&lt;T&gt;(
+  items: T[],
+  total: number,
+  page: number,
+  pageSize: number,
+): PaginatedResponse&lt;T&gt; {
+  return { items, total, page, pageSize };
+}
+
+// Usage:
+const result = buildPaginatedResponse&lt;User&gt;(users, 100, 1, 20);</code></pre>
+
+      <h4>async / await</h4>
+
+      <p>
+        Anything that hits a database, the network, or a file is asynchronous —
+        it returns a <code>Promise</code>. <code>await</code> pauses the
+        function until the Promise resolves.
+      </p>
+
+      <pre><code>// `await` only works inside an `async` function.
+async function loadUser(id: string) {
+  const user = await userModel.findByPk(id);  // pause until DB returns
+  console.log(user.email);                    // runs after
+}</code></pre>
+
+      <hr class="divider" />
+
+      <!-- 2. NestJS in 5 minutes ========================================= -->
+      <h2 id="nest-basics" class="section">2. NestJS in 5 minutes</h2>
+
+      <p>
+        <strong>NestJS</strong> is a framework for building server-side
+        TypeScript apps. Think of it as the structure layer that organizes
+        Express into <em>modules</em>, <em>controllers</em>, and
+        <em>services</em>.
+      </p>
+
+      <div class="diagram">
+        <pre>
+HTTP Request
+     │
+     ▼
+┌───────────────┐    ┌──────────────┐    ┌───────────────┐    ┌──────────┐
+│  Controller   │───▶│   Service    │───▶│  Sequelize    │───▶│ Postgres │
+│ (HTTP layer)  │    │ (business    │    │   (ORM)       │    │   (DB)   │
+│               │    │  logic)      │    │               │    │          │
+└───────────────┘    └──────────────┘    └───────────────┘    └──────────┘
+     ▲
+     │ HTTP Response</pre>
+      </div>
+
+      <h3>The three building blocks</h3>
+
+      <table>
+        <tr>
+          <th>Block</th>
+          <th>File suffix</th>
+          <th>Job</th>
+        </tr>
+        <tr>
+          <td><strong>Controller</strong></td>
+          <td><code>*.controller.ts</code></td>
+          <td>
+            Receive HTTP request, validate input, call a service, return a
+            response. Should be small.
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Service</strong></td>
+          <td><code>*.service.ts</code></td>
+          <td>Business logic. Talks to the database. Reusable.</td>
+        </tr>
+        <tr>
+          <td><strong>Module</strong></td>
+          <td><code>*.module.ts</code></td>
+          <td>
+            Wires controllers + services + dependencies together so NestJS
+            knows what depends on what.
+          </td>
+        </tr>
+      </table>
+
+      <h3>Bootstrap</h3>
+
+      <div class="file-path">src/main.ts</div>
+      <pre><code>async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  // Apply security middleware
+  app.use(helmet());
+
+  // Validate every DTO on every request
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+
+  // Catch every exception, format the response
+  app.useGlobalFilters(new HttpExceptionFilter());
+
+  await app.listen(3000);
+}
+bootstrap();</code></pre>
+
+      <p>
+        <code>AppModule</code> is the root — it imports every feature module
+        (User, Group, Payment, etc.) and the global infrastructure
+        (database, JWT, throttling).
+      </p>
+
+      <hr class="divider" />
+
+      <!-- 3. Dependency injection ======================================== -->
+      <h2 id="di" class="section">3. Dependency injection (DI)</h2>
+
+      <p>
+        DI is the single biggest concept in NestJS. It says: <em>don't create
+        your own dependencies; ask for them.</em>
+      </p>
+
+      <h3>Without DI (don't do this)</h3>
+
+      <pre><code>// Tightly coupled — UserService creates its own EmailService.
+class UserService {
+  private emailService = new EmailService(new ConfigService());
+
+  async register(email: string) {
+    // ...
+    this.emailService.sendWelcome(email);
+  }
+}</code></pre>
+
+      <p>
+        Problem: when you write a test for <code>UserService.register</code>,
+        you can't swap <code>EmailService</code> for a fake one.
+      </p>
+
+      <h3>With DI (the NestJS way)</h3>
+
+      <pre><code>@Injectable()
+class UserService {
+  // NestJS will create the EmailService and pass it in.
+  constructor(private readonly emailService: EmailService) {}
+
+  async register(email: string) {
+    // ...
+    this.emailService.sendWelcome(email);
+  }
+}</code></pre>
+
+      <p>
+        At startup, NestJS reads every <code>@Injectable()</code> class, looks
+        at what each constructor needs, and builds a graph of who depends on
+        what. It then constructs everything in the right order. In tests, you
+        can swap any provider with <code>{ provide: EmailService, useValue:
+        fakeEmail }</code>.
+      </p>
+
+      <h3>The four parts of DI</h3>
+
+      <ol>
+        <li>
+          <strong>Provider</strong> — a class marked <code>@Injectable()</code>.
+          Examples: services, repositories.
+        </li>
+        <li>
+          <strong>Module</strong> — declares which providers it owns and which
+          ones it exports for other modules to use.
+        </li>
+        <li>
+          <strong>Consumer</strong> — any class with a constructor that asks
+          for a provider.
+        </li>
+        <li>
+          <strong>Container</strong> — NestJS itself, which builds the graph
+          and creates instances.
+        </li>
+      </ol>
+
+      <h3>Real example — GroupService</h3>
+
+      <div class="file-path">src/modules/group/group.service.ts</div>
+      <pre><code>@Injectable()
+export class GroupService {
+  constructor(
+    @InjectModel(Group)
+    private readonly groupModel: typeof Group,
+    @InjectModel(GroupMember)
+    private readonly memberModel: typeof GroupMember,
+    @InjectModel(GroupJoinRequest)
+    private readonly joinRequestModel: typeof GroupJoinRequest,
+    @InjectModel(InstructorClient)
+    private readonly instructorClientModel: typeof InstructorClient,
+    @InjectModel(User)
+    private readonly userModel: typeof User,
+    private readonly emailService: EmailService,
+    private readonly cryptoService: CryptoService,
+    @Inject(WINSTON_MODULE_NEST_PROVIDER)
+    private readonly logger: LoggerService,
+    private readonly searchIndexService: SearchIndexService,
+    private readonly notificationService: NotificationService,
+  ) {}
+}</code></pre>
+
+      <p>
+        Every line in the constructor says: <em>"I need a thing of this
+        type."</em> NestJS finds it and passes it in. The class never calls
+        <code>new EmailService(...)</code>.
+      </p>
+
+      <hr class="divider" />
+
+      <!-- 4. Decorators =================================================== -->
+      <h2 id="decorators" class="section">4. Decorators (the @ symbols)</h2>
+
+      <p>
+        A <strong>decorator</strong> is a function prefixed with
+        <code>@</code> that attaches metadata to a class, method, or
+        parameter. NestJS reads that metadata at startup to wire everything.
+      </p>
+
+      <h3>The big ones you'll see daily</h3>
+
+      <table>
+        <tr>
+          <th>Decorator</th>
+          <th>Where</th>
+          <th>What it says</th>
+        </tr>
+        <tr>
+          <td><code>@Module({...})</code></td>
+          <td>Module class</td>
+          <td>"This is a module. Here are its imports/providers/controllers."</td>
+        </tr>
+        <tr>
+          <td><code>@Injectable()</code></td>
+          <td>Service class</td>
+          <td>"NestJS may instantiate me and inject my deps."</td>
+        </tr>
+        <tr>
+          <td><code>@Controller('groups')</code></td>
+          <td>Controller class</td>
+          <td>"All my routes start with <code>/groups</code>."</td>
+        </tr>
+        <tr>
+          <td><code>@Get('/:id')</code></td>
+          <td>Method</td>
+          <td>"This method handles GET <code>/groups/:id</code>."</td>
+        </tr>
+        <tr>
+          <td><code>@Param('id', ParseUUIDPipe)</code></td>
+          <td>Param</td>
+          <td>"Bind <code>:id</code> here, and validate it's a UUID."</td>
+        </tr>
+        <tr>
+          <td><code>@Body()</code></td>
+          <td>Param</td>
+          <td>"Bind the request body here (must be a DTO)."</td>
+        </tr>
+        <tr>
+          <td><code>@Query()</code></td>
+          <td>Param</td>
+          <td>"Bind the URL query string here."</td>
+        </tr>
+        <tr>
+          <td><code>@Request()</code></td>
+          <td>Param</td>
+          <td>"Bind the raw Express request (gives access to <code>req.user</code>)."</td>
+        </tr>
+        <tr>
+          <td><code>@UseGuards(AuthGuard('jwt'), RolesGuard)</code></td>
+          <td>Method or class</td>
+          <td>"Require a JWT and check the @Roles list."</td>
+        </tr>
+        <tr>
+          <td><code>@Roles('INSTRUCTOR')</code></td>
+          <td>Method</td>
+          <td>"Only INSTRUCTOR / ADMIN / SUPER_ADMIN may call this."</td>
+        </tr>
+        <tr>
+          <td><code>@InjectModel(User)</code></td>
+          <td>Constructor param</td>
+          <td>"Inject the Sequelize repository for User."</td>
+        </tr>
+        <tr>
+          <td><code>@Inject(SOME_TOKEN)</code></td>
+          <td>Constructor param</td>
+          <td>"Inject the provider registered under this token (used for non-class providers)."</td>
+        </tr>
+      </table>
+
+      <h3>How decorators look in practice</h3>
+
+      <div class="file-path">src/modules/group/group.controller.ts</div>
+      <pre><code>@ApiTags('Groups')                     // groups all routes under "Groups" in Swagger
+@Controller('groups')                  // routes start with /groups
+export class GroupController {
+  constructor(private readonly groupService: GroupService) {}
+
+  @Get(':id')                          // GET /groups/:id
+  @UseGuards(AuthGuard('jwt'))         // require login
+  @ApiEndpoint(GroupDocs.getById)      // Swagger docs from common/docs/group.docs.ts
+  async getById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupService.getById(id, req.user.id);
+  }
+}</code></pre>
+
+      <hr class="divider" />
+
+      <!-- 5. Project layout =============================================== -->
+      <h2 id="layout" class="section">5. Project layout</h2>
+
+      <div class="diagram">
+        <pre>
+src/
+├── main.ts                       <span style="color:#94a3b8">// app bootstrap</span>
+├── app.module.ts                 <span style="color:#94a3b8">// root composition</span>
+├── config/                       <span style="color:#94a3b8">// env validation, DB / JWT config</span>
+├── common/
+│   ├── decorators/               <span style="color:#94a3b8">// @ApiEndpoint, @Public, @Roles</span>
+│   ├── docs/                     <span style="color:#94a3b8">// per-module Swagger doc objects</span>
+│   ├── dto/                      <span style="color:#94a3b8">// PaginationDto</span>
+│   ├── filters/                  <span style="color:#94a3b8">// HttpExceptionFilter (global)</span>
+│   ├── guards/                   <span style="color:#94a3b8">// RolesGuard, PermissionsGuard</span>
+│   ├── email/                    <span style="color:#94a3b8">// HTML email templates</span>
+│   ├── interceptors/             <span style="color:#94a3b8">// CamelCaseInterceptor</span>
+│   ├── middleware/               <span style="color:#94a3b8">// RequestIdMiddleware</span>
+│   └── services/                 <span style="color:#94a3b8">// EmailService, CryptoService, CloudinaryService</span>
+└── modules/
+    ├── auth/                     <span style="color:#94a3b8">// JWT, OAuth, password reset</span>
+    ├── user/                     <span style="color:#94a3b8">// /users/me, GDPR export</span>
+    ├── role/                     <span style="color:#94a3b8">// RBAC role assignment</span>
+    ├── profile/                  <span style="color:#94a3b8">// instructor profiles</span>
+    ├── group/                    <span style="color:#94a3b8">// fitness groups</span>
+    ├── session/                  <span style="color:#94a3b8">// training sessions</span>
+    ├── invitation/               <span style="color:#94a3b8">// group invitations</span>
+    ├── client/                   <span style="color:#94a3b8">// instructor↔client relationships</span>
+    ├── blog/                     <span style="color:#94a3b8">// blog posts + sitemap</span>
+    ├── post/                     <span style="color:#94a3b8">// group posts + comments</span>
+    ├── notification/             <span style="color:#94a3b8">// in-app + email delivery</span>
+    ├── payment/                  <span style="color:#94a3b8">// Stripe Connect</span>
+    ├── jobs/                     <span style="color:#94a3b8">// BullMQ workers</span>
+    ├── venue/                    <span style="color:#94a3b8">// where sessions happen</span>
+    ├── feedback/                 <span style="color:#94a3b8">// public feedback form</span>
+    ├── waitlist/                 <span style="color:#94a3b8">// landing-page email capture</span>
+    ├── search/                   <span style="color:#94a3b8">// global search</span>
+    ├── analytics/                <span style="color:#94a3b8">// instructor / platform stats</span>
+    └── health/                   <span style="color:#94a3b8">// /health, /health/config</span></pre>
+      </div>
+
+      <p>
+        <strong>Rule of thumb:</strong> if a class is used by 1-2 modules,
+        co-locate it. If it's used by 3+, lift it into <code>common/</code>.
+      </p>
+
+      <hr class="divider" />
+
+      <!-- 6. Anatomy of a module ========================================= -->
+      <h2 id="module-anatomy" class="section">6. Anatomy of a module</h2>
+
+      <p>
+        Every feature module follows the same shape. Let's dissect
+        <code>group/</code>.
+      </p>
+
+      <div class="diagram">
+        <pre>
+src/modules/group/
+├── group.module.ts                <span style="color:#94a3b8">// DI wiring</span>
+├── group.controller.ts            <span style="color:#94a3b8">// HTTP routes</span>
+├── group.service.ts               <span style="color:#94a3b8">// business logic</span>
+├── group.service.spec.ts          <span style="color:#94a3b8">// tests</span>
+├── notifications.ts               <span style="color:#94a3b8">// notification builders</span>
+├── entities/
+│   ├── group.entity.ts            <span style="color:#94a3b8">// `group` table model</span>
+│   ├── group-member.entity.ts     <span style="color:#94a3b8">// `group_member` table model</span>
+│   └── group-join-request.entity.ts
+└── dto/
+    ├── create-group.dto.ts
+    ├── update-group.dto.ts
+    ├── add-members-bulk.dto.ts
+    ├── transfer-ownership.dto.ts
+    └── ... (one per request shape)</pre>
+      </div>
+
+      <h3>1. The module file</h3>
+
+      <div class="file-path">src/modules/group/group.module.ts</div>
+      <pre><code>@Module({
+  imports: [
+    SequelizeModule.forFeature([
+      Group, GroupMember, GroupJoinRequest, InstructorClient, User,
+    ]),
+    RoleModule,            // RBAC checks
+    SearchModule,          // updates search index when groups change
+  ],
+  controllers: [GroupController],
+  providers: [GroupService, CryptoService],
+  exports: [GroupService], // other modules (Invitation) can inject GroupService
+})
+export class GroupModule {}</code></pre>
+
+      <details>
+        <summary>What does <code>SequelizeModule.forFeature(...)</code> do?</summary>
+        <p>
+          It tells the Sequelize DI integration: "for this module, expose
+          repositories for these entities." After this, any service in this
+          module can do <code>@InjectModel(Group)</code> in its constructor
+          and get a typed reference to the <code>Group</code> model.
+        </p>
+      </details>
+
+      <h3>2. The controller</h3>
+
+      <p>
+        The controller is HTTP only. It validates input, calls the service,
+        returns a response. Nothing else.
+      </p>
+
+      <div class="file-path">src/modules/group/group.controller.ts</div>
+      <pre><code>@ApiTags('Groups')
+@Controller('groups')
+export class GroupController {
+  constructor(private readonly groupService: GroupService) {}
+
+  @Post()
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint({ ...GroupDocs.create, body: CreateGroupDto })
+  async create(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: CreateGroupDto,
+  ) {
+    return this.groupService.create(req.user.id, dto);
+  }
+
+  @Get(':id')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiEndpoint(GroupDocs.getById)
+  async getById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.groupService.getById(id, req.user.id);
+  }
+}</code></pre>
+
+      <h3>3. The service</h3>
+
+      <p>
+        The service holds the business logic. It's where the interesting
+        decisions happen.
+      </p>
+
+      <div class="file-path">src/modules/group/group.service.ts (excerpt)</div>
+      <pre><code>@Injectable()
+export class GroupService {
+  constructor(
+    @InjectModel(Group) private readonly groupModel: typeof Group,
+    // ... other models + services ...
+    private readonly notificationService: NotificationService,
+  ) {}
+
+  async transferOwnership(groupId: string, currentOwnerId: string, newOwnerId: string) {
+    const group = await this.assertOwnerAndGet(groupId, currentOwnerId);
+    if (currentOwnerId === newOwnerId) {
+      throw new BadRequestException('You are already the owner');
+    }
+    // ... role flip + group update inside a tx ...
+
+    // Fire notifications AFTER the tx commits.
+    const groupRef = { id: group.id, name: group.name };
+    await Promise.all([
+      this.notificationService
+        .notify(groupOwnershipTransferredToNewOwner(newOwnerId, groupRef))
+        .catch((err) =&gt; this.logger.error(...)),
+      this.notificationService
+        .notify(groupOwnershipTransferredFromOldOwner(currentOwnerId, groupRef))
+        .catch((err) =&gt; this.logger.error(...)),
+    ]);
+
+    return { message: 'Ownership transferred successfully' };
+  }
+}</code></pre>
+
+      <h3>4. The entity</h3>
+
+      <div class="file-path">src/modules/group/entities/group.entity.ts (excerpt)</div>
+      <pre><code>@Table({
+  tableName: 'group',
+  timestamps: true,
+  underscored: true,        // DB columns become snake_case
+  paranoid: true,           // soft delete (deleted_at)
+})
+export class Group extends Model {
+  @Column({
+    type: DataType.CHAR(36),
+    defaultValue: DataType.UUIDV4,
+    primaryKey: true,
+  })
+  declare id: string;
+
+  @Column({ type: DataType.STRING(120), allowNull: false })
+  declare name: string;
+
+  @ForeignKey(() =&gt; User)
+  @Column({ type: DataType.CHAR(36), allowNull: false })
+  declare instructorId: string;
+
+  // ... etc.
+}</code></pre>
+
+      <h3>5. The DTO</h3>
+
+      <div class="file-path">src/modules/group/dto/create-group.dto.ts (excerpt)</div>
+      <pre><code>export class CreateGroupDto {
+  @ApiProperty({ example: 'Yoga Wednesdays' })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(120)
+  name: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string;
+
+  // ...
+}</code></pre>
+
+      <p>
+        When a <code>POST /groups</code> request comes in, NestJS automatically
+        runs class-validator on the body. If it fails, NestJS returns a 400
+        with the validation errors — the controller method never even runs.
+      </p>
+
+      <hr class="divider" />
+
+      <!-- 7. Request lifecycle =========================================== -->
+      <h2 id="request-lifecycle" class="section">7. Request lifecycle</h2>
+
+      <p>
+        Every incoming HTTP request goes through this sequence before reaching
+        your controller:
+      </p>
+
+      <div class="diagram">
+        <pre>
+HTTP Request
+     │
+     ▼
+┌─────────────────────────────────────────────────┐
+│  Middleware                                     │
+│  • RequestIdMiddleware (assigns request UUID)   │
+│  • Helmet (security headers)                    │
+│  • CORS                                         │
+│  • express.raw() <span style="color:#94a3b8">(Stripe webhook only)</span>          │
+└─────────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────────────────┐
+│  Guards (cancel before reaching controller)     │
+│  • ThrottlerGuard <span style="color:#94a3b8">(rate limit)</span>                  │
+│  • AuthGuard('jwt') <span style="color:#94a3b8">(if @UseGuards(...) )</span>        │
+│  • RolesGuard      <span style="color:#94a3b8">(if @Roles('INSTRUCTOR'))</span>      │
+└─────────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────────────────┐
+│  Pipes (transform + validate)                   │
+│  • ValidationPipe (DTO validation)              │
+│  • ParseUUIDPipe (per-param UUID validation)    │
+└─────────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────────────────┐
+│  Controller method                              │
+│  • Service call → DB → response                 │
+└─────────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────────────────┐
+│  Interceptor (transform response)               │
+│  • CamelCaseInterceptor                         │
+└─────────────────────────────────────────────────┘
+     │
+     ▼
+HTTP Response (or HttpExceptionFilter on error)</pre>
+      </div>
+
+      <p>
+        These five layers are wired in <code>app.module.ts</code> as global
+        providers, plus <code>main.ts</code> for the Express middleware.
+      </p>
+
+      <div class="file-path">src/app.module.ts (excerpt)</div>
+      <pre><code>@Module({
+  // ...
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_FILTER, useClass: HttpExceptionFilter },
+    { provide: APP_INTERCEPTOR, useClass: CamelCaseInterceptor },
+  ],
+})
+export class AppModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}</code></pre>
+
+      <hr class="divider" />
+
+      <!-- 8. Authentication ============================================= -->
+      <h2 id="auth" class="section">8. Authentication & authorization</h2>
+
+      <h3>JWT-based auth</h3>
+
+      <p>
+        On login, <code>AuthService.login()</code> issues an
+        <strong>access token</strong> (short-lived, ~15 min) and a
+        <strong>refresh token</strong> (longer-lived, stored in DB so we can
+        revoke). The FE sends the access token on every request as
+        <code>Authorization: Bearer &lt;token&gt;</code>.
+      </p>
+
+      <div class="diagram">
+        <pre>
+1. POST /auth/login { email, password }
+       │
+       ▼
+   AuthService.login()
+       │ ├── verify password
+       │ ├── reset failed-attempt counter
+       │ ├── generate access + refresh tokens
+       │ └── store refresh in DB
+       ▼
+   { accessToken, refreshToken, user }
+
+2. Future requests:
+   GET /groups/abc
+   Authorization: Bearer eyJhbGciOi...
+       │
+       ▼
+   AuthGuard('jwt') decodes the token and populates req.user.
+       │
+       ▼
+   Controller sees req.user.id and proceeds.</pre>
+      </div>
+
+      <h3>Roles & guards</h3>
+
+      <pre><code>@Get('admin/platform')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')          // only these roles pass
+@ApiEndpoint(AnalyticsDocs.getPlatformStats)
+async getPlatformStats() {
+  return this.analyticsService.getPlatformStats();
+}</code></pre>
+
+      <p>
+        <code>RolesGuard</code> reads the <code>@Roles(...)</code> metadata,
+        compares against <code>req.user.roles</code>, and either allows or
+        throws 403.
+      </p>
+
+      <h3>Public routes</h3>
+
+      <pre><code>@Public()                                // explicit opt-out of JWT
+@Get('webhook/stripe')
+async handleStripeWebhook(@Req() req) { ... }</code></pre>
+
+      <hr class="divider" />
+
+      <!-- 9. Database =================================================== -->
+      <h2 id="db" class="section">9. Database (Sequelize)</h2>
+
+      <p>
+        We use <strong>Sequelize</strong> as our ORM (Object-Relational
+        Mapper). Sequelize lets us write TypeScript classes that map to SQL
+        tables, and call methods like <code>.findByPk(id)</code> instead of
+        writing raw SQL.
+      </p>
+
+      <h3>Reading data</h3>
+
+      <pre><code>// Single row by primary key
+const user = await this.userModel.findByPk(userId);
+
+// First match
+const user = await this.userModel.findOne({ where: { email } });
+
+// All matches
+const groups = await this.groupModel.findAll({
+  where: { instructorId, isPublic: true },
+  order: [['createdAt', 'DESC']],
+  limit: 20,
+});
+
+// With a join (eager loading)
+const sub = await this.subscriptionModel.findByPk(id, {
+  include: [
+    { model: Product, attributes: ['id', 'name'] },
+    { model: User, as: 'client', attributes: ['id', 'firstName', 'lastName'] },
+  ],
+});</code></pre>
+
+      <h3>Writing data</h3>
+
+      <pre><code>// Create
+const group = await this.groupModel.create({
+  name: 'Yoga',
+  instructorId: userId,
+});
+
+// Update an existing instance
+group.name = 'Yoga Wednesdays';
+await group.save();
+
+// Update via static method
+await this.groupModel.update(
+  { name: 'New name' },
+  { where: { id: groupId } },
+);
+
+// Soft delete (paranoid mode)
+await group.destroy();    // sets deleted_at; row is hidden from default queries
+await group.restore();    // unsets deleted_at</code></pre>
+
+      <h3>Naming convention</h3>
+
+      <p>
+        <code>underscored: true</code> on every entity means the DB columns
+        are snake_case, but the TS fields are camelCase.
+      </p>
+
+      <table>
+        <tr>
+          <th>TypeScript</th>
+          <th>Database column</th>
+        </tr>
+        <tr>
+          <td><code>instructorId</code></td>
+          <td><code>instructor_id</code></td>
+        </tr>
+        <tr>
+          <td><code>createdAt</code></td>
+          <td><code>created_at</code></td>
+        </tr>
+        <tr>
+          <td><code>isEmailVerified</code></td>
+          <td><code>is_email_verified</code></td>
+        </tr>
+      </table>
+
+      <hr class="divider" />
+
+      <!-- 10. Transactions =============================================== -->
+      <h2 id="transactions" class="section">10. Transactions</h2>
+
+      <p>
+        A <strong>transaction</strong> is a way to say "either ALL these DB
+        writes succeed, or NONE of them do." If one fails, the others are
+        rolled back.
+      </p>
+
+      <h3>Why we need them</h3>
+
+      <p>
+        Suppose accepting an invitation does three things: add a group
+        member, assign a role, and mark the invitation accepted. If the
+        role-assignment fails after the member is added, we'd have an
+        orphaned member with no role. A transaction prevents that.
+      </p>
+
+      <h3>The pattern</h3>
+
+      <pre><code>const transaction = await this.sequelize.transaction();
+try {
+  // EVERY ORM call inside MUST pass { transaction }
+  await this.groupService.addMember(groupId, userId, transaction);
+  await this.roleService.assignRoleToUser(userId, roleId, ..., transaction);
+  await invitation.update({ acceptedAt: new Date() }, { transaction });
+
+  await transaction.commit();        // ✓ all good, persist everything
+} catch (error) {
+  await transaction.rollback();      // ✗ undo all writes
+  throw error;
+}</code></pre>
+
+      <div class="callout bad">
+        <strong>Common bug:</strong> forgetting to pass <code>{ transaction }</code>
+        on an inner call. That call commits to the default DB connection
+        instead of the transaction — and the rollback can't undo it. EVERY
+        ORM call inside a tx callback must pass the tx.
+      </div>
+
+      <h3>Side effects after commit</h3>
+
+      <p>
+        Notifications, emails, Cloudinary uploads — these are NOT part of the
+        DB transaction. If you fire them inside the try block and the tx
+        rolls back, you've sent a "payment received" email for a payment
+        that didn't actually finalize.
+      </p>
+
+      <p>
+        Always fire side effects <strong>after</strong>
+        <code>tx.commit()</code> succeeds.
+      </p>
+
+      <hr class="divider" />
+
+      <!-- 11. Notification system ======================================== -->
+      <h2 id="notifications" class="section">11. Notification system</h2>
+
+      <p>
+        Every user-facing event in the app (invoice paid, group invitation
+        received, post approved) flows through <strong>one</strong>
+        notification system. The producer (some service) calls a
+        <strong>builder</strong>, which returns a <code>NotifyParams</code>
+        object, which is passed to <code>NotificationService.notify()</code>.
+      </p>
+
+      <div class="diagram">
+        <pre>
+Producer (service method)
+       │
+       │  invoiceCreatedForClient(clientId, invoice)
+       ▼
+┌────────────────────────────────┐
+│  Builder                       │  returns NotifyParams
+│  (payment/notifications.ts)    │  { userId, type, title, body, data }
+└────────────────────────────────┘
+       │
+       ▼
+┌────────────────────────────────┐
+│  notificationService.notify()  │
+│  • Resolves user preferences   │
+│  • Writes notification row     │
+│  • Writes receipt row          │
+│  • Enqueues email job (BullMQ) │
+└────────────────────────────────┘
+       │
+       ├──▶ <span style="color:#22c55e">In-app:</span> bell shows it on next /notifications poll
+       │
+       └──▶ <span style="color:#22c55e">Email:</span> BullMQ worker sends via Resend</pre>
+      </div>
+
+      <h3>Domain model</h3>
+
+      <table>
+        <tr>
+          <th>Table</th>
+          <th>Purpose</th>
+        </tr>
+        <tr>
+          <td><code>notification</code></td>
+          <td>One row per event. Stores type, title, body, data.</td>
+        </tr>
+        <tr>
+          <td><code>notification_receipt</code></td>
+          <td>One row per (notification, recipient). Tracks viewed/read/dismissed/delivered_channels.</td>
+        </tr>
+        <tr>
+          <td><code>notification_preference</code></td>
+          <td>Per-user, per-category channel preferences (email on/off etc.).</td>
+        </tr>
+        <tr>
+          <td><code>device_token</code></td>
+          <td>Phase 3: push notification tokens.</td>
+        </tr>
+      </table>
+
+      <p>
+        For a 1:1 notification (invoice paid → instructor): one
+        <code>notification</code> row + one <code>notification_receipt</code>.
+        For a broadcast (post approved in a group → 50 members): one
+        <code>notification</code> row + 50 <code>notification_receipt</code>
+        rows.
+      </p>
+
+      <h3>The builder pattern</h3>
+
+      <p>
+        Producers don't write notification objects inline. They call a
+        <strong>builder</strong> co-located with their domain.
+      </p>
+
+      <div class="file-path">src/modules/payment/notifications.ts (excerpt)</div>
+      <pre><code>export function invoiceCreatedForClient(
+  clientId: string,
+  invoice: InvoiceForBuilder,
+): NotifyParams {
+  const amount = formatMoney(invoice.amountDueCents, invoice.currency);
+  const due = formatDueDate(invoice.dueDate);
+  return {
+    userId: clientId,
+    type: NotificationType.INVOICE_CREATED,
+    title: 'New invoice',
+    body: due ? `${amount} due ${due}.` : `${amount} — open to view details.`,
+    data: { screen: 'profile/invoices', entityId: invoice.id },
+  };
+}</code></pre>
+
+      <h3>Calling the builder</h3>
+
+      <div class="file-path">src/modules/payment/services/invoice.service.ts (excerpt)</div>
+      <pre><code>if (invoice.clientId) {
+  await this.notificationService.notify(
+    invoiceCreatedForClient(invoice.clientId, invoice),
+  );
+}</code></pre>
+
+      <h3>Click targets</h3>
+
+      <p>
+        The FE bell handler builds a URL from <code>data.screen</code> +
+        <code>data.entityId</code> (or <code>data.queryParams</code>):
+      </p>
+
+      <table>
+        <tr>
+          <th>data</th>
+          <th>FE URL</th>
+        </tr>
+        <tr>
+          <td><code>{ screen: 'groups', entityId: 'abc' }</code></td>
+          <td><code>/groups/abc</code></td>
+        </tr>
+        <tr>
+          <td><code>{ screen: 'profile/invoices', entityId: 'inv-1' }</code></td>
+          <td><code>/profile/invoices/inv-1</code></td>
+        </tr>
+        <tr>
+          <td><code>{ screen: 'profile', queryParams: { tab: 'memberships' } }</code></td>
+          <td><code>/profile?tab=memberships</code></td>
+        </tr>
+        <tr>
+          <td><code>{ screen: 'groups' }</code> (no entityId)</td>
+          <td><code>/groups</code> (lands on the list)</td>
+        </tr>
+      </table>
+
+      <h3>The Outbox — for webhook flows</h3>
+
+      <p>
+        Stripe webhook handlers run inside a transaction owned by the
+        dispatcher. If we fire <code>notify()</code> inside that tx and the
+        tx rolls back, the notification still persists — meaning the user
+        gets a "payment received" email for a payment that didn't actually
+        finalize.
+      </p>
+
+      <p>
+        Solution: <strong>NotificationOutbox</strong>. The dispatcher creates
+        one, hands it to handlers, and flushes it AFTER the tx commits.
+      </p>
+
+      <div class="file-path">src/modules/notification/notification-outbox.ts</div>
+      <pre><code>export class NotificationOutbox {
+  private readonly pending: NotifyParams[] = [];
+
+  add(params: NotifyParams): void { this.pending.push(params); }
+  discard(): void { this.pending.length = 0; }
+
+  async flush(): Promise&lt;void&gt; {
+    const items = [...this.pending];
+    this.pending.length = 0;
+    for (const params of items) {
+      try { await this.notifications.notify(params); }
+      catch (err) { /* log, don't throw */ }
+    }
+  }
+}</code></pre>
+
+      <div class="file-path">src/modules/payment/services/webhook-handler.service.ts (excerpt)</div>
+      <pre><code>const outbox = new NotificationOutbox(this.notificationService, this.logger);
+try {
+  await this.sequelize.transaction(async (tx) =&gt; {
+    await this.dispatchHandler(event, tx, outbox);   // handlers call outbox.add(...)
+    auditRow.status = WebhookEventStatus.PROCESSED;
+    await auditRow.save({ transaction: tx });
+  });
+  await outbox.flush();      // ✓ tx committed — fire all queued notifies
+} catch (err) {
+  outbox.discard();          // ✗ tx rolled back — drop them
+  // ... handle error ...
+}</code></pre>
+
+      <hr class="divider" />
+
+      <!-- 12. Jobs system ================================================ -->
+      <h2 id="jobs" class="section">12. Jobs system (BullMQ)</h2>
+
+      <div class="lead">
+        <strong>Why jobs?</strong> Some work shouldn't happen during the HTTP
+        request. Sending an email takes 200-500ms — making the user wait
+        feels slow. Email failure should not 500 the request. So we put it
+        on a queue and a worker handles it asynchronously.
+      </div>
+
+      <h3>The pieces</h3>
+
+      <div class="diagram">
+        <pre>
+┌──────────────────────────────────────────────────────────────────────┐
+│  Producer                  Queue (Redis)              Worker          │
+│  ─────────                 ─────────────              ──────          │
+│                                                                       │
+│  service.notify(...)                                                  │
+│     │                                                                 │
+│     │ enqueue                                                         │
+│     ▼                                                                 │
+│  ┌─────────┐    BullMQ    ┌───────────────┐    pull     ┌──────────┐ │
+│  │ Jobs-   │ ───────────▶ │  notifications│ ──────────▶ │ EmailSend│ │
+│  │ Service │              │     queue     │             │  Worker  │ │
+│  └─────────┘              └───────────────┘             └──────────┘ │
+│                                                              │        │
+│                                                              ▼        │
+│                                                       ┌──────────────┐│
+│                                                       │ Resend (API) ││
+│                                                       └──────────────┘│
+│                                                              │        │
+│                                                              ▼        │
+│                                                       receipt.delivered_channels.email = 'sent' │
+└──────────────────────────────────────────────────────────────────────┘</pre>
+      </div>
+
+      <h3>1. The Queue (Redis-backed)</h3>
+
+      <p>
+        BullMQ stores jobs in Redis. Each queue has a name (e.g.
+        <code>notifications</code>) and default settings (retries, backoff).
+      </p>
+
+      <div class="file-path">src/modules/jobs/job-registry.ts</div>
+      <pre><code>export enum QueueName {
+  Notifications = 'notifications',
+}
+
+export const QUEUE_DEFAULTS = {
+  [QueueName.Notifications]: {
+    defaultJobOptions: {
+      attempts: 5,                         // retry up to 5 times
+      backoff: { type: 'exponential', delay: 5000 },
+      removeOnComplete: { age: 86400 },    // keep done jobs 24h
+      removeOnFail: { age: 7 * 86400 },    // keep failed jobs 7d
+    },
+  },
+};</code></pre>
+
+      <h3>2. The Producer (JobsService)</h3>
+
+      <p>
+        The producer enqueues a job. It doesn't wait for the worker.
+      </p>
+
+      <div class="file-path">src/modules/jobs/jobs.service.ts (excerpt)</div>
+      <pre><code>@Injectable()
+export class JobsService {
+  constructor(
+    @InjectQueue(QueueName.Notifications)
+    private readonly notificationsQueue: Queue,
+  ) {}
+
+  async enqueue&lt;K extends keyof JobPayloadMap&gt;(
+    name: K,
+    payload: JobPayloadMap[K],
+    opts?: { jobId?: string },
+  ) {
+    return this.notificationsQueue.add(name, payload, {
+      jobId: opts?.jobId,         // ← idempotency: same jobId = same job
+    });
+  }
+}</code></pre>
+
+      <h3>3. The Worker (consumer)</h3>
+
+      <p>
+        A worker is a class decorated with <code>@Processor(queueName)</code>
+        and extending <code>BaseWorker</code>. It implements
+        <code>handle(payload, ctx)</code>.
+      </p>
+
+      <div class="file-path">src/modules/jobs/workers/notifications/email-send.worker.ts</div>
+      <pre><code>@Processor(QueueName.Notifications)
+export class EmailSendWorker extends BaseWorker&lt;'notifications.email_send'&gt; {
+  constructor(
+    @Inject(WINSTON_MODULE_NEST_PROVIDER) logger: LoggerService,
+    private readonly emailService: EmailService,
+    private readonly receiptService: NotificationReceiptService,
+  ) {
+    super(logger);
+  }
+
+  async handle(
+    payload: JobPayload&lt;'notifications.email_send'&gt;,
+    ctx: JobContext,
+  ): Promise&lt;void&gt; {
+    // 1. Idempotency check — already delivered? skip.
+    if (await this.receiptService.isChannelDelivered(payload.receiptId, 'email')) {
+      ctx.log.log(`email skip (already delivered)`);
+      return;
+    }
+
+    // 2. Send via Resend
+    const status = await this.emailService.sendNotificationEmail({
+      to: payload.to,
+      title: payload.title,
+      body: payload.body,
+      ctaUrl: payload.ctaUrl,
+    });
+
+    // 3. Record outcome on the receipt row
+    if (status.ok) {
+      await this.receiptService.recordChannelOutcome(payload.receiptId, 'email', 'sent');
+      return;
+    }
+
+    // 4. On failure, record + throw so BullMQ retries
+    await this.receiptService.recordChannelOutcome(
+      payload.receiptId, 'email', `failed:${status.reason}`
+    );
+    throw new TemporaryError(`resend send failed: ${status.reason}`);
+  }
+}</code></pre>
+
+      <h3>4. End-to-end flow for an email notification</h3>
+
+      <div class="diagram">
+        <pre>
+1. invoice.service.ts:
+   await notificationService.notify(invoiceCreatedForClient(...))
+
+2. notification.service.ts:
+   • Resolve preferences (email channel ON for INVOICE_CREATED)
+   • INSERT INTO notification (...)
+   • INSERT INTO notification_receipt (...)
+   • SET delivered_channels.in_app = 'sent'  ← in-app delivery is sync
+   • SET delivered_channels.email = 'queued' ← email is async
+   • jobsService.enqueue('notifications.email_send', { receiptId, to, title, body, ctaUrl })
+
+3. BullMQ:
+   • Job lands in Redis
+   • EmailSendWorker pulls it (in-process, same Node)
+
+4. EmailSendWorker.handle():
+   • Check isChannelDelivered (idempotency)
+   • Call Resend HTTP API
+   • UPDATE notification_receipt SET delivered_channels.email = 'sent'
+
+5. User opens the FE bell:
+   • GET /notifications returns the row with delivered_channels for audit
+   • User sees "Invoice paid" in the dropdown</pre>
+      </div>
+
+      <h3>Idempotency — two layers</h3>
+
+      <table>
+        <tr>
+          <th>Layer</th>
+          <th>What it covers</th>
+        </tr>
+        <tr>
+          <td><strong>BullMQ <code>jobId</code></strong></td>
+          <td>
+            If the same job is enqueued twice (e.g. retry of a failed
+            producer), Redis deduplicates by jobId.
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <strong><code>receiptService.isChannelDelivered</code></strong>
+          </td>
+          <td>
+            If a worker retries after a transient failure, the second
+            attempt sees the receipt is already marked <code>'sent'</code>
+            and skips.
+          </td>
+        </tr>
+      </table>
+
+      <p>Both are needed because Resend has no idempotency-key support.</p>
+
+      <h3>BullMQ retry semantics</h3>
+
+      <ul>
+        <li>
+          <code>throw new TemporaryError(...)</code> → BullMQ retries with
+          exponential backoff (5 attempts default).
+        </li>
+        <li>
+          <code>throw new PermanentError(...)</code> → wrapped in
+          <code>UnrecoverableError</code>; BullMQ stops retrying immediately.
+        </li>
+        <li>
+          <code>return</code> normally → job marked complete.
+        </li>
+      </ul>
+
+      <hr class="divider" />
+
+      <!-- 13. Stripe webhooks =========================================== -->
+      <h2 id="stripe" class="section">13. Stripe webhooks</h2>
+
+      <p>
+        Stripe sends HTTP POSTs to <code>/webhooks/stripe</code> when events
+        happen (invoice paid, refund issued, account onboarded). We MUST
+        verify the signature and respond 2xx within 20s, or Stripe retries.
+      </p>
+
+      <h3>The dispatcher</h3>
+
+      <div class="diagram">
+        <pre>
+1. POST /webhooks/stripe (raw body, Stripe-Signature header)
+       │
+       ▼
+2. WebhookHandlerService.handleIncomingEvent()
+       │ ├── verify signature (Stripe SDK)
+       │ ├── INSERT INTO webhook_event (idempotent — UNIQUE on stripe_event_id)
+       │ │     ↳ if duplicate: respond 200, no work
+       │ └── if event type is not in handledEventTypes: stamp IGNORED, respond 200
+       ▼
+3. Open a Sequelize transaction
+       │
+       │  Create a NotificationOutbox (notify-after-commit safety)
+       │
+       ▼
+4. dispatchHandler(event, tx, outbox)
+       │  Routes to the right service:
+       │   - account.updated         → connectService.syncAccountFromWebhook
+       │   - invoice.paid            → invoiceService.syncFromStripeInvoice
+       │   - invoice.payment_failed  → invoiceService.handlePaymentFailed
+       │   - charge.refunded         → refundService.syncRefundFromWebhook
+       │   - customer.subscription.* → subscriptionService.syncFromWebhook
+       │
+       ▼
+5. tx.commit()  ✓
+       │
+       ▼
+6. outbox.flush()  → fires queued notifications
+       │
+       ▼
+7. Respond 200 to Stripe</pre>
+      </div>
+
+      <h3>Idempotency: the webhook_event table</h3>
+
+      <pre><code>// migrations/.../*.sql
+CREATE TABLE webhook_event (
+  id CHAR(36) PRIMARY KEY,
+  stripe_event_id VARCHAR(255) NOT NULL,
+  type VARCHAR(255) NOT NULL,
+  status webhook_event_status NOT NULL,
+  ...
+  CONSTRAINT uk_webhook_event_id UNIQUE (stripe_event_id)
+);</code></pre>
+
+      <p>
+        On every incoming event we try <code>INSERT</code>. The UNIQUE
+        constraint catches duplicates — the dispatcher catches the
+        <code>UniqueConstraintError</code> and responds with the existing
+        row's status, so Stripe doesn't retry-spam us.
+      </p>
+
+      <h3>Why raw body matters</h3>
+
+      <p>
+        Stripe signs the exact byte stream. If Express's JSON parser
+        re-serializes the body before signature check, the signature won't
+        match. We use <code>express.raw()</code> only on
+        <code>/webhooks/stripe</code> — every other route still gets the
+        normal JSON parser.
+      </p>
+
+      <div class="file-path">src/main.ts (excerpt)</div>
+      <pre><code>app.use('/webhooks/stripe', express.raw({ type: '*/*' }));</code></pre>
+
+      <hr class="divider" />
+
+      <!-- 14. Email delivery ============================================ -->
+      <h2 id="email" class="section">14. Email delivery</h2>
+
+      <p>
+        We use <strong>Resend</strong> for transactional email. Templates
+        live in <code>src/common/email/&lt;domain&gt;/&lt;name&gt;.template.ts</code>,
+        each exporting a function that returns an HTML string.
+      </p>
+
+      <h3>The two paths</h3>
+
+      <table>
+        <tr>
+          <th>Path</th>
+          <th>How</th>
+          <th>Used for</th>
+        </tr>
+        <tr>
+          <td><strong>Direct</strong></td>
+          <td><code>emailService.sendXxxEmail(...)</code></td>
+          <td>
+            Auth flows (verification, password reset), feedback confirmations,
+            invoice override-email path. Synchronous, fire-and-forget.
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Via the notification system</strong></td>
+          <td>
+            <code>notificationService.notify(...)</code> →
+            <code>EmailSendWorker</code> → Resend
+          </td>
+          <td>
+            Anything that's also a bell notification (invoice paid, group
+            invitation accepted, refund issued).
+          </td>
+        </tr>
+      </table>
+
+      <h3>Template structure</h3>
+
+      <p>
+        All templates share a <strong>base layout</strong>
+        (<code>src/common/email/_layouts/base-layout.ts</code>) which provides
+        <code>baseLayout</code>, <code>heading</code>, <code>paragraph</code>,
+        <code>primaryButton</code> helpers.
+      </p>
+
+      <div class="file-path">src/common/email/group/invitation.template.ts (sketch)</div>
+      <pre><code>export function invitationTemplate({
+  inviterName, groupName, message, link,
+}: InvitationParams): string {
+  return baseLayout({
+    title: `You've been invited to ${escapeHtml(groupName)}`,
+    body: `
+      ${heading('You\'re invited!')}
+      ${paragraph(`${escapeHtml(inviterName)} invited you to join ${escapeHtml(groupName)}.`)}
+      ${message ? paragraph(escapeHtml(message)) : ''}
+      ${primaryButton({ label: 'Accept invitation', href: link })}
+    `,
+  });
+}</code></pre>
+
+      <div class="callout warn">
+        <strong>Security:</strong> every user-controlled string interpolated
+        into HTML MUST be escaped with
+        <code>escapeHtml</code> from
+        <code>src/common/utils/html.utils.ts</code>. Group name, user names,
+        invitation messages — all of them.
+      </div>
+
+      <hr class="divider" />
+
+      <!-- 15. Tests ====================================================== -->
+      <h2 id="tests" class="section">15. Tests</h2>
+
+      <p>
+        We use <strong>Jest</strong>. Test files sit next to the source as
+        <code>*.spec.ts</code>. Run with <code>npm test</code>.
+      </p>
+
+      <h3>Anatomy of a service test</h3>
+
+      <div class="file-path">src/modules/group/group.service.spec.ts (excerpt)</div>
+      <pre><code>describe('GroupService', () =&gt; {
+  let service: GroupService;
+  let groupModel: ModelMock &amp; { sequelize: { transaction: jest.Mock } };
+  let memberModel: ModelMock;
+  // ... other mocks ...
+
+  beforeEach(async () =&gt; {
+    groupModel = { ...makeModelMock(), sequelize };
+    memberModel = makeModelMock();
+    // ... etc.
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        GroupService,
+        { provide: getModelToken(Group), useValue: groupModel },
+        { provide: getModelToken(GroupMember), useValue: memberModel },
+        // ... etc.
+        { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: makeSilentLogger() },
+      ],
+    }).compile();
+
+    service = moduleRef.get(GroupService);
+  });
+
+  it('creates an active membership for an OPEN-policy group', async () =&gt; {
+    groupModel.findByPk.mockResolvedValue(publicGroup());
+    memberModel.findOne.mockResolvedValue(null);
+
+    const result = await service.selfJoinGroup('g-1', 'u-1');
+
+    expect(result.status).toBe('JOINED');
+    expect(memberModel.create).toHaveBeenCalledWith({
+      groupId: 'g-1',
+      userId: 'u-1',
+      role: GroupMemberRole.MEMBER,
+    });
+  });
+});</code></pre>
+
+      <h3>Mock helpers</h3>
+
+      <p>
+        <code>test/helpers/sequelize-mocks.ts</code> provides the boilerplate:
+      </p>
+
+      <ul>
+        <li>
+          <code>makeModelMock()</code> — returns a fake repository with
+          <code>create</code>, <code>findOne</code>, <code>findByPk</code>,
+          <code>findAll</code>, <code>update</code>, <code>destroy</code>.
+        </li>
+        <li>
+          <code>makeSequelizeMock()</code> — returns a fake
+          <code>Sequelize</code> instance whose <code>transaction(cb)</code>
+          runs the callback synchronously with a fake <code>tx</code>.
+        </li>
+        <li>
+          <code>makeSilentLogger()</code> — a Winston-compatible logger that
+          captures calls but doesn't print.
+        </li>
+      </ul>
+
+      <h3>Coverage today</h3>
+
+      <p>
+        27 spec files covering 279 tests. Strong coverage on:
+        auth, user, post, group, client, invitation, payment (5 services),
+        notification (service + outbox + 3 sub-services + 4 controllers),
+        jobs (1 service + 1 worker), crypto, html-utils.
+      </p>
+
+      <p>
+        Gaps: session, blog, profile, venue, analytics, feedback, waitlist,
+        search.
+      </p>
+
+      <hr class="divider" />
+
+      <!-- 16. Cheat sheet ================================================ -->
+      <h2 id="cheatsheet" class="section">16. Cheat sheet</h2>
+
+      <h3>"Where do I…"</h3>
+
+      <table>
+        <tr>
+          <th>I want to…</th>
+          <th>Touch this file</th>
+        </tr>
+        <tr>
+          <td>Add a new route to an existing module</td>
+          <td><code>&lt;module&gt;/&lt;module&gt;.controller.ts</code></td>
+        </tr>
+        <tr>
+          <td>Add business logic for that route</td>
+          <td><code>&lt;module&gt;/&lt;module&gt;.service.ts</code></td>
+        </tr>
+        <tr>
+          <td>Define the request body shape</td>
+          <td><code>&lt;module&gt;/dto/&lt;name&gt;.dto.ts</code></td>
+        </tr>
+        <tr>
+          <td>Add a new field to a table</td>
+          <td>Migration in <code>migrations/</code> + entity in <code>&lt;module&gt;/entities/</code></td>
+        </tr>
+        <tr>
+          <td>Add a new notification type</td>
+          <td>
+            <code>notification/notification-types.ts</code> +
+            <code>notification-categories.ts</code> +
+            <code>notification-defaults.ts</code> +
+            builder in <code>&lt;module&gt;/notifications.ts</code>
+          </td>
+        </tr>
+        <tr>
+          <td>Add a new background job</td>
+          <td>
+            <code>jobs/job-registry.ts</code> + new worker file in
+            <code>jobs/workers/&lt;queue&gt;/&lt;name&gt;.worker.ts</code>
+          </td>
+        </tr>
+        <tr>
+          <td>Add a new email template</td>
+          <td><code>common/email/&lt;domain&gt;/&lt;name&gt;.template.ts</code></td>
+        </tr>
+        <tr>
+          <td>Document a new endpoint in Swagger</td>
+          <td><code>common/docs/&lt;module&gt;.docs.ts</code></td>
+        </tr>
+      </table>
+
+      <h3>Common commands</h3>
+
+      <table>
+        <tr>
+          <th>Command</th>
+          <th>What it does</th>
+        </tr>
+        <tr>
+          <td><code>npm run start:dev</code></td>
+          <td>Run the API in watch mode (hot reload).</td>
+        </tr>
+        <tr>
+          <td><code>npm test</code></td>
+          <td>Run Jest test suite.</td>
+        </tr>
+        <tr>
+          <td><code>npm run test:cov</code></td>
+          <td>Run Jest with coverage report.</td>
+        </tr>
+        <tr>
+          <td><code>npm run lint</code></td>
+          <td>Run ESLint with auto-fix.</td>
+        </tr>
+        <tr>
+          <td><code>npm run build</code></td>
+          <td>Compile TypeScript to <code>dist/</code>.</td>
+        </tr>
+        <tr>
+          <td><code>npm run migrate</code></td>
+          <td>Run new SQL migrations.</td>
+        </tr>
+      </table>
+
+      <h3>The "always do this" list</h3>
+
+      <ul>
+        <li>
+          <span class="pill green">DO</span> Use <code>@Param('id', ParseUUIDPipe)</code> on every UUID param.
+        </li>
+        <li>
+          <span class="pill green">DO</span> Make every constructor param <code>private readonly</code>.
+        </li>
+        <li>
+          <span class="pill green">DO</span> Pass <code>{ transaction }</code> on every ORM call inside a tx.
+        </li>
+        <li>
+          <span class="pill green">DO</span> Fire notifications AFTER <code>tx.commit()</code> resolves.
+        </li>
+        <li>
+          <span class="pill green">DO</span> Use builders for notifications (<code>&lt;module&gt;/notifications.ts</code>).
+        </li>
+        <li>
+          <span class="pill green">DO</span> Throw NestJS exceptions, not raw <code>Error</code>.
+        </li>
+        <li>
+          <span class="pill green">DO</span> Inject Winston logger and use the two-arg form.
+        </li>
+        <li>
+          <span class="pill green">DO</span> Test new RBAC and money-related code.
+        </li>
+        <li>
+          <span class="pill red">DON'T</span> Use <code>any</code> or <code>as any</code>.
+        </li>
+        <li>
+          <span class="pill red">DON'T</span> Put business logic in controllers.
+        </li>
+        <li>
+          <span class="pill red">DON'T</span> Use <code>console.log</code> in business code.
+        </li>
+        <li>
+          <span class="pill red">DON'T</span> Call <code>notify()</code> inside a transaction callback.
+        </li>
+        <li>
+          <span class="pill red">DON'T</span> Re-declare <code>page</code> / <code>limit</code> in a DTO.
+        </li>
+        <li>
+          <span class="pill red">DON'T</span> List <code>EmailService</code> in a feature module's providers.
+        </li>
+      </ul>
+
+      <hr class="divider" />
+
+      <p class="footnote">
+        For the formal rules and what triggers a review block, see
+        <code>CODE_STANDARDS.md</code>. This document is the friendly tour;
+        that document is the contract.
+      </p>
+    </div>
+  </body>
+</html>

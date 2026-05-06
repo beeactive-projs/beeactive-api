@@ -563,6 +563,10 @@ export class PostService {
         dto.decision === ModerationDecision.APPROVED
           ? postApprovedForAuthor(post.authorId, ctx)
           : postRejectedForAuthor(post.authorId, ctx);
+      // notify-after-commit: REJECTED branch already destroyed the post
+      // inside its own tx above; APPROVED branch already did
+      // post.update + searchIndex (no enclosing tx). Either way, the
+      // notify can't orphan. Do NOT hoist into a tx.
       await this.notificationService.notify(params);
     }
   }

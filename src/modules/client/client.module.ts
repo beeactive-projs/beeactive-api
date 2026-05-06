@@ -6,7 +6,6 @@ import { InstructorProfile } from '../profile/entities/instructor-profile.entity
 import { ClientController } from './client.controller';
 import { ClientService } from './client.service';
 import { RoleModule } from '../role/role.module';
-import { EmailService } from '../../common/services/email.service';
 
 /**
  * Client Module
@@ -29,7 +28,7 @@ import { EmailService } from '../../common/services/email.service';
     RoleModule,
   ],
   controllers: [ClientController],
-  providers: [ClientService, EmailService],
+  providers: [ClientService],
   exports: [ClientService],
 })
 export class ClientModule {}

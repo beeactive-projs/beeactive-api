@@ -9,11 +9,11 @@ import { UserRole } from './entities/user-role.entity';
 export class RoleService {
   constructor(
     @InjectModel(Role)
-    private roleModel: typeof Role,
+    private readonly roleModel: typeof Role,
     @InjectModel(Permission)
-    private permissionModel: typeof Permission,
+    private readonly permissionModel: typeof Permission,
     @InjectModel(UserRole)
-    private userRoleModel: typeof UserRole,
+    private readonly userRoleModel: typeof UserRole,
   ) {}
 
   // =====================================================

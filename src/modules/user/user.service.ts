@@ -9,7 +9,13 @@ import type { LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { Op, QueryTypes, Transaction, literal } from 'sequelize';
+import {
+  Op,
+  QueryTypes,
+  Transaction,
+  UniqueConstraintError,
+  literal,
+} from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
 import { User } from './entities/user.entity';
 import {
@@ -85,12 +91,12 @@ export interface UserDataExport {
 export class UserService {
   constructor(
     @InjectModel(User)
-    private userModel: typeof User,
+    private readonly userModel: typeof User,
     @InjectModel(SocialAccount)
-    private socialAccountModel: typeof SocialAccount,
-    private sequelize: Sequelize,
-    private configService: ConfigService,
-    private cryptoService: CryptoService,
+    private readonly socialAccountModel: typeof SocialAccount,
+    private readonly sequelize: Sequelize,
+    private readonly configService: ConfigService,
+    private readonly cryptoService: CryptoService,
     private readonly cloudinaryService: CloudinaryService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
@@ -121,6 +127,57 @@ export class UserService {
    */
   async findById(id: string): Promise<User | null> {
     return this.userModel.findByPk(id);
+  }
+
+  /**
+   * Shape the public-facing profile payload returned by `GET /users/me`
+   * and `PATCH /users/me`. Lives here (not in the controller) so the
+   * shape is governed by one place — adding a new field means editing
+   * one method, not chasing inline literals across controllers.
+   *
+   * Accepts either a Sequelize `User` entity or the JWT-derived
+   * `AuthenticatedUser` (which has `roles: string[]`). Caller passes
+   * `slim: true` for the `PATCH` response which omits `roles` /
+   * `isActive` / `isEmailVerified` / `createdAt` (those don't change
+   * via the profile update path).
+   */
+  static toProfileDto(
+    user: {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+      phone: string | null;
+      avatarId: number | null;
+      avatarUrl: string | null;
+      language: string | null;
+      timezone: string | null;
+      isActive?: boolean;
+      isEmailVerified?: boolean;
+      roles?: unknown;
+      createdAt?: Date;
+    },
+    options: { slim?: boolean } = {},
+  ): Record<string, unknown> {
+    const base = {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      avatarId: user.avatarId,
+      avatarUrl: user.avatarUrl,
+      language: user.language,
+      timezone: user.timezone,
+    };
+    if (options.slim) return base;
+    return {
+      ...base,
+      isActive: user.isActive,
+      isEmailVerified: user.isEmailVerified,
+      roles: user.roles,
+      createdAt: user.createdAt,
+    };
   }
 
   /**
@@ -319,7 +376,10 @@ export class UserService {
     profile: OAuthProfile,
     transaction?: Transaction,
   ): Promise<{ user: User; isNewUser: boolean }> {
-    // 1. Already linked?
+    // 1. Already linked? Idempotency anchor — `UNIQUE(provider,
+    //    provider_user_id)` at the DB level guarantees one row per
+    //    (provider, sub) pair, so a duplicate OAuth callback for the
+    //    same identity always lands here.
     const existingSocial = await this.socialAccountModel.findOne({
       where: { provider, providerUserId: profile.providerUserId },
       include: [{ model: User, as: 'user' }],
@@ -341,30 +401,59 @@ export class UserService {
         );
       }
 
+      await this.linkSocialAccountIdempotent(
+        existingUser.id,
+        provider,
+        profile,
+        transaction,
+      );
+      return { user: existingUser, isNewUser: false };
+    }
+
+    // 3. Create new user + social account.
+    const user = await this.createFromOAuth(profile, transaction);
+    await this.linkSocialAccountIdempotent(
+      user.id,
+      provider,
+      profile,
+      transaction,
+    );
+    return { user, isNewUser: true };
+  }
+
+  /**
+   * Insert a social_account row, but treat a concurrent UNIQUE-
+   * constraint failure as success. Two concurrent OAuth callbacks for
+   * the same (provider, sub) can both pass step 1 of the find-or-
+   * create dance because `UNIQUE(provider, provider_user_id)` is only
+   * checked at INSERT time. Without this guard the second caller 500s
+   * even though the link they wanted now exists. Idempotent by
+   * design.
+   */
+  private async linkSocialAccountIdempotent(
+    userId: string,
+    provider: SocialProvider,
+    profile: OAuthProfile,
+    transaction?: Transaction,
+  ): Promise<void> {
+    try {
       await this.socialAccountModel.create(
         {
-          userId: existingUser.id,
+          userId,
           provider,
           providerUserId: profile.providerUserId,
           providerEmail: profile.email,
         },
         { transaction },
       );
-      return { user: existingUser, isNewUser: false };
+    } catch (err) {
+      if (err instanceof UniqueConstraintError) {
+        // The race resolved — another concurrent caller linked first.
+        // Caller can proceed; the row they wanted exists.
+        return;
+      }
+      throw err;
     }
-
-    // 3. Create new user + social account
-    const user = await this.createFromOAuth(profile, transaction);
-    await this.socialAccountModel.create(
-      {
-        userId: user.id,
-        provider,
-        providerUserId: profile.providerUserId,
-        providerEmail: profile.email,
-      },
-      { transaction },
-    );
-    return { user, isNewUser: true };
   }
 
   /**

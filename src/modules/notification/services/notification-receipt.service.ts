@@ -240,6 +240,25 @@ export class NotificationReceiptService {
     await receipt.save();
   }
 
+  /**
+   * Has the given channel already been successfully delivered for
+   * this receipt? Used by workers to short-circuit a retry that
+   * would otherwise re-send (Resend has no idempotency key, so we
+   * dedupe at the receipt level).
+   *
+   * Treats only the literal `'sent'` outcome as delivered — `'queued'`
+   * means we tried to enqueue but never saw the worker confirm, and
+   * `'failed:...'` means the worker should retry.
+   */
+  async isChannelDelivered(
+    receiptId: string,
+    channel: 'in_app' | 'email' | 'push' | 'sms',
+  ): Promise<boolean> {
+    const receipt = await this.receiptModel.findByPk(receiptId);
+    if (!receipt) return false;
+    return receipt.deliveredChannels?.[channel] === 'sent';
+  }
+
   private async findOwnedOrThrow(
     userId: string,
     receiptId: string,

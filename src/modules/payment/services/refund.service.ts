@@ -14,12 +14,9 @@ import type { Stripe } from 'stripe-types';
 import { Payment, PaymentStatus } from '../entities/payment.entity';
 import { StripeService } from './stripe.service';
 import { OrphanedWebhookError } from './webhook-errors';
-import {
-  NotificationService,
-  NotificationType,
-} from '../../notification/notification.service';
+import { NotificationService } from '../../notification/notification.service';
 import { NotificationOutbox } from '../../notification/notification-outbox';
-import { formatMoney } from '../../notification/format';
+import { refundIssuedForClient } from '../notifications';
 import { CreateRefundDto } from '../dto/create-refund.dto';
 
 const MAX_REFUND_WINDOW_DAYS = 14;
@@ -107,19 +104,14 @@ export class RefundService {
     await payment.save();
 
     if (payment.clientId) {
-      // Refund deep-link: prefer the related invoice when present
-      // (clients view billing under /profile/invoices/:id). When the
-      // payment isn't tied to an invoice, land on the Invoices tab.
-      const data = payment.invoiceId
-        ? { screen: 'profile/invoices', entityId: payment.invoiceId }
-        : { screen: 'profile', queryParams: { tab: 'invoices' } };
-      await this.notificationService.notify({
-        userId: payment.clientId,
-        type: NotificationType.REFUND_ISSUED,
-        title: 'Refund processed',
-        body: `A refund of ${formatMoney(refundAmount, payment.currency)} has been issued.`,
-        data,
-      });
+      await this.notificationService.notify(
+        refundIssuedForClient(
+          payment.clientId,
+          refundAmount,
+          payment.currency,
+          payment.invoiceId,
+        ),
+      );
     }
 
     this.logger.log(

@@ -12,9 +12,9 @@ import { EmailVerifierService } from '../../common/services/email-verifier.servi
 export class WaitlistService {
   constructor(
     @InjectModel(Waitlist)
-    private waitlistModel: typeof Waitlist,
-    private emailService: EmailService,
-    private emailVerifier: EmailVerifierService,
+    private readonly waitlistModel: typeof Waitlist,
+    private readonly emailService: EmailService,
+    private readonly emailVerifier: EmailVerifierService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}

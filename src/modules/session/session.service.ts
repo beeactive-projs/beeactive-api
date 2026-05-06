@@ -47,15 +47,15 @@ export class SessionService {
 
   constructor(
     @InjectModel(Session)
-    private sessionModel: typeof Session,
+    private readonly sessionModel: typeof Session,
     @InjectModel(SessionParticipant)
-    private participantModel: typeof SessionParticipant,
+    private readonly participantModel: typeof SessionParticipant,
     @InjectModel(GroupMember)
-    private memberModel: typeof GroupMember,
+    private readonly memberModel: typeof GroupMember,
     @InjectModel(InstructorClient)
-    private instructorClientModel: typeof InstructorClient,
-    private sequelize: Sequelize,
-    private emailService: EmailService,
+    private readonly instructorClientModel: typeof InstructorClient,
+    private readonly sequelize: Sequelize,
+    private readonly emailService: EmailService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
     private readonly searchIndexService: SearchIndexService,

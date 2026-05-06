@@ -148,6 +148,33 @@ export function subscriptionCancelledForClient(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Refund
+// ---------------------------------------------------------------------------
+
+/**
+ * Client — a refund has been issued for one of their payments. When the
+ * payment is tied to an invoice we deep-link to that invoice; otherwise
+ * we land on the Invoices tab so the client can find it themselves.
+ */
+export function refundIssuedForClient(
+  clientId: string,
+  refundCents: number,
+  currency: string,
+  invoiceId: string | null,
+): NotifyParams {
+  const data = invoiceId
+    ? { screen: 'profile/invoices', entityId: invoiceId }
+    : { screen: 'profile', queryParams: { tab: 'invoices' } };
+  return {
+    userId: clientId,
+    type: NotificationType.REFUND_ISSUED,
+    title: 'Refund processed',
+    body: `A refund of ${formatMoney(refundCents, currency)} has been issued.`,
+    data,
+  };
+}
+
 /** Instructor — a client cancelled their own membership. */
 export function subscriptionCancelledByClientForInstructor(
   instructorId: string,

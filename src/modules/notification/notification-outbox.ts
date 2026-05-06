@@ -13,7 +13,26 @@ import { NotificationService, NotifyParams } from './notification.service';
  *   the user gets a "payment received" email for a payment that
  *   never finalized.
  *
- * Usage:
+ * WHEN TO USE THE OUTBOX vs DIRECT notify()
+ * -----------------------------------------
+ *   USE OUTBOX inside a transaction you do NOT own — e.g. webhook
+ *   handlers that receive `tx` from a dispatcher. You can't safely
+ *   call `notify()` there because rollback is decided after you
+ *   return. The dispatcher creates the outbox, hands it through, and
+ *   calls `flush()` on commit / `discard()` on rollback.
+ *
+ *   USE DIRECT notify() in service methods that own their own tx.
+ *   Pattern: do the multi-table writes inside `sequelize.transaction
+ *   (async tx => { ... })`, let it resolve (commit or throw), THEN
+ *   call `await this.notificationService.notify(...)`. If the tx
+ *   throws, control never reaches the notify, so no orphan
+ *   notifications fire. This is the dominant pattern across
+ *   group/client/invitation/post services today.
+ *
+ *   ❌ NEVER call notify() *inside* the transaction callback. That
+ *   re-introduces the rollback bug the outbox was built to prevent.
+ *
+ * Usage (outbox path):
  *   const outbox = new NotificationOutbox(notificationService, log);
  *   await sequelize.transaction(async (tx) => {
  *     await someService.syncStuff(payload, tx, outbox);

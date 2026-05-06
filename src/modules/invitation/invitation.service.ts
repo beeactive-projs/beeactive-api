@@ -41,16 +41,16 @@ import {
 export class InvitationService {
   constructor(
     @InjectModel(Invitation)
-    private invitationModel: typeof Invitation,
+    private readonly invitationModel: typeof Invitation,
     @InjectModel(GroupMember)
-    private memberModel: typeof GroupMember,
-    private sequelize: Sequelize,
-    private groupService: GroupService,
-    private roleService: RoleService,
-    private cryptoService: CryptoService,
-    private emailService: EmailService,
-    private configService: ConfigService,
-    private notificationService: NotificationService,
+    private readonly memberModel: typeof GroupMember,
+    private readonly sequelize: Sequelize,
+    private readonly groupService: GroupService,
+    private readonly roleService: RoleService,
+    private readonly cryptoService: CryptoService,
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -293,6 +293,9 @@ export class InvitationService {
             'InvitationService',
           ),
         );
+      // notify-after-commit: the addMember + assignRole + markAccepted
+      // tx already committed above. Do NOT hoist this inside the tx
+      // block — a rollback would orphan the "invitation accepted" alert.
       await this.notificationService
         .notify(
           groupInvitationAccepted(

@@ -7,7 +7,6 @@ import { SessionService } from './session.service';
 import { RoleModule } from '../role/role.module';
 import { GroupMember } from '../group/entities/group-member.entity';
 import { InstructorClient } from '../client/entities/instructor-client.entity';
-import { EmailService } from '../../common/services/email.service';
 import { SearchModule } from '../search/search.module';
 
 /**
@@ -33,7 +32,7 @@ import { SearchModule } from '../search/search.module';
     SearchModule,
   ],
   controllers: [SessionController],
-  providers: [SessionService, EmailService],
+  providers: [SessionService],
   exports: [SessionService],
 })
 export class SessionModule {}

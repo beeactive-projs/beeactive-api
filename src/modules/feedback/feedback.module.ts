@@ -4,12 +4,11 @@ import { Feedback } from './entities/feedback.entity';
 import { FeedbackController } from './feedback.controller';
 import { FeedbackService } from './feedback.service';
 import { RoleModule } from '../role/role.module';
-import { EmailService } from '../../common/services/email.service';
 
 @Module({
   imports: [SequelizeModule.forFeature([Feedback]), RoleModule],
   controllers: [FeedbackController],
-  providers: [FeedbackService, EmailService],
+  providers: [FeedbackService],
   exports: [FeedbackService],
 })
 export class FeedbackModule {}

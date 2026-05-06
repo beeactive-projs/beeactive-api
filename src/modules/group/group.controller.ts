@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -80,7 +81,7 @@ export class GroupController {
 
   @Get(':id/public')
   @ApiEndpoint(GroupDocs.getPublicProfile)
-  async getPublicProfile(@Param('id') id: string) {
+  async getPublicProfile(@Param('id', ParseUUIDPipe) id: string) {
     return this.groupService.getPublicProfile(id);
   }
 
@@ -116,7 +117,10 @@ export class GroupController {
   @Get(':id')
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(GroupDocs.getById)
-  async getById(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+  async getById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
     return this.groupService.getById(id, req.user.id);
   }
 
@@ -124,7 +128,7 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({ ...GroupDocs.update, body: UpdateGroupDto })
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: UpdateGroupDto,
   ) {
@@ -135,7 +139,7 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(GroupDocs.deleteGroup)
   async deleteGroup(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     await this.groupService.deleteGroup(id, req.user.id);
@@ -152,7 +156,7 @@ export class GroupController {
     responses: [{ status: 200, description: 'Ownership transferred' }],
   })
   async transferOwnership(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: TransferOwnershipDto,
   ) {
@@ -169,7 +173,7 @@ export class GroupController {
     responses: [{ status: 200, description: 'Group statistics' }],
   })
   async getStats(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.groupService.getGroupStats(id, req.user.id);
@@ -184,7 +188,7 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(GroupDocs.selfJoin)
   async selfJoin(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     const result = await this.groupService.selfJoinGroup(id, req.user.id);
@@ -210,7 +214,7 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(GroupDocs.listJoinRequests)
   async listJoinRequests(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Query() pagination: PaginationDto,
   ) {
@@ -226,7 +230,7 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(GroupDocs.getMyJoinRequest)
   async getMyJoinRequest(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     const request = await this.groupService.getMyJoinRequest(id, req.user.id);
@@ -237,7 +241,7 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(GroupDocs.cancelMyJoinRequest)
   async cancelMyJoinRequest(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     await this.groupService.cancelMyJoinRequest(id, req.user.id);
@@ -251,8 +255,8 @@ export class GroupController {
     body: DecideJoinRequestDto,
   })
   async decideJoinRequest(
-    @Param('id') id: string,
-    @Param('requestId') requestId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: DecideJoinRequestDto,
   ) {
@@ -267,7 +271,7 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(GroupDocs.getMembers)
   async getMembers(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Query() pagination: PaginationDto,
   ) {
@@ -290,7 +294,7 @@ export class GroupController {
     responses: [{ status: 201, description: 'Members added' }],
   })
   async addMembersBulk(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: AddMembersBulkDto,
   ) {
@@ -301,7 +305,7 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({ ...GroupDocs.updateMyMembership, body: UpdateMemberDto })
   async updateMyMembership(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
     @Body() dto: UpdateMemberDto,
   ) {
@@ -312,7 +316,7 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(GroupDocs.leaveGroup)
   async leaveGroup(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     await this.groupService.leaveGroup(id, req.user.id);
@@ -323,8 +327,8 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint(GroupDocs.removeMember)
   async removeMember(
-    @Param('id') id: string,
-    @Param('userId') memberId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) memberId: string,
     @Request() req: AuthenticatedRequest,
   ) {
     await this.groupService.removeMember(id, memberId, req.user.id);
@@ -335,8 +339,8 @@ export class GroupController {
   @UseGuards(AuthGuard('jwt'))
   @ApiEndpoint({ ...GroupRoleDocs.updateMemberRole, body: UpdateMemberRoleDto })
   async updateMemberRole(
-    @Param('id') id: string,
-    @Param('userId') memberId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) memberId: string,
     @Body() dto: UpdateMemberRoleDto,
     @Request() req: AuthenticatedRequest,
   ) {
@@ -352,7 +356,7 @@ export class GroupController {
   @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint(GroupDocs.generateJoinLink)
   async generateJoinLink(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     const result = await this.groupService.generateJoinLink(id, req.user.id);
@@ -368,7 +372,7 @@ export class GroupController {
   @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint(GroupDocs.revokeJoinLink)
   async revokeJoinLink(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
     await this.groupService.revokeJoinLink(id, req.user.id);

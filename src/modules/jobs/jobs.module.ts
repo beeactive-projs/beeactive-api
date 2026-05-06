@@ -1,7 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { NotificationModule } from '../notification/notification.module';
-import { EmailService } from '../../common/services/email.service';
 import { JobsService } from './jobs.service';
 import { QUEUE_DEFAULTS, QueueName } from './job-registry';
 import { EmailSendWorker } from './workers/notifications/email-send.worker';
@@ -52,10 +51,8 @@ import { EmailSendWorker } from './workers/notifications/email-send.worker';
   providers: [
     JobsService,
     EmailSendWorker,
-    // EmailService isn't exported from a shared module; every
-    // consumer declares it locally. The worker needs it to actually
-    // talk to Resend.
-    EmailService,
+    // EmailService comes in via the @Global EmailModule registered
+    // in AppModule — no need to declare it locally.
   ],
   exports: [JobsService],
 })
