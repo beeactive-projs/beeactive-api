@@ -32,9 +32,27 @@ export const envValidationSchema = Joi.object({
   PGPASSWORD: Joi.string().optional(),
   PGDATABASE: Joi.string().optional(),
 
-  // Redis Configuration (optional — only needed when using Bull queues)
-  REDIS_HOST: Joi.string().optional(),
+  // Redis Configuration — required for BullMQ queues. Required in
+  // production; optional in dev/test so a developer without Redis
+  // running can still boot the API (the JobsModule degrades to a
+  // no-op enqueue + logs a warning).
+  REDIS_HOST: Joi.string().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
   REDIS_PORT: Joi.number().default(6379),
+  REDIS_PASSWORD: Joi.string().optional(),
+  // Set to "true" when using Redis Cloud / managed Redis (TLS-enabled).
+  // Local Docker Redis runs without TLS so this defaults to false.
+  REDIS_TLS: Joi.string().valid('true', 'false').default('false'),
+
+  // Bull Board admin UI — mounted at /admin/queues. Protected with
+  // HTTP basic auth so we don't have to wire JWT into the Express
+  // middleware that Bull Board ships with. Both vars must be set
+  // for the UI to mount; missing either disables it (the route 404s).
+  BULL_BOARD_USER: Joi.string().optional(),
+  BULL_BOARD_PASSWORD: Joi.string().min(12).optional(),
 
   // JWT Configuration (CRITICAL - no defaults allowed!)
   JWT_SECRET: Joi.string().min(32).required(),

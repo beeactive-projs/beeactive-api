@@ -25,6 +25,14 @@ import { Group } from '../group/entities/group.entity';
 import { InstructorProfile } from '../profile/entities/instructor-profile.entity';
 import { RoleService } from '../role/role.service';
 import { User } from '../user/entities/user.entity';
+import { NotificationService } from '../notification/notification.service';
+import {
+  clientRequestReceived,
+  clientRequestAccepted,
+  clientRequestDeclined,
+  clientInvitationReceived,
+  clientRelationshipEndedForInstructor,
+} from './notifications';
 import {
   ClientRequest,
   ClientRequestStatus,
@@ -112,6 +120,7 @@ export class ClientService {
     private sequelize: Sequelize,
     private roleService: RoleService,
     private emailService: EmailService,
+    private notificationService: NotificationService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -864,6 +873,15 @@ export class ClientService {
         ),
       );
 
+    await this.notificationService
+      .notify(clientInvitationReceived(toUserId, instructorName))
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to notify invitee on client invitation: ${err.message}`,
+          'ClientService',
+        ),
+      );
+
     this.logger.log(
       `Instructor ${instructorId} invited user ${toUserId} as client`,
       'ClientService',
@@ -966,6 +984,18 @@ export class ClientService {
           ),
         );
     }
+
+    const requesterName =
+      [sender?.firstName, sender?.lastName].filter(Boolean).join(' ').trim() ||
+      null;
+    await this.notificationService
+      .notify(clientRequestReceived(instructorId, requesterName))
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to notify instructor on new client request: ${err.message}`,
+          'ClientService',
+        ),
+      );
 
     this.logger.log(
       `User ${userId} requested to become client of instructor ${instructorId}`,
@@ -1081,6 +1111,19 @@ export class ClientService {
           ),
         );
     }
+    const responderName =
+      [responder?.firstName, responder?.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || null;
+    await this.notificationService
+      .notify(clientRequestAccepted(request.fromUserId, responderName))
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to notify request sender on accept: ${err.message}`,
+          'ClientService',
+        ),
+      );
 
     this.logger.log(
       `Client request ${requestId} accepted by user ${userId}`,
@@ -1161,6 +1204,19 @@ export class ClientService {
           ),
         );
     }
+    const declinerName =
+      [responder?.firstName, responder?.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || null;
+    await this.notificationService
+      .notify(clientRequestDeclined(request.fromUserId, declinerName))
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to notify request sender on decline: ${err.message}`,
+          'ClientService',
+        ),
+      );
 
     this.logger.log(
       `Client request ${requestId} declined by user ${userId}`,
@@ -1451,6 +1507,19 @@ export class ClientService {
           'ClientService',
         ),
     );
+    const clientName =
+      [relationship.client?.firstName, relationship.client?.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || null;
+    await this.notificationService
+      .notify(clientRelationshipEndedForInstructor(instructorId, clientName))
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to notify instructor on collaboration-ended: ${err.message}`,
+          'ClientService',
+        ),
+      );
 
     return relationship;
   }

@@ -15,7 +15,11 @@ import { User } from '../../user/entities/user.entity';
  * attempts.
  *
  * Values are open strings to allow ad-hoc reasons:
- *   'sent'                   — delivered successfully
+ *   'sent'                   — delivered successfully (sync path or worker confirmed)
+ *   'queued'                 — handed to BullMQ; the worker hasn't
+ *                              reported back yet. Worker overwrites
+ *                              with 'sent' or 'failed:...' when it
+ *                              finishes.
  *   'skipped:preference_off' — user disabled the channel
  *   'skipped:no_email'       — user has no email on file (future audiences)
  *   'skipped:not_implemented'— phase-1 placeholder for push/sms
@@ -23,6 +27,7 @@ import { User } from '../../user/entities/user.entity';
  */
 export type DeliveredChannelStatus =
   | 'sent'
+  | 'queued'
   | `skipped:${string}`
   | `failed:${string}`;
 

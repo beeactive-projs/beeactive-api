@@ -215,6 +215,31 @@ export class NotificationReceiptService {
     }
   }
 
+  /**
+   * Record the per-channel outcome for a receipt. Used by workers
+   * (Phase 6+) to update `delivered_channels` after async delivery
+   * completes — e.g. the email worker writes `email: 'sent'` or
+   * `email: 'failed:resend timeout'` here when its job finishes.
+   *
+   * Merges with the existing JSONB so other channel results (in_app,
+   * push, sms) aren't clobbered by a single channel's update.
+   *
+   * Silently no-ops when the receipt no longer exists (the user
+   * deleted it before the worker finished). The worker shouldn't
+   * fail just because a row is gone.
+   */
+  async recordChannelOutcome(
+    receiptId: string,
+    channel: 'in_app' | 'email' | 'push' | 'sms',
+    outcome: string,
+  ): Promise<void> {
+    const receipt = await this.receiptModel.findByPk(receiptId);
+    if (!receipt) return;
+    const next = { ...receipt.deliveredChannels, [channel]: outcome };
+    receipt.deliveredChannels = next;
+    await receipt.save();
+  }
+
   private async findOwnedOrThrow(
     userId: string,
     receiptId: string,

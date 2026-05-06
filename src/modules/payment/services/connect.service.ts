@@ -23,6 +23,7 @@ import {
   NotificationService,
   NotificationType,
 } from '../../notification/notification.service';
+import { NotificationOutbox } from '../../notification/notification-outbox';
 
 /**
  * ConnectService
@@ -290,6 +291,7 @@ export class ConnectService {
   async syncAccountFromWebhook(
     stripeAccount: Stripe.Account,
     tx: Transaction,
+    outbox?: NotificationOutbox,
   ): Promise<void> {
     const local = await this.stripeAccountModel.findOne({
       where: { stripeAccountId: stripeAccount.id },
@@ -331,24 +333,24 @@ export class ConnectService {
     await local.save({ transaction: tx });
 
     if (!wasChargesEnabled && local.chargesEnabled) {
-      await this.notificationService.notify({
+      outbox?.add({
         userId: local.userId,
         type: NotificationType.STRIPE_ACCOUNT_READY,
         title: 'Payments enabled',
         body:
           'Your Stripe account is verified. You can now issue invoices and ' +
           'accept payments from clients.',
-        data: { screen: 'instructor-payments' },
+        data: { screen: 'coaching/payments' },
       });
     } else if (!wasRestricted && local.disabledReason) {
-      await this.notificationService.notify({
+      outbox?.add({
         userId: local.userId,
         type: NotificationType.STRIPE_ACCOUNT_RESTRICTED,
         title: 'Action required on your Stripe account',
         body:
           'Stripe has flagged additional information is required to keep ' +
           'your payouts active. Open the Express Dashboard to resolve it.',
-        data: { screen: 'instructor-payments' },
+        data: { screen: 'coaching/payments' },
       });
     }
   }
@@ -384,6 +386,7 @@ export class ConnectService {
   async handleDeauthorized(
     stripeAccountId: string,
     tx: Transaction,
+    outbox?: NotificationOutbox,
   ): Promise<void> {
     const local = await this.stripeAccountModel.findOne({
       where: { stripeAccountId },
@@ -414,9 +417,10 @@ export class ConnectService {
       'ConnectService',
     );
 
-    // Best-effort instructor notification. Per-client notifications +
-    // emails are queued for the jobs sprint.
-    await this.notificationService.notify({
+    // Instructor notification — queued in the outbox so a rolled-back
+    // webhook tx doesn't tell the user "your account is disconnected"
+    // when in fact the disconnect failed mid-flight.
+    outbox?.add({
       userId: instructorId,
       type: NotificationType.STRIPE_ACCOUNT_RESTRICTED,
       title: 'Stripe account disconnected',
@@ -424,7 +428,7 @@ export class ConnectService {
         cancelled > 0
           ? `Your Stripe account was disconnected. ${cancelled} active subscription${cancelled === 1 ? '' : 's'} will end at the current billing period — no future charges. You can reconnect from the payments page.`
           : 'Your Stripe account was disconnected. You can reconnect from the payments page.',
-      data: { screen: 'instructor-payments' },
+      data: { screen: 'coaching/payments' },
     });
   }
 }

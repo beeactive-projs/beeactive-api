@@ -71,16 +71,20 @@ export const NOTIFICATION_DEFAULTS: Record<
   // worth an email so it's not lost in app silence.
   [NotificationType.CLIENT_REQUEST_RECEIVED]: IN_APP_AND_EMAIL,
   [NotificationType.CLIENT_REQUEST_ACCEPTED]: IN_APP_AND_EMAIL,
+  [NotificationType.CLIENT_REQUEST_DECLINED]: IN_APP_AND_EMAIL,
   [NotificationType.CLIENT_INVITATION_RECEIVED]: IN_APP_AND_EMAIL,
+  [NotificationType.CLIENT_RELATIONSHIP_ENDED]: IN_APP_AND_EMAIL,
 
   // ── Groups & invitations ─────────────────────────────────
   [NotificationType.GROUP_INVITATION_RECEIVED]: IN_APP_AND_EMAIL,
   [NotificationType.GROUP_INVITATION_ACCEPTED]: IN_APP_AND_EMAIL,
+  [NotificationType.GROUP_INVITATION_DECLINED]: IN_APP_AND_EMAIL,
   // Member churn is noisy in active groups → in-app only.
   [NotificationType.GROUP_MEMBER_JOINED]: IN_APP_ONLY,
   [NotificationType.GROUP_MEMBER_LEFT]: IN_APP_ONLY,
-  // Removal / ownership transfer is consequential → email.
+  // Removal / ownership transfer / role change is consequential → email.
   [NotificationType.GROUP_MEMBER_REMOVED]: IN_APP_AND_EMAIL,
+  [NotificationType.GROUP_MEMBER_ROLE_CHANGED]: IN_APP_AND_EMAIL,
   [NotificationType.GROUP_OWNERSHIP_TRANSFERRED]: IN_APP_AND_EMAIL,
   // Join requests — owner needs to act; user wants to know the outcome.
   [NotificationType.GROUP_JOIN_REQUEST_RECEIVED]: IN_APP_AND_EMAIL,

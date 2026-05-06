@@ -7,6 +7,7 @@ import { AppModule } from './app.module';
 import helmet from 'helmet';
 import * as express from 'express';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { setupBullBoard } from './modules/jobs/bull-board.setup';
 
 /**
  * Bootstrap Function
@@ -291,6 +292,11 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
     exposedHeaders: ['X-Request-ID'], // Expose request ID to client
     maxAge: 3600, // Cache preflight for 1 hour
   });
+
+  // Mount the Bull Board admin UI (gated by HTTP basic auth via
+  // BULL_BOARD_USER + BULL_BOARD_PASSWORD env). No-op when those
+  // aren't set — see modules/jobs/bull-board.setup.ts.
+  setupBullBoard(app, new Logger('BullBoard'));
 
   // Start server
   const port = process.env.PORT || 3000;

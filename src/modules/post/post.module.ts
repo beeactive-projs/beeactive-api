@@ -5,6 +5,7 @@ import { PostComment } from './entities/post-comment.entity';
 import { PostReaction } from './entities/post-reaction.entity';
 import { Group } from '../group/entities/group.entity';
 import { GroupMember } from '../group/entities/group-member.entity';
+import { User } from '../user/entities/user.entity';
 import { PostController } from './post.controller';
 import { PostService } from './post.service';
 import { CloudinaryService } from '../../common/services/cloudinary.service';
@@ -19,6 +20,7 @@ import { GroupModule } from '../group/group.module';
       PostReaction,
       Group,
       GroupMember,
+      User,
     ]),
     SearchModule,
     GroupModule,

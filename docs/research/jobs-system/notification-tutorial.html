@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Notification System — Tutorial &amp; Architecture</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --panel-2: #1c2230;
+    --panel-3: #232a3b;
+    --border: #2a3142;
+    --text: #e6e8ee;
+    --text-dim: #9ba3b4;
+    --text-muted: #6b7283;
+    --accent: #ffb627;
+    --accent-2: #6ea8ff;
+    --green: #7fd1a3;
+    --red: #ff7a90;
+    --purple: #c4a7ff;
+    --code-bg: #0b0d12;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+    font-size: 13px;
+  }
+  nav.toc h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin: 18px 8px 8px;
+  }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a {
+    display: block;
+    padding: 6px 8px;
+    color: var(--text-dim);
+    text-decoration: none;
+    border-radius: 4px;
+  }
+  nav.toc a:hover { background: var(--panel-2); color: var(--text); }
+  nav.toc .indent { padding-left: 20px; font-size: 12px; }
+
+  main {
+    max-width: 920px;
+    padding: 40px 48px 80px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  h2 {
+    font-size: 24px;
+    margin: 56px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+    color: var(--text);
+    scroll-margin-top: 24px;
+  }
+  h3 {
+    font-size: 18px;
+    margin: 32px 0 12px;
+    color: var(--accent-2);
+    scroll-margin-top: 24px;
+  }
+  h4 {
+    font-size: 15px;
+    margin: 20px 0 8px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  p { margin: 0 0 14px; }
+  .lede {
+    color: var(--text-dim);
+    font-size: 16px;
+    margin-bottom: 32px;
+  }
+
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background: var(--panel-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--accent);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    margin: 12px 0 20px;
+    line-height: 1.5;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .filename {
+    background: var(--panel-3);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    padding: 6px 14px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 12px 0 0;
+  }
+  .filename + pre {
+    margin-top: 0;
+    border-radius: 0 0 8px 8px;
+  }
+
+  ul, ol { padding-left: 24px; margin: 0 0 14px; }
+  li { margin-bottom: 6px; }
+
+  .callout {
+    background: var(--panel);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+  }
+  .callout.why { border-left-color: var(--green); }
+  .callout.warn { border-left-color: var(--red); }
+  .callout.note { border-left-color: var(--accent-2); }
+  .callout strong { color: var(--accent); }
+  .callout.why strong { color: var(--green); }
+  .callout.warn strong { color: var(--red); }
+  .callout.note strong { color: var(--accent-2); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: var(--panel-2);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  tbody tr:hover { background: rgba(110, 168, 255, 0.05); }
+
+  .ascii {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text);
+    white-space: pre;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 6px;
+  }
+  .pill.done { background: rgba(127, 209, 163, 0.15); color: var(--green); }
+  .pill.todo { background: rgba(196, 167, 255, 0.15); color: var(--purple); }
+  .pill.future { background: rgba(110, 168, 255, 0.15); color: var(--accent-2); }
+  .pill.warn { background: rgba(255, 122, 144, 0.15); color: var(--red); }
+
+  /* Token highlighting (manual since we have no JS) */
+  .kw { color: #ff7ab0; }
+  .str { color: #b5e88c; }
+  .com { color: #6b7283; font-style: italic; }
+  .num { color: #ffb627; }
+  .fn { color: #6ea8ff; }
+  .typ { color: #c4a7ff; }
+  .dec { color: #ffb627; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Overview</h2>
+  <a href="#what-we-built">What we built</a>
+  <a href="#stack">The stack &amp; what each thing does</a>
+  <a href="#install">Install &amp; setup</a>
+
+  <h2>How it works</h2>
+  <a href="#architecture">Architecture diagram</a>
+  <a href="#data-model">The 4 tables</a>
+  <a href="#producer-flow">Producer flow (notify)</a>
+  <a href="#channels">Channels &amp; preferences</a>
+  <a href="#bell-flow">Bell flow (FE reads)</a>
+
+  <h2>Code walkthrough</h2>
+  <a href="#service">NotificationService</a>
+  <a href="#receipt-service">NotificationReceiptService</a>
+  <a href="#preference-service">PreferenceService</a>
+  <a href="#device-service">DeviceTokenService</a>
+  <a href="#email-template">Generic email template</a>
+
+  <h2>REST API</h2>
+  <a href="#endpoints">All 17 endpoints</a>
+  <a href="#auth">Auth + DTO patterns</a>
+  <a href="#debug">Debug endpoint (smoke test)</a>
+
+  <h2>Coming soon</h2>
+  <a href="#fe">Frontend bell + settings (Phase 5)</a>
+  <a href="#workers">BullMQ workers (Phase 6)</a>
+  <a href="#push">Web Push + mobile FCM</a>
+  <a href="#realtime">Real-time (SSE)</a>
+
+  <h2>Reference</h2>
+  <a href="#patterns">Best practices we follow</a>
+  <a href="#glossary">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Notification System — Tutorial</h1>
+<p class="lede">
+A complete walkthrough of the multi-channel notification system in MotionHive — what we've shipped through Phase 4, why we built it this way, what's next, and how every piece fits together. Read top-to-bottom or jump to any section using the nav.
+</p>
+
+<!-- ========================================================== -->
+<h2 id="what-we-built">What we built (and why)</h2>
+
+<p>The product needs to <strong>notify users about things</strong> — invoices got paid, sessions are starting, someone wants to be your client. Each notification might appear in several places: the bell icon in the app, an email in their inbox, a push notification on their phone (later), maybe an SMS for high-urgency money events (also later).</p>
+
+<p>The naive approach would be: in the code that creates an invoice, also send the email and create the in-app row. That works for one notification type but explodes when:</p>
+<ul>
+  <li>You have 30 different notification types across 8 modules</li>
+  <li>Each user wants to control which channels they receive (preferences)</li>
+  <li>You want to add a new channel (push, SMS) without changing every producer</li>
+  <li>You want to make these async (move them off the request path)</li>
+</ul>
+
+<div class="callout why">
+  <strong>The pattern we used</strong> — borrowed from the <code>clym/events-api</code> reference project (sections C of the research index): <em>producers don't know about channels</em>. They call <code>notify(userId, type, title, body)</code>. The notification system writes the in-app row, looks up that user's channel preferences, and fans out to whichever channels are enabled. Adding a new channel later = one new adapter, zero changes to call sites.
+</div>
+
+<p>This tutorial covers everything <strong>we've built</strong> through Phase 4 (data model, services, REST API, debug endpoint) and previews <strong>what's coming</strong> in Phase 5 (frontend bell + settings) and Phase 6 (BullMQ workers + push + real-time).</p>
+
+<h3>What's done <span class="pill done">Phase 1–4</span></h3>
+<ul>
+  <li>Database schema: <code>notification</code>, <code>notification_receipt</code>, <code>notification_preference</code>, <code>device_token</code></li>
+  <li>4 services: producer-facing <code>NotificationService</code> + 3 FE-facing services (receipts, preferences, devices)</li>
+  <li>17 REST endpoints across 4 controllers (notifications, settings, devices, debug)</li>
+  <li>187 unit tests passing, full coverage of the service layer</li>
+  <li>System defaults map for 30 notification types</li>
+  <li>In-app + email channels delivering synchronously</li>
+</ul>
+
+<h3>What's coming <span class="pill todo">Phase 5–7</span></h3>
+<ul>
+  <li>Frontend bell + settings tab + signal store (Phase 5)</li>
+  <li>BullMQ + Redis + workers (Phase 6) — moves email send off the request path</li>
+  <li>Web Push (browser) + FCM (mobile via Ionic) — Phase 6+</li>
+  <li>SSE real-time push to the bell — Phase 6+</li>
+  <li>SMS via Twilio — when needed</li>
+</ul>
+
+<!-- ========================================================== -->
+<h2 id="stack">The stack &amp; what each thing does</h2>
+
+<table>
+  <thead>
+    <tr><th>Technology</th><th>What it does in this system</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>NestJS 11</strong></td>
+      <td>The framework. Modules, controllers, services, dependency injection. Everything we wrote sits inside it.</td>
+    </tr>
+    <tr>
+      <td><strong>Sequelize 6 + sequelize-typescript</strong></td>
+      <td>ORM. Maps the 4 SQL tables to TypeScript classes (<code>Notification</code>, <code>NotificationReceipt</code>, etc). Used for transactions and queries.</td>
+    </tr>
+    <tr>
+      <td><strong>PostgreSQL</strong></td>
+      <td>The actual database. Stores notifications, receipts, preferences, device tokens. Handles the JSONB columns we use for <code>data</code> and <code>delivered_channels</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Resend</strong></td>
+      <td>Email delivery API. <code>EmailService.sendNotificationEmail()</code> calls Resend's HTTP API. In dev (no API key) it just logs.</td>
+    </tr>
+    <tr>
+      <td><strong>class-validator + class-transformer</strong></td>
+      <td>Validates request bodies (DTOs) at runtime. We use <code>@IsEnum</code>, <code>@MaxLength</code>, <code>@ValidateNested</code> all over the controllers.</td>
+    </tr>
+    <tr>
+      <td><strong>Passport JWT</strong></td>
+      <td>Authentication. <code>AuthGuard('jwt')</code> on every notification route extracts <code>req.user.id</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Throttler</strong></td>
+      <td>Rate limiting. Global default is 100 req/60s; we add tighter throttles on <code>POST /devices/register</code> (60/min) and the debug endpoint (5/min).</td>
+    </tr>
+    <tr>
+      <td><strong>Winston</strong></td>
+      <td>Structured logging. <code>NotificationService.logger.log()</code> traces every <code>notify()</code> call.</td>
+    </tr>
+    <tr>
+      <td><strong>Swagger / OpenAPI</strong></td>
+      <td>Auto-generated API docs at <code>/api/docs</code>. Driven by the <code>@ApiEndpoint()</code> decorator + per-module <code>*.docs.ts</code> files.</td>
+    </tr>
+    <tr>
+      <td><strong>Jest</strong></td>
+      <td>Unit testing. Mock the model layer with <code>makeModelMock()</code>; mock services with plain objects.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Coming in later phases (NOT installed yet)</h3>
+<table>
+  <thead><tr><th>Tech</th><th>What it'll do</th><th>Phase</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>BullMQ</strong></td>
+      <td>Job queue on top of Redis. Will move email/push/SMS sends off the request path so the API responds in 50ms instead of 800ms.</td>
+      <td>Phase 6</td>
+    </tr>
+    <tr>
+      <td><strong>Redis</strong></td>
+      <td>Storage for BullMQ. Already running locally (Docker), will use Railway addon (~$5/mo) in production.</td>
+      <td>Phase 6</td>
+    </tr>
+    <tr>
+      <td><strong>web-push</strong></td>
+      <td>Node library that talks to browsers' push services (FCM for Chrome, Mozilla autopush, Apple). Free, browser standard.</td>
+      <td>Phase 6+</td>
+    </tr>
+    <tr>
+      <td><strong>Firebase Cloud Messaging (FCM)</strong></td>
+      <td>For mobile (Ionic) push. Free tier covers our scale forever. Same <code>device_token</code> table just stores FCM tokens for <code>platform = IOS / ANDROID</code>.</td>
+      <td>Phase 6+</td>
+    </tr>
+    <tr>
+      <td><strong>SSE (Server-Sent Events)</strong></td>
+      <td>One-way real-time push from server to browser. Bell badge updates instantly when a notification arrives, no polling. NestJS supports it natively via <code>@Sse()</code>.</td>
+      <td>Phase 6+</td>
+    </tr>
+    <tr>
+      <td><strong>Twilio</strong></td>
+      <td>SMS delivery. Pay-per-message. Wired into the same channel-adapter pattern as email — one new adapter, no producer changes.</td>
+      <td>When first paid customer asks</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ========================================================== -->
+<h2 id="install">Install &amp; setup</h2>
+
+<p>Everything in Phase 1–4 is already installed. Here's what's currently in <code>package.json</code> that the notification system uses, and what's <strong>not yet</strong> installed but coming.</p>
+
+<h3>Already installed (Phase 1–4)</h3>
+<div class="filename">package.json (excerpt)</div>
+<pre><code><span class="str">"@nestjs/common"</span>: <span class="str">"^11.0.1"</span>,
+<span class="str">"@nestjs/sequelize"</span>: <span class="str">"^11.0.0"</span>,
+<span class="str">"@nestjs/jwt"</span>: <span class="str">"^11.0.2"</span>,
+<span class="str">"@nestjs/passport"</span>: <span class="str">"^11.0.5"</span>,
+<span class="str">"@nestjs/throttler"</span>: <span class="str">"^6.4.0"</span>,
+<span class="str">"@nestjs/swagger"</span>: <span class="str">"^11.0.7"</span>,
+<span class="str">"sequelize"</span>: <span class="str">"^6.37.5"</span>,
+<span class="str">"sequelize-typescript"</span>: <span class="str">"^2.1.6"</span>,
+<span class="str">"pg"</span>: <span class="str">"^8.13.1"</span>,
+<span class="str">"class-validator"</span>: <span class="str">"^0.14.3"</span>,
+<span class="str">"class-transformer"</span>: <span class="str">"^0.5.1"</span>,
+<span class="str">"resend"</span>: <span class="str">"^6.9.2"</span>,
+<span class="str">"nest-winston"</span>: <span class="str">"^1.10.2"</span></code></pre>
+
+<h3>Environment variables</h3>
+<pre><code><span class="com"># Required for the notification system today</span>
+DATABASE_URL=<span class="str">postgres://...</span>
+RESEND_API_KEY=<span class="str">re_xxx</span>          <span class="com"># optional in dev — falls back to console logging</span>
+EMAIL_FROM=<span class="str">noreply@motionhive.fit</span>
+FRONTEND_URL=<span class="str">http://localhost:4200</span>  <span class="com"># used to build CTA URLs in emails</span>
+JWT_SECRET=<span class="str">...</span></code></pre>
+
+<h3>What you'll add later (Phase 6)</h3>
+<pre><code><span class="com"># BullMQ workers — Phase 6</span>
+<span class="kw">npm install</span> @nestjs/bullmq bullmq
+
+<span class="com"># Web Push — Phase 6+</span>
+<span class="kw">npm install</span> web-push @types/web-push
+
+<span class="com"># Mobile FCM — Phase 6+</span>
+<span class="kw">npm install</span> firebase-admin
+
+<span class="com"># SMS (when needed)</span>
+<span class="kw">npm install</span> twilio</code></pre>
+
+<div class="callout note">
+  <strong>Why Resend (not SendGrid / SES / Mailgun)?</strong> Best DX for transactional emails right now. Free tier covers 3,000 emails/month, then $20/mo for 50k. Native React-email template support if we want it later. Same migration path as everything else: if we outgrow it, swap the <code>send()</code> implementation in <code>EmailService</code> — call sites don't change.
+</div>
+
+<!-- ========================================================== -->
+<h2 id="architecture">Architecture diagram</h2>
+
+<p>Phase 4 architecture (today):</p>
+<div class="ascii">┌─────────────────────────────────────────────────────────┐
+│  Producer (any service that wants to notify)            │
+│  e.g. invoice.service.ts, session.service.ts            │
+│                                                         │
+│    notificationService.notify({                         │
+│      userId, type, title, body, data                    │
+│    })                                                   │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  NotificationService.notifyMany()                       │
+│                                                         │
+│  1. Open transaction                                    │
+│  2. Find existing notification by fingerprint (dedup)   │
+│  3. Create notification row                             │
+│  4. Commit                                              │
+│  5. Bulk-load preferences for all recipients            │
+│  6. Bulk-load user emails                               │
+│  7. For each recipient → deliverToUser()                │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  deliverToUser() — fans out to channels                 │
+│                                                         │
+│  • In-app:  upsert receipt → delivered_channels.in_app  │
+│  • Email:   EmailService.sendNotificationEmail()        │
+│             → Resend HTTP → delivered_channels.email    │
+│  • Push:    'skipped:not_implemented' (Phase 6+)        │
+│  • SMS:     'skipped:not_implemented' (Phase 6+)        │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  Postgres: notification + notification_receipt rows     │
+│  Resend: email sent (or queued)                         │
+│  Returns: delivery audit per channel                    │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+            ┌─────────────────────────┐
+            │  Frontend (Phase 5)      │
+            │  GET /notifications      │
+            │  GET /unread-count       │
+            │  PATCH /:id/read         │
+            └─────────────────────────┘
+</div>
+
+<p>Phase 6 (the "after workers" architecture) — same producer code, async delivery:</p>
+<div class="ascii">producer ──notify()──► NotificationService
+                            │
+                  ┌─────────┴─────────┐
+                  │                   │
+                  ▼                   ▼
+       (sync) write notification    (async) enqueue jobs:
+              + receipt rows           • notifications.email_send
+              + commit                 • notifications.push_send
+                                       • notifications.sms_send
+                  │                          │
+                  ▼                          ▼
+           returns to caller          BullMQ workers (separate
+           in ~10ms                   process or same dyno)
+                                            │
+                                            ▼
+                                     Resend / web-push / FCM / Twilio
+</div>
+
+<!-- ========================================================== -->
+<h2 id="data-model">The 4 tables</h2>
+
+<p>Designed to support broadcasts (one alert → many recipients), per-user channel preferences, and multi-device push (web + iOS + Android in one table).</p>
+
+<h3><code>notification</code> — the message itself</h3>
+<p>One row per <em>event</em>, not per recipient. A broadcast (<em>"session cancelled, notify all 12 participants"</em>) is one notification row + 12 receipt rows.</p>
+
+<table>
+  <thead><tr><th>Column</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>UUID PK</td></tr>
+    <tr><td><code>type</code></td><td>e.g. <code>'INVOICE_PAID'</code> — VARCHAR not Postgres ENUM, so adding a new type is a code change, not a migration</td></tr>
+    <tr><td><code>title</code> / <code>body</code></td><td>What the user sees in the bell + email</td></tr>
+    <tr><td><code>data</code> (JSONB)</td><td><code>{ screen, entityId, action }</code> — drives FE deep-linking</td></tr>
+    <tr><td><code>severity</code></td><td><code>info</code> / <code>success</code> / <code>warn</code> / <code>error</code> — drives icon + color</td></tr>
+    <tr><td><code>audience_type</code></td><td><code>USER</code> / <code>GROUP</code> / <code>PLATFORM</code> — Phase 4 only emits USER, others reserved for future broadcasts without schema change</td></tr>
+    <tr><td><code>fingerprint</code></td><td>Optional sha256; same fingerprint within window = no duplicate notification</td></tr>
+    <tr><td><code>deliver_at</code> / <code>expire_at</code></td><td>Scheduled visibility window — bell query honors both</td></tr>
+  </tbody>
+</table>
+
+<h3><code>notification_receipt</code> — per-recipient state</h3>
+<p>One row per <code>(notification, user)</code> pair. Tracks the delivery funnel:</p>
+
+<table>
+  <thead><tr><th>Timestamp</th><th>Set when</th></tr></thead>
+  <tbody>
+    <tr><td><code>delivered_at</code></td><td>In-app worker created the receipt → bell shows it</td></tr>
+    <tr><td><code>viewed_at</code></td><td>User opened the bell dropdown and saw it (FE batch-marks on dropdown open)</td></tr>
+    <tr><td><code>read_at</code></td><td>User clicked through OR clicked "mark all read"</td></tr>
+    <tr><td><code>clicked_at</code></td><td>User followed the deep link to the entity</td></tr>
+    <tr><td><code>dismissed_at</code></td><td>User X'd it without reading</td></tr>
+  </tbody>
+</table>
+
+<p>Plus <code>delivered_channels</code> JSONB for per-channel audit:</p>
+<pre><code>{
+  <span class="str">"in_app"</span>: <span class="str">"sent"</span>,
+  <span class="str">"email"</span>: <span class="str">"sent"</span>,
+  <span class="str">"push"</span>: <span class="str">"failed:no_active_devices"</span>,
+  <span class="str">"sms"</span>: <span class="str">"skipped:preference_off"</span>
+}</code></pre>
+
+<div class="callout why">
+  <strong>Why split notification + receipt?</strong> Lets us have <em>one</em> alert row that fans out to many users (broadcast). Edit the message once, all recipients see the update. Storage stays small (no duplicating title/body N times). Read counts, click rates, etc. become trivial COUNT queries on the receipt table.
+</div>
+
+<h3><code>notification_preference</code> — per-user channel toggles</h3>
+<p>Sparse. Only contains rows where the user has <em>overridden</em> the system default. The defaults live in code (<code>notification-defaults.ts</code>) so we don't need a migration to retune.</p>
+
+<pre><code><span class="com">// notification-defaults.ts excerpt</span>
+<span class="kw">export const</span> <span class="typ">NOTIFICATION_DEFAULTS</span>: <span class="typ">Record</span>&lt;<span class="typ">NotificationType</span>, <span class="typ">ChannelPreferences</span>&gt; = {
+  [<span class="typ">NotificationType</span>.<span class="dec">SESSION_REMINDER_1H</span>]: { in_app: <span class="kw">true</span>, push: <span class="kw">true</span> },
+  [<span class="typ">NotificationType</span>.<span class="dec">INVOICE_PAID</span>]: { in_app: <span class="kw">true</span>, email: <span class="kw">true</span> },
+  [<span class="typ">NotificationType</span>.<span class="dec">GROUP_MEMBER_JOINED</span>]: { in_app: <span class="kw">true</span> },
+  <span class="com">// ...30 entries</span>
+};</code></pre>
+
+<h3><code>device_token</code> — push registration</h3>
+<p>One row per <code>(user, device)</code>. Web Push subscriptions <strong>and</strong> mobile FCM tokens live here together. Same query (<code>WHERE user_id = ? AND revoked_at IS NULL</code>) returns everything; the future push worker branches on <code>platform</code> to pick the adapter.</p>
+
+<table>
+  <thead><tr><th>Column</th><th>For WEB</th><th>For IOS / ANDROID</th></tr></thead>
+  <tbody>
+    <tr><td><code>token</code></td><td>JSON-stringified <code>PushSubscription</code></td><td>FCM token string</td></tr>
+    <tr><td><code>endpoint_hash</code></td><td>sha256 of subscription.endpoint URL</td><td>sha256 of FCM token</td></tr>
+    <tr><td><code>last_seen_at</code></td><td>Bumped on every login + heartbeat</td><td>Same</td></tr>
+    <tr><td><code>revoked_at</code></td><td>Logout / push 410 / user removes</td><td>Logout / FCM NotRegistered / user removes</td></tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <strong>"How do we know how many devices a user has?"</strong> They tell us. Each device registers itself once (<code>POST /devices/register</code>) after the user grants push permission. A user with the web app on their laptop, the web app on their phone browser, and the Ionic app on iPhone has 3 rows.
+</div>
+
+<!-- ========================================================== -->
+<h2 id="producer-flow">Producer flow — what happens when notify() is called</h2>
+
+<p>This is the heart of the system. When any service in the API needs to notify a user, it calls <code>notificationService.notify(...)</code>. Here's the full flow:</p>
+
+<div class="filename">src/modules/payment/services/invoice.service.ts (example)</div>
+<pre><code><span class="kw">await</span> <span class="kw">this</span>.notificationService.notify({
+  userId: invoice.userId,
+  type: <span class="typ">NotificationType</span>.<span class="dec">INVOICE_PAID</span>,
+  title: <span class="str">'Invoice paid'</span>,
+  body: <span class="str">`Your invoice for ${formatMoney(invoice.amount)} was paid.`</span>,
+  data: { screen: <span class="str">'invoice'</span>, entityId: invoice.id },
+});</code></pre>
+
+<p>Behind the scenes, in <code>NotificationService.notifyMany()</code> ([notification.service.ts:114–214](src/modules/notification/notification.service.ts#L114-L214)):</p>
+
+<ol>
+  <li><strong>Dedup userIds</strong> — a participant array could contain the same user twice (e.g. instructor is also a member). We <code>Array.from(new Set(userIds))</code>.</li>
+  <li><strong>Open a transaction</strong> for the notification row creation.</li>
+  <li><strong>Check for existing fingerprint</strong> — if the producer passed <code>fingerprint</code> and we've already created a notification with that fingerprint, return the existing one (idempotency).</li>
+  <li><strong>Insert the notification row</strong>. <code>audienceType=USER</code>, <code>audienceId=userId</code> if single recipient (or <code>null</code> for multi).</li>
+  <li><strong>Commit the transaction</strong>. The notification now exists.</li>
+  <li><strong>Bulk-load preferences</strong> for all recipients in one query.</li>
+  <li><strong>Bulk-load user emails</strong> in one query.</li>
+  <li><strong>For each recipient</strong> → <code>deliverToUser()</code>:
+    <ul>
+      <li><code>findOrCreate</code> the receipt (UNIQUE on <code>notification_id, user_id</code> — idempotent re-runs)</li>
+      <li>Resolve effective channels (user override merged over system default)</li>
+      <li>If in-app channel enabled: mark <code>delivered_channels.in_app = 'sent'</code></li>
+      <li>If email channel enabled: call <code>EmailService.sendNotificationEmail()</code>, record success or failure reason</li>
+      <li>Push / SMS: <code>'skipped:not_implemented'</code> for now (Phase 6+)</li>
+      <li><code>save()</code> the receipt with the audit</li>
+    </ul>
+  </li>
+</ol>
+
+<div class="callout warn">
+  <strong>Phase 4 trade-off:</strong> the email send blocks the request path. If you call <code>notify()</code> in a controller, the user waits ~300ms for Resend to respond before getting their HTTP response. <em>This is intentional</em> — feeling that latency is the motivation to ship Phase 6 (workers) where the email goes onto a queue and the request returns in 10ms.
+</div>
+
+<h3>Why we don't roll back the in-app row when email fails</h3>
+<p>If Resend is down for 30 seconds, we'd lose every notification during that window. Instead, we record the failure on the receipt (<code>delivered_channels.email = 'failed:resend 503'</code>) and let the in-app row succeed. The user still sees the bell. Later we can add a retry job (Phase 6) that scans for failed channels and re-sends.</p>
+
+<!-- ========================================================== -->
+<h2 id="channels">Channels &amp; preferences</h2>
+
+<p>Every notification has 4 potential channels:</p>
+
+<table>
+  <thead><tr><th>Channel</th><th>What it is</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td><code>in_app</code></td><td>The bell icon dropdown — a row in <code>notification_receipt</code></td><td><span class="pill done">Live</span></td></tr>
+    <tr><td><code>email</code></td><td>HTML email via Resend</td><td><span class="pill done">Live</span></td></tr>
+    <tr><td><code>push</code></td><td>Browser/OS push notification (web-push + FCM)</td><td><span class="pill todo">Phase 6+</span></td></tr>
+    <tr><td><code>sms</code></td><td>Text message via Twilio</td><td><span class="pill future">Future</span></td></tr>
+  </tbody>
+</table>
+
+<h3>How preference resolution works</h3>
+<p>Two layers, code wins over DB only when DB is missing:</p>
+
+<ol>
+  <li><strong>System defaults</strong> in <code>notification-defaults.ts</code> — what most users want for each type</li>
+  <li><strong>User overrides</strong> in <code>notification_preference</code> table — only rows the user has explicitly changed</li>
+</ol>
+
+<p>The merger lives in <code>resolveChannels()</code>:</p>
+<pre><code><span class="kw">export function</span> <span class="fn">resolveChannels</span>(
+  type: <span class="typ">NotificationType</span>,
+  override: <span class="typ">ChannelPreferences</span> | <span class="kw">null</span>,
+): <span class="typ">Required</span>&lt;<span class="typ">ChannelPreferences</span>&gt; {
+  <span class="kw">const</span> base = <span class="typ">NOTIFICATION_DEFAULTS</span>[type] ?? IN_APP_ONLY;
+  <span class="kw">return</span> {
+    in_app: override?.in_app ?? base.in_app ?? <span class="kw">true</span>,
+    email:  override?.email  ?? base.email  ?? <span class="kw">false</span>,
+    push:   override?.push   ?? base.push   ?? <span class="kw">false</span>,
+    sms:    override?.sms    ?? base.sms    ?? <span class="kw">false</span>,
+  };
+}</code></pre>
+
+<p>Why per-key fallback (not whole-row): a user can disable email for INVOICE_PAID without losing the default push setting. Only the channels they explicitly toggle change.</p>
+
+<!-- ========================================================== -->
+<h2 id="bell-flow">Bell flow — what the FE sees</h2>
+
+<p>In Phase 5 the frontend will:</p>
+
+<ol>
+  <li><strong>On app load</strong>: poll <code>GET /notifications/unread-count</code> every 60 seconds → update the badge on the bell icon</li>
+  <li><strong>When user clicks bell</strong>: <code>GET /notifications?page=1&amp;limit=20</code> → render the dropdown list</li>
+  <li><strong>When dropdown opens</strong>: <code>PATCH /notifications/viewed</code> with the visible IDs → analytics signal (not "read")</li>
+  <li><strong>When user clicks a notification</strong>: <code>PATCH /notifications/:id/clicked</code> → marks both clicked + read, then router navigates to <code>data.screen / data.entityId</code></li>
+  <li><strong>"Mark all read" link</strong>: <code>PATCH /notifications/read-all</code> → badge drops to 0</li>
+  <li><strong>X button on a notification</strong>: <code>PATCH /notifications/:id/dismiss</code> → hides from list</li>
+  <li><strong>Trash icon</strong>: <code>DELETE /notifications/:id</code> → hard delete</li>
+</ol>
+
+<p>The settings tab will:</p>
+<ol>
+  <li><code>GET /users/me/notification-settings</code> → returns one entry per type with merged channels + <code>isCustomized</code> flag</li>
+  <li>Render 30 rows of 4 toggle switches each (in_app / email / push / sms)</li>
+  <li><code>PATCH /users/me/notification-settings</code> with the changed items on save</li>
+</ol>
+
+<div class="callout note">
+  <strong>Why polling instead of WebSocket?</strong> SSE (Phase 6+) is the upgrade path. For now polling is dead simple, no extra infrastructure, and 60s lag on a notification badge is acceptable for v1. When SSE lands, the FE service swaps the polling loop for a stream — components don't change.
+</div>
+
+<!-- ========================================================== -->
+<h2 id="service">Code — NotificationService (the producer-facing API)</h2>
+
+<p>The single entry point producers use. Two methods that everyone calls:</p>
+
+<div class="filename">src/modules/notification/notification.service.ts (signature)</div>
+<pre><code><span class="kw">async</span> <span class="fn">notify</span>(params: <span class="typ">NotifyParams</span>): <span class="typ">Promise</span>&lt;<span class="typ">NotifyResult</span>&gt;;
+<span class="kw">async</span> <span class="fn">notifyMany</span>(
+  userIds: <span class="typ">string</span>[],
+  params: <span class="typ">Omit</span>&lt;<span class="typ">NotifyParams</span>, <span class="str">'userId'</span>&gt;,
+): <span class="typ">Promise</span>&lt;{ notificationId: <span class="typ">string</span>; deduped: <span class="typ">boolean</span>; results: <span class="typ">NotifyResult</span>[] }&gt;;</code></pre>
+
+<p>The full <code>NotifyParams</code> input:</p>
+<pre><code><span class="kw">interface</span> <span class="typ">NotifyParams</span> {
+  userId: <span class="typ">string</span>;
+  type: <span class="typ">NotificationType</span>;        <span class="com">// enum from notification-types.ts</span>
+  title: <span class="typ">string</span>;
+  body: <span class="typ">string</span>;
+  data?: <span class="typ">NotificationData</span>;       <span class="com">// { screen, entityId, action }</span>
+  severity?: <span class="typ">NotificationSeverity</span>;
+  fingerprint?: <span class="typ">string</span>;          <span class="com">// dedup key</span>
+  ctaLabel?: <span class="typ">string</span>;             <span class="com">// "Open invoice" — used in email button</span>
+}</code></pre>
+
+<p>And the result it returns (so the caller can inspect what happened):</p>
+<pre><code><span class="kw">interface</span> <span class="typ">NotifyResult</span> {
+  notificationId: <span class="typ">string</span>;
+  receiptId: <span class="typ">string</span>;
+  deduped: <span class="typ">boolean</span>;             <span class="com">// true if fingerprint matched an existing one</span>
+  delivered: {
+    in_app?: <span class="typ">DeliveredChannelStatus</span>;
+    email?: <span class="typ">DeliveredChannelStatus</span>;
+    push?: <span class="typ">DeliveredChannelStatus</span>;
+    sms?: <span class="typ">DeliveredChannelStatus</span>;
+  };
+}
+
+<span class="com">// 'sent' | 'skipped:preference_off' | 'failed:&lt;reason&gt;' | ...</span></code></pre>
+
+<!-- ========================================================== -->
+<h2 id="receipt-service">Code — NotificationReceiptService (the FE-facing read API)</h2>
+
+<p>Producers use <code>NotificationService</code>; the frontend uses <code>NotificationReceiptService</code>. Clear separation.</p>
+
+<table>
+  <thead><tr><th>Method</th><th>Endpoint</th></tr></thead>
+  <tbody>
+    <tr><td><code>listForUser(userId, opts)</code></td><td>GET /notifications</td></tr>
+    <tr><td><code>unreadCount(userId)</code></td><td>GET /notifications/unread-count</td></tr>
+    <tr><td><code>markAsRead(userId, id)</code></td><td>PATCH /notifications/:id/read</td></tr>
+    <tr><td><code>markAllAsRead(userId)</code></td><td>PATCH /notifications/read-all</td></tr>
+    <tr><td><code>markAsViewed(userId, ids[])</code></td><td>PATCH /notifications/viewed</td></tr>
+    <tr><td><code>markAsClicked(userId, id)</code></td><td>PATCH /notifications/:id/clicked</td></tr>
+    <tr><td><code>dismiss(userId, id)</code></td><td>PATCH /notifications/:id/dismiss</td></tr>
+    <tr><td><code>remove(userId, id)</code></td><td>DELETE /notifications/:id</td></tr>
+  </tbody>
+</table>
+
+<p>Two design rules every method follows:</p>
+
+<h4>1. Owner-scoped queries, 404 not 403</h4>
+<pre><code><span class="kw">private async</span> <span class="fn">findOwnedOrThrow</span>(userId: <span class="typ">string</span>, receiptId: <span class="typ">string</span>) {
+  <span class="kw">const</span> receipt = <span class="kw">await this</span>.receiptModel.findOne({
+    where: { id: receiptId, userId },   <span class="com">// userId always in WHERE</span>
+  });
+  <span class="kw">if</span> (!receipt) {
+    <span class="com">// 404 (not 403) — don't leak existence of other users' receipts.</span>
+    <span class="kw">throw new</span> <span class="typ">NotFoundException</span>(<span class="str">'Notification not found'</span>);
+  }
+  <span class="kw">return</span> receipt;
+}</code></pre>
+
+<h4>2. Visibility window enforced via JOIN</h4>
+<p>The bell list and the badge count both join the receipt with the notification, filtering by <code>deliver_at &lt;= now AND (expire_at IS NULL OR expire_at &gt; now)</code>. Extracted into a private helper so the two queries can't drift:</p>
+
+<pre><code><span class="kw">private</span> <span class="fn">activeNotificationInclude</span>() {
+  <span class="kw">const</span> now = <span class="kw">new</span> <span class="typ">Date</span>();
+  <span class="kw">return</span> {
+    model: <span class="kw">this</span>.notificationModel,
+    required: <span class="kw">true</span>,
+    where: {
+      [<span class="typ">Op</span>.and]: [
+        { [<span class="typ">Op</span>.or]: [{ deliverAt: { [<span class="typ">Op</span>.is]: <span class="kw">null</span> } }, { deliverAt: { [<span class="typ">Op</span>.lte]: now } }] },
+        { [<span class="typ">Op</span>.or]: [{ expireAt: { [<span class="typ">Op</span>.is]: <span class="kw">null</span> } },  { expireAt: { [<span class="typ">Op</span>.gt]: now } }] },
+      ],
+    },
+  };
+}</code></pre>
+
+<!-- ========================================================== -->
+<h2 id="preference-service">Code — NotificationPreferenceService</h2>
+
+<p>Powers the settings tab. Three operations:</p>
+
+<ul>
+  <li><code>getForUser(userId)</code> — returns all 30 types with merged channels + <code>isCustomized</code></li>
+  <li><code>bulkUpdate(userId, items[])</code> — upserts many rows in one transaction</li>
+  <li><code>resetToDefault(userId, type?)</code> — deletes the override row(s) so defaults take effect</li>
+</ul>
+
+<div class="filename">src/modules/notification/services/notification-preference.service.ts (excerpt)</div>
+<pre><code><span class="kw">async</span> <span class="fn">getForUser</span>(userId: <span class="typ">string</span>): <span class="typ">Promise</span>&lt;<span class="typ">PreferenceView</span>[]&gt; {
+  <span class="kw">const</span> overrides = <span class="kw">await this</span>.preferenceModel.findAll({ where: { userId } });
+  <span class="kw">const</span> overrideByType = <span class="kw">new</span> <span class="typ">Map</span>(overrides.map((o) =&gt; [o.type, o.channels]));
+
+  <span class="kw">const</span> types = <span class="typ">Object</span>.keys(<span class="typ">NOTIFICATION_DEFAULTS</span>) <span class="kw">as</span> <span class="typ">NotificationType</span>[];
+  <span class="kw">return</span> types.map((type) =&gt; {
+    <span class="kw">const</span> override = overrideByType.get(type) ?? <span class="kw">null</span>;
+    <span class="kw">return</span> {
+      type,
+      channels: <span class="fn">resolveChannels</span>(type, override),
+      isCustomized: override !== <span class="kw">null</span>,
+    };
+  });
+}</code></pre>
+
+<!-- ========================================================== -->
+<h2 id="device-service">Code — DeviceTokenService</h2>
+
+<p>Push registration storage. Already supports the future Phase 6 push worker — just no worker reads it yet.</p>
+
+<p>Key design choice: <strong>one table for web + mobile</strong>, branched on <code>platform</code>:</p>
+
+<pre><code><span class="kw">async</span> <span class="fn">register</span>(params: <span class="typ">RegisterDeviceParams</span>): <span class="typ">Promise</span>&lt;<span class="typ">DeviceToken</span>&gt; {
+  <span class="kw">const</span> tokenString  = <span class="kw">this</span>.serializeToken(params.token);
+  <span class="kw">const</span> endpointHash = <span class="kw">this</span>.computeEndpointHash(params.platform, params.token);
+
+  <span class="kw">const</span> existing = <span class="kw">await this</span>.deviceModel.findOne({
+    where: { userId: params.userId, endpointHash },
+  });
+
+  <span class="kw">if</span> (existing) {
+    <span class="com">// Same browser / device → upsert. Re-registration after revoke un-revokes.</span>
+    existing.token       = tokenString;
+    existing.platform    = params.platform;
+    existing.lastSeenAt  = <span class="kw">new</span> <span class="typ">Date</span>();
+    existing.revokedAt   = <span class="kw">null</span>;
+    <span class="kw">await</span> existing.save();
+    <span class="kw">return</span> existing;
+  }
+
+  <span class="kw">return this</span>.deviceModel.create({ ...params, tokenString, endpointHash, ... });
+}</code></pre>
+
+<p>The future push worker (Phase 6+) will fan out like this:</p>
+
+<pre><code><span class="com">// Phase 6 sketch — worker that handles 'notifications.push_send' job</span>
+<span class="kw">const</span> devices = <span class="kw">await</span> deviceTokenService.<span class="fn">listActiveForUser</span>(userId);
+
+<span class="kw">for</span> (<span class="kw">const</span> device <span class="kw">of</span> devices) {
+  <span class="kw">if</span> (device.platform === <span class="typ">DevicePlatform</span>.WEB) {
+    <span class="kw">await</span> webPush.<span class="fn">sendNotification</span>(<span class="typ">JSON</span>.parse(device.token), payload);
+  } <span class="kw">else</span> {
+    <span class="kw">await</span> firebaseAdmin.messaging().<span class="fn">send</span>({
+      token: device.token,
+      notification: { title, body },
+    });
+  }
+}</code></pre>
+
+<!-- ========================================================== -->
+<h2 id="email-template">Code — Generic email template</h2>
+
+<p>For Phase 4, every notification email uses one shared template (<code>genericNotificationTemplate</code>):</p>
+
+<div class="filename">src/common/email/notification/generic.template.ts</div>
+<pre><code><span class="kw">export function</span> <span class="fn">genericNotificationTemplate</span>(params: {
+  title: <span class="typ">string</span>;
+  body: <span class="typ">string</span>;
+  ctaUrl?: <span class="typ">string</span>;
+  ctaLabel?: <span class="typ">string</span>;
+}): <span class="typ">string</span> {
+  <span class="kw">const</span> safeTitle = <span class="fn">escapeHtml</span>(params.title);
+  <span class="kw">const</span> safeBody  = <span class="fn">escapeHtml</span>(params.body);
+  <span class="kw">const</span> cta = params.ctaUrl &amp;&amp; params.ctaLabel
+    ? <span class="fn">primaryButton</span>(<span class="fn">escapeHtml</span>(params.ctaLabel), params.ctaUrl)
+    : <span class="str">''</span>;
+
+  <span class="kw">return</span> <span class="fn">baseLayout</span>(<span class="str">`</span>
+<span class="str">    ${heading(safeTitle)}</span>
+<span class="str">    ${paragraph(safeBody)}</span>
+<span class="str">    ${cta}</span>
+<span class="str">  `</span>, safeTitle);
+}</code></pre>
+
+<div class="callout warn">
+  <strong>Security rule:</strong> every user-controlled string interpolated into HTML <em>must</em> go through <code>escapeHtml()</code>. CLAUDE.md enforces this. The notification system follows it automatically because the template only takes the four fields shown above and escapes them all.
+</div>
+
+<p>In Phase 6 we can add per-type templates for richer content (e.g. an invoice email with a payment summary table) by mapping <code>NotificationType → templateFn</code> in <code>EmailService.sendNotificationEmail</code>. The generic template stays as the fallback.</p>
+
+<!-- ========================================================== -->
+<h2 id="endpoints">REST API — All 17 endpoints</h2>
+
+<h3>Bell endpoints (<code>NotificationController</code>)</h3>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>GET</td><td><code>/notifications</code></td><td>Paginated list. Query: <code>page</code>, <code>limit</code>, <code>unreadOnly</code></td></tr>
+    <tr><td>GET</td><td><code>/notifications/unread-count</code></td><td>Returns <code>{ count: number }</code></td></tr>
+    <tr><td>PATCH</td><td><code>/notifications/read-all</code></td><td>Mark every unread as read</td></tr>
+    <tr><td>PATCH</td><td><code>/notifications/viewed</code></td><td>Body: <code>{ ids: [] }</code> — analytics signal</td></tr>
+    <tr><td>PATCH</td><td><code>/notifications/:id/read</code></td><td>Mark one as read</td></tr>
+    <tr><td>PATCH</td><td><code>/notifications/:id/clicked</code></td><td>Mark clicked + read in one save</td></tr>
+    <tr><td>PATCH</td><td><code>/notifications/:id/dismiss</code></td><td>Dismiss without reading</td></tr>
+    <tr><td>DELETE</td><td><code>/notifications/:id</code></td><td>Hard delete</td></tr>
+  </tbody>
+</table>
+
+<h3>Settings endpoints (<code>NotificationSettingsController</code>)</h3>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>GET</td><td><code>/users/me/notification-settings</code></td><td>All 30 types, merged channels</td></tr>
+    <tr><td>PATCH</td><td><code>/users/me/notification-settings</code></td><td>Bulk update (whole-payload save)</td></tr>
+    <tr><td>DELETE</td><td><code>/users/me/notification-settings/:type/reset</code></td><td>Reset one type to default</td></tr>
+    <tr><td>DELETE</td><td><code>/users/me/notification-settings</code></td><td>Reset all overrides</td></tr>
+  </tbody>
+</table>
+
+<h3>Device endpoints (<code>DeviceController</code>)</h3>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>POST</td><td><code>/devices/register</code></td><td>Upsert by <code>endpoint_hash</code>. Throttled 60/min</td></tr>
+    <tr><td>GET</td><td><code>/devices</code></td><td>List user's active devices</td></tr>
+    <tr><td>DELETE</td><td><code>/devices/:id</code></td><td>Revoke (logout / remove)</td></tr>
+    <tr><td>PATCH</td><td><code>/devices/:id/seen</code></td><td>Heartbeat (bump <code>last_seen_at</code>)</td></tr>
+  </tbody>
+</table>
+
+<h3>Debug endpoint (<code>NotificationDebugController</code>) — SUPER_ADMIN only</h3>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>POST</td><td><code>/admin/debug/notify</code></td><td>Fire <code>notify()</code> with arbitrary params for smoke testing</td></tr>
+  </tbody>
+</table>
+
+<!-- ========================================================== -->
+<h2 id="auth">Auth + DTO patterns</h2>
+
+<p>Every controller in the system follows the same shape:</p>
+
+<pre><code><span class="dec">@ApiTags</span>(<span class="str">'Notifications'</span>)
+<span class="dec">@Controller</span>(<span class="str">'notifications'</span>)
+<span class="dec">@UseGuards</span>(<span class="fn">AuthGuard</span>(<span class="str">'jwt'</span>))   <span class="com">// every route requires JWT</span>
+<span class="kw">export class</span> <span class="typ">NotificationController</span> {
+  <span class="kw">constructor</span>(<span class="kw">private readonly</span> receipts: <span class="typ">NotificationReceiptService</span>) {}
+
+  <span class="dec">@Get</span>()
+  <span class="dec">@ApiEndpoint</span>(<span class="typ">NotificationDocs</span>.list)
+  <span class="fn">list</span>(
+    <span class="dec">@Request</span>() req: <span class="typ">AuthenticatedRequest</span>,    <span class="com">// req.user.id is the authenticated user</span>
+    <span class="dec">@Query</span>() query: <span class="typ">ListNotificationsDto</span>,    <span class="com">// validated by class-validator</span>
+  ) {
+    <span class="kw">return this</span>.receipts.<span class="fn">listForUser</span>(req.user.id, { ...query });
+  }
+}</code></pre>
+
+<p>Three decorator stacks compose every endpoint:</p>
+<ul>
+  <li><code>@UseGuards(AuthGuard('jwt'))</code> — checks the bearer token, populates <code>req.user</code></li>
+  <li><code>@ApiEndpoint(NotificationDocs.xxx)</code> — adds Swagger metadata (summary, response codes)</li>
+  <li><code>@Body() / @Query() / @Param()</code> with a DTO class — class-validator runs automatically</li>
+</ul>
+
+<p>For SUPER_ADMIN-only routes (the debug endpoint) we add two more:</p>
+<pre><code><span class="dec">@UseGuards</span>(<span class="fn">AuthGuard</span>(<span class="str">'jwt'</span>), <span class="typ">RolesGuard</span>)
+<span class="dec">@Roles</span>(<span class="str">'SUPER_ADMIN'</span>)
+<span class="dec">@Throttle</span>({ default: { limit: <span class="num">5</span>, ttl: <span class="num">60_000</span> } })</code></pre>
+
+<!-- ========================================================== -->
+<h2 id="debug">Debug endpoint — how the smoke test works</h2>
+
+<p>The <code>POST /admin/debug/notify</code> endpoint is a SUPER_ADMIN escape hatch. It's the only way (in Phase 4) to actually fire a notification through the pipeline since we haven't wired any real producers yet.</p>
+
+<p>Example call (curl):</p>
+<pre><code><span class="kw">curl</span> -X POST http://localhost:3800/admin/debug/notify \
+  -H <span class="str">"Authorization: Bearer $SUPER_ADMIN_TOKEN"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{
+    "userId": "570ea197-4ac0-4e58-a8c1-bff06c6f945f",
+    "type": "INVOICE_PAID",
+    "title": "Smoke test",
+    "body": "Hello from the notification system",
+    "data": { "screen": "invoice", "entityId": "inv-9" }
+  }'</span></code></pre>
+
+<p>Expected response:</p>
+<pre><code>{
+  <span class="str">"notificationId"</span>: <span class="str">"&lt;uuid&gt;"</span>,
+  <span class="str">"receiptId"</span>: <span class="str">"&lt;uuid&gt;"</span>,
+  <span class="str">"deduped"</span>: <span class="kw">false</span>,
+  <span class="str">"delivered"</span>: {
+    <span class="str">"in_app"</span>: <span class="str">"sent"</span>,
+    <span class="str">"email"</span>: <span class="str">"sent"</span>,
+    <span class="str">"push"</span>: <span class="str">"skipped:preference_off"</span>,
+    <span class="str">"sms"</span>: <span class="str">"skipped:preference_off"</span>
+  }
+}</code></pre>
+
+<p>This single endpoint is enough to verify the entire pipeline works end-to-end before we wire real producers in Phase 6.</p>
+
+<!-- ========================================================== -->
+<h2 id="fe">Frontend — Phase 5 (coming next)</h2>
+
+<p>The Angular FE is signal-based, uses PrimeNG, and already has the auth interceptor + error handler we need. The notification work splits into:</p>
+
+<h3>1. Notification service + signal store</h3>
+<p>Mirrors the BE service pattern:</p>
+<pre><code><span class="dec">@Injectable</span>({ providedIn: <span class="str">'root'</span> })
+<span class="kw">export class</span> <span class="typ">NotificationStore</span> {
+  notifications = <span class="fn">signal</span>&lt;<span class="typ">BellNotification</span>[]&gt;([]);
+  unreadCount   = <span class="fn">computed</span>(() =&gt; <span class="kw">this</span>.notifications().filter(n =&gt; !n.readAt).length);
+
+  <span class="kw">async</span> <span class="fn">loadList</span>() { <span class="com">/* GET /notifications */</span> }
+  <span class="kw">async</span> <span class="fn">markRead</span>(id: <span class="typ">string</span>) { <span class="com">/* PATCH + optimistic update */</span> }
+  <span class="kw">async</span> <span class="fn">markAllRead</span>() { <span class="com">/* PATCH read-all */</span> }
+}</code></pre>
+
+<h3>2. Bell component in the toolbar</h3>
+<p>PrimeNG <code>OverlayPanel</code> for the dropdown, <code>Badge</code> for the unread count. Polls <code>unread-count</code> every 60s while the page is in focus (uses <code>document.visibilityState</code>).</p>
+
+<h3>3. Settings tab</h3>
+<p>New tab in <code>/profile</code>. One row per notification type with 4 toggle switches. Single bulk PATCH on save.</p>
+
+<h3>4. Device registration (deferred to Phase 6+)</h3>
+<p>Once we have web push working, the FE will:</p>
+<ol>
+  <li>Ask for browser push permission</li>
+  <li>Get a <code>PushSubscription</code> from the service worker</li>
+  <li>POST it to <code>/devices/register</code></li>
+</ol>
+
+<!-- ========================================================== -->
+<h2 id="workers">BullMQ workers — Phase 6 (coming)</h2>
+
+<p>This is the big one. Today every <code>notify()</code> call blocks the request path while emails send. After Phase 6:</p>
+
+<h3>Architecture</h3>
+<div class="ascii">┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│  API        │────►│  Redis       │────►│  Worker      │
+│  notify()   │ enq │  (BullMQ)    │ pick │  email_send  │
+│  returns    │     │  - notif Q   │      │  push_send   │
+│  in ~10ms   │     │  - payment Q │      │  in_app_create│
+└─────────────┘     └──────────────┘     └─────────────┘
+                                                │
+                                                ▼
+                                         Resend / web-push
+                                         FCM / Twilio</div>
+
+<h3>What changes in code</h3>
+<p><code>NotificationService.deliverToUser()</code> stops calling <code>EmailService</code> directly. Instead:</p>
+
+<pre><code><span class="com">// Phase 6 sketch</span>
+<span class="kw">if</span> (channels.email &amp;&amp; userEmail) {
+  <span class="kw">await this</span>.jobs.<span class="fn">enqueue</span>(<span class="str">'notifications.email_send'</span>, {
+    to: userEmail,
+    title: notification.title,
+    body: notification.body,
+    ctaUrl,
+    ctaLabel,
+  }, {
+    jobId: <span class="str">`email.</span>${notification.id}<span class="str">.</span>${userId}<span class="str">`</span>,  <span class="com">// idempotency</span>
+  });
+  delivered.email = <span class="str">'queued'</span>;
+}</code></pre>
+
+<p>The worker (separate file) handles the actual send:</p>
+<pre><code><span class="dec">@Processor</span>(<span class="typ">QueueName</span>.Notifications)
+<span class="kw">export class</span> <span class="typ">EmailSendWorker</span> <span class="kw">extends</span> <span class="typ">BaseWorker</span>&lt;<span class="str">'notifications.email_send'</span>&gt; {
+  <span class="kw">async</span> <span class="fn">handle</span>(payload, ctx) {
+    <span class="kw">await this</span>.emailService.<span class="fn">sendNotificationEmail</span>(payload);
+  }
+}</code></pre>
+
+<h3>Why this matters</h3>
+<ul>
+  <li><strong>Latency drops</strong>: notify() returns in 10ms instead of 300–800ms</li>
+  <li><strong>Retries are free</strong>: BullMQ retries failed jobs with exponential backoff</li>
+  <li><strong>Visibility</strong>: Bull Board UI at <code>/admin/queues</code> shows every job, every failure</li>
+  <li><strong>Scaling</strong>: more workers = more throughput, no API code change</li>
+</ul>
+
+<!-- ========================================================== -->
+<h2 id="push">Web Push + mobile FCM — Phase 6+ (coming)</h2>
+
+<h3>How browser push works (the lifecycle)</h3>
+<ol>
+  <li>FE registers a service worker (one-time)</li>
+  <li>FE asks the browser for push permission</li>
+  <li>Browser returns a <code>PushSubscription</code> object — a unique URL + crypto keys for that browser/device</li>
+  <li>FE POSTs the subscription to <code>/devices/register</code> → row in <code>device_token</code></li>
+  <li>When we want to send: API calls <code>web-push</code> library with the subscription + payload, signed with our VAPID private key</li>
+  <li><code>web-push</code> sends to the browser's push service (FCM for Chrome, Mozilla autopush for FF, Apple for Safari)</li>
+  <li>Push service wakes up the user's browser → service worker fires → notification banner appears</li>
+</ol>
+
+<div class="callout note">
+  <strong>VAPID</strong> = Voluntary Application Server Identification. We generate a public/private keypair once. The public key goes in the FE; the private key stays in our env. Lets browser push services trust our messages without API keys per-provider.
+</div>
+
+<h3>Mobile (Ionic) push via FCM</h3>
+<p>Ionic apps use Capacitor's <code>PushNotifications</code> plugin which talks to FCM. Same backend code path:</p>
+<ol>
+  <li>Ionic app calls <code>PushNotifications.register()</code> on first launch</li>
+  <li>FCM returns a token string</li>
+  <li>Ionic app POSTs to <code>/devices/register</code> with <code>platform: 'IOS'</code> or <code>'ANDROID'</code></li>
+  <li>Push worker sends to FCM with the token + payload</li>
+  <li>FCM forwards to APNs (iOS) or directly to the device (Android)</li>
+</ol>
+
+<p>The schema already supports this — <code>device_token.platform</code> is an ENUM with WEB / IOS / ANDROID values, the worker just branches on it.</p>
+
+<!-- ========================================================== -->
+<h2 id="realtime">Real-time — SSE (Phase 6+, coming)</h2>
+
+<p>Today the FE polls <code>unread-count</code> every 60 seconds. That's fine for v1 but feels laggy. The fix is Server-Sent Events (SSE) — a one-way stream from server to browser.</p>
+
+<h3>How it'll work</h3>
+<pre><code><span class="com">// notification.controller.ts (Phase 6+)</span>
+<span class="dec">@Sse</span>(<span class="str">'stream'</span>)
+<span class="fn">stream</span>(<span class="dec">@Request</span>() req): <span class="typ">Observable</span>&lt;<span class="typ">MessageEvent</span>&gt; {
+  <span class="com">// Subscribe this user to a Redis pub/sub channel</span>
+  <span class="kw">return this</span>.realtime.<span class="fn">subscribe</span>(req.user.id);
+}</code></pre>
+
+<p>When a notification is created:</p>
+<pre><code><span class="com">// in_app_create worker (Phase 6+)</span>
+<span class="kw">await</span> redisPubSub.<span class="fn">publish</span>(<span class="str">`user:</span>${userId}<span class="str">:notifications`</span>, JSON.stringify({
+  type: <span class="str">'notification:created'</span>,
+  notification: rendered,
+}));</code></pre>
+
+<p>The browser's <code>EventSource</code> connection wakes up, the FE updates the signal store, the badge updates instantly.</p>
+
+<h3>Why SSE not WebSocket</h3>
+<table>
+  <thead><tr><th></th><th>SSE</th><th>WebSocket</th></tr></thead>
+  <tbody>
+    <tr><td>Direction</td><td>Server → Client only</td><td>Bi-directional</td></tr>
+    <tr><td>Reconnection</td><td>Built into the browser</td><td>You write it</td></tr>
+    <tr><td>Auth</td><td>Standard HTTP headers</td><td>Custom handshake</td></tr>
+    <tr><td>HTTP/2 multiplexing</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Right for our case?</td><td>✅ Yes</td><td>Overkill — we don't need bi-directional</td></tr>
+  </tbody>
+</table>
+
+<!-- ========================================================== -->
+<h2 id="patterns">Best practices we follow (from CLAUDE.md)</h2>
+
+<table>
+  <thead><tr><th>Rule</th><th>Where it shows up</th></tr></thead>
+  <tbody>
+    <tr><td>All multi-table writes in transactions</td><td><code>notifyMany()</code> wraps notification creation in <code>sequelize.transaction()</code></td></tr>
+    <tr><td>404 (not 403) on cross-user access</td><td><code>findOwnedOrThrow()</code> in receipt + device services</td></tr>
+    <tr><td>UUID PKs as <code>CHAR(36)</code></td><td>Every entity</td></tr>
+    <tr><td>JSONB for flexible columns</td><td><code>data</code>, <code>delivered_channels</code>, <code>channels</code></td></tr>
+    <tr><td>Always escape user-controlled HTML</td><td><code>genericNotificationTemplate</code> uses <code>escapeHtml</code></td></tr>
+    <tr><td>Never use <code>any</code></td><td>Strict types throughout, <code>unknown</code> + narrowing where needed</td></tr>
+    <tr><td>No <code>console.log</code></td><td>Winston via <code>WINSTON_MODULE_NEST_PROVIDER</code></td></tr>
+    <tr><td>Rate limit sensitive endpoints</td><td><code>POST /devices/register</code> (60/min), debug endpoint (5/min)</td></tr>
+    <tr><td>Pagination caps</td><td><code>@Min(1)</code> + <code>@Max(100)</code> on every limit param</td></tr>
+    <tr><td>Use <code>Op.iLike</code> not <code>Op.like</code> for search</td><td>(Will apply when we add search)</td></tr>
+    <tr><td>Idempotency on every external write</td><td><code>fingerprint</code> for dedup, BullMQ <code>jobId</code> for queue</td></tr>
+  </tbody>
+</table>
+
+<!-- ========================================================== -->
+<h2 id="glossary">Glossary</h2>
+
+<table>
+  <tbody>
+    <tr><td><strong>Notification</strong></td><td>The message itself — title + body + data + audience. One row per event.</td></tr>
+    <tr><td><strong>Receipt</strong></td><td>Per-recipient state for a notification. Tracks delivered/viewed/read/clicked/dismissed timestamps.</td></tr>
+    <tr><td><strong>Channel</strong></td><td>How the notification is delivered: in-app, email, push, sms.</td></tr>
+    <tr><td><strong>Producer</strong></td><td>Any service that calls <code>notify()</code>. Doesn't know or care about channels.</td></tr>
+    <tr><td><strong>Adapter</strong></td><td>The code that talks to a specific channel (Resend for email, web-push for browser push, FCM for mobile).</td></tr>
+    <tr><td><strong>Fingerprint</strong></td><td>sha256 dedup key. Same fingerprint within window = no second notification created.</td></tr>
+    <tr><td><strong>Audience</strong></td><td>Who receives the notification: USER (one), GROUP (members), PLATFORM (everyone). Phase 4 only emits USER.</td></tr>
+    <tr><td><strong>VAPID</strong></td><td>Voluntary Application Server Identification — the public/private keypair we use to authenticate Web Push messages.</td></tr>
+    <tr><td><strong>FCM</strong></td><td>Firebase Cloud Messaging — Google's push delivery service. Free, used for both Android and iOS (via APNs forwarding).</td></tr>
+    <tr><td><strong>SSE</strong></td><td>Server-Sent Events — one-way real-time HTTP stream from server to browser. The right fit for notification badges.</td></tr>
+    <tr><td><strong>BullMQ</strong></td><td>Redis-backed job queue. Will move email/push/SMS sends off the request path in Phase 6.</td></tr>
+    <tr><td><strong>Outbox pattern</strong></td><td>Future: write a job row in the same DB transaction as the domain change, drain to BullMQ post-commit. Solves the "webhook arrives before commit" race.</td></tr>
+  </tbody>
+</table>
+
+<p style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px;">
+  Compiled 2026-05-02. Living document — update when we ship Phase 5 (FE), Phase 6 (workers), or add a new channel.
+</p>
+
+</main>
+</div>
+</body>
+</html>

@@ -13,6 +13,7 @@ import {
   GroupMember,
   GroupMemberRole,
 } from '../group/entities/group-member.entity';
+import { User } from '../user/entities/user.entity';
 import { ModerationDecision } from './dto/moderate-post.dto';
 import { SearchIndexService } from '../search/search-index.service';
 import { NotificationService } from '../notification/notification.service';
@@ -52,12 +53,17 @@ interface ReactionModelMock {
 interface GroupModelMock {
   sequelize: { transaction: jest.Mock };
   findAll: jest.Mock;
+  findByPk: jest.Mock;
 }
 
 interface MemberModelMock {
   sequelize: { transaction: jest.Mock };
   findOne: jest.Mock;
   findAll: jest.Mock;
+}
+
+interface UserModelMock {
+  findByPk: jest.Mock;
 }
 
 describe('PostService', () => {
@@ -67,6 +73,7 @@ describe('PostService', () => {
   let reactionModel: ReactionModelMock;
   let groupModel: GroupModelMock;
   let memberModel: MemberModelMock;
+  let userModel: UserModelMock;
   let searchIndex: { upsertPost: jest.Mock; removeIfExists: jest.Mock };
   let notificationService: { notify: jest.Mock; notifyMany: jest.Mock };
   let cloudinaryService: {
@@ -117,8 +124,17 @@ describe('PostService', () => {
       count: jest.fn().mockResolvedValue(0),
       destroy: jest.fn().mockResolvedValue(0),
     };
-    groupModel = { sequelize, findAll: jest.fn() };
+    groupModel = {
+      sequelize,
+      findAll: jest.fn().mockResolvedValue([]),
+      findByPk: jest.fn().mockResolvedValue({ id: 'g1', name: 'Test group' }),
+    };
     memberModel = { sequelize, findOne: jest.fn(), findAll: jest.fn() };
+    userModel = {
+      findByPk: jest
+        .fn()
+        .mockResolvedValue({ id: 'u', firstName: 'Test', lastName: 'User' }),
+    };
     searchIndex = {
       upsertPost: jest.fn().mockResolvedValue(undefined),
       removeIfExists: jest.fn().mockResolvedValue(undefined),
@@ -157,6 +173,7 @@ describe('PostService', () => {
         { provide: getModelToken(PostReaction), useValue: reactionModel },
         { provide: getModelToken(Group), useValue: groupModel },
         { provide: getModelToken(GroupMember), useValue: memberModel },
+        { provide: getModelToken(User), useValue: userModel },
         { provide: SearchIndexService, useValue: searchIndex },
         { provide: NotificationService, useValue: notificationService },
         { provide: CloudinaryService, useValue: cloudinaryService },

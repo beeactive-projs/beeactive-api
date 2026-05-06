@@ -20,6 +20,12 @@ import { User } from '../user/entities/user.entity';
 import { Group } from '../group/entities/group.entity';
 import { Role } from '../role/entities/role.entity';
 import { GroupMember } from '../group/entities/group-member.entity';
+import { NotificationService } from '../notification/notification.service';
+import {
+  groupInvitationReceived,
+  groupInvitationAccepted,
+  groupInvitationDeclined,
+} from '../group/notifications';
 
 /**
  * Invitation Service
@@ -44,6 +50,7 @@ export class InvitationService {
     private cryptoService: CryptoService,
     private emailService: EmailService,
     private configService: ConfigService,
+    private notificationService: NotificationService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -150,6 +157,30 @@ export class InvitationService {
           'InvitationService',
         ),
       );
+
+    // If the invitee already has an account, drop a bell notification
+    // alongside the email. Unregistered emails get email only — there's
+    // no userId to address yet.
+    const invitee = await User.findOne({
+      where: { email: dto.email },
+      attributes: ['id'],
+    });
+    if (invitee) {
+      await this.notificationService
+        .notify(
+          groupInvitationReceived(
+            invitee.id,
+            { id: group.id, name: group.name },
+            inviterName,
+          ),
+        )
+        .catch((err: Error) =>
+          this.logger.error(
+            `Failed to notify invitee on group invitation: ${err.message}`,
+            'InvitationService',
+          ),
+        );
+    }
 
     this.logger.log(
       `Invitation sent to ${dto.email} for group ${group.name}`,
@@ -262,6 +293,23 @@ export class InvitationService {
             'InvitationService',
           ),
         );
+      await this.notificationService
+        .notify(
+          groupInvitationAccepted(
+            invitation.inviterId,
+            {
+              id: invitation.groupId,
+              name: invitation.group?.name ?? null,
+            },
+            accepterName.trim() || null,
+          ),
+        )
+        .catch((err: Error) =>
+          this.logger.error(
+            `Failed to notify inviter on invitation accepted: ${err.message}`,
+            'InvitationService',
+          ),
+        );
     }
 
     return {
@@ -284,6 +332,7 @@ export class InvitationService {
 
     const invitation = await this.invitationModel.findOne({
       where: { token: hashedToken },
+      include: [{ model: Group, attributes: ['id', 'name'] }],
     });
 
     if (!invitation) {
@@ -302,6 +351,40 @@ export class InvitationService {
     }
 
     await invitation.update({ declinedAt: new Date() });
+
+    // Notify the inviter so they don't keep wondering. We deliberately
+    // do NOT echo the invitee's email back to the inviter — even though
+    // they sent the invite, surfacing the email confirms the person
+    // signed up under it (or did the email lookup) and makes the bell
+    // a vector for address harvesting. Resolve a display name via the
+    // User row if one exists; otherwise pass null and let the builder
+    // render a generic "A user" fallback.
+    const invitee = await User.findOne({
+      where: { email: invitation.email },
+      attributes: ['firstName', 'lastName'],
+    });
+    const inviteeName =
+      [invitee?.firstName, invitee?.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || null;
+    await this.notificationService
+      .notify(
+        groupInvitationDeclined(
+          invitation.inviterId,
+          {
+            id: invitation.groupId,
+            name: invitation.group?.name ?? null,
+          },
+          inviteeName,
+        ),
+      )
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to notify inviter on invitation declined: ${err.message}`,
+          'InvitationService',
+        ),
+      );
 
     return { message: 'Invitation declined' };
   }

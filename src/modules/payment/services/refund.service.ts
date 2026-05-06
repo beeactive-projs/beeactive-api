@@ -18,6 +18,8 @@ import {
   NotificationService,
   NotificationType,
 } from '../../notification/notification.service';
+import { NotificationOutbox } from '../../notification/notification-outbox';
+import { formatMoney } from '../../notification/format';
 import { CreateRefundDto } from '../dto/create-refund.dto';
 
 const MAX_REFUND_WINDOW_DAYS = 14;
@@ -105,12 +107,18 @@ export class RefundService {
     await payment.save();
 
     if (payment.clientId) {
+      // Refund deep-link: prefer the related invoice when present
+      // (clients view billing under /profile/invoices/:id). When the
+      // payment isn't tied to an invoice, land on the Invoices tab.
+      const data = payment.invoiceId
+        ? { screen: 'profile/invoices', entityId: payment.invoiceId }
+        : { screen: 'profile', queryParams: { tab: 'invoices' } };
       await this.notificationService.notify({
         userId: payment.clientId,
         type: NotificationType.REFUND_ISSUED,
         title: 'Refund processed',
-        body: `A refund of ${(refundAmount / 100).toFixed(2)} ${payment.currency} has been issued.`,
-        data: { screen: 'client-payments', entityId: payment.id },
+        body: `A refund of ${formatMoney(refundAmount, payment.currency)} has been issued.`,
+        data,
       });
     }
 
@@ -128,6 +136,11 @@ export class RefundService {
   async syncRefundFromWebhook(
     charge: Stripe.Charge,
     tx: Transaction,
+    // Reserved for future post-commit refund notifications (e.g.
+    // tell the instructor when a charge is refunded by Stripe Smart
+    // Retries failure). Today we only notify on the request-driven
+    // refund path in `issueRefund()`.
+    _outbox?: NotificationOutbox,
   ): Promise<void> {
     const payment = await this.paymentModel.findOne({
       where: { stripeChargeId: charge.id },

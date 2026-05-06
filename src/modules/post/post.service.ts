@@ -31,10 +31,13 @@ import {
   PaginatedResponse,
 } from '../../common/dto/pagination.dto';
 import { SearchIndexService } from '../search/search-index.service';
+import { NotificationService } from '../notification/notification.service';
 import {
-  NotificationService,
-  NotificationType,
-} from '../notification/notification.service';
+  postPendingApproval,
+  postApprovedForAuthor,
+  postRejectedForAuthor,
+  postNewComment,
+} from './notifications';
 
 /**
  * Tombstone written into post/comment `content` when the row is
@@ -87,6 +90,7 @@ export class PostService {
     @InjectModel(Group) private readonly groupModel: typeof Group,
     @InjectModel(GroupMember)
     private readonly memberModel: typeof GroupMember,
+    @InjectModel(User) private readonly userModel: typeof User,
     private readonly searchIndexService: SearchIndexService,
     private readonly notificationService: NotificationService,
     private readonly cloudinaryService: CloudinaryService,
@@ -292,13 +296,26 @@ export class PostService {
     if (pending.length === 0) return;
 
     const groupIds = pending.map((p) => p.groupId);
-    const staff = await this.memberModel.findAll({
-      where: {
-        groupId: { [Op.in]: groupIds },
-        role: { [Op.in]: [GroupMemberRole.OWNER, GroupMemberRole.MODERATOR] },
-        leftAt: null,
-      },
-    });
+    const [staff, groups, author] = await Promise.all([
+      this.memberModel.findAll({
+        where: {
+          groupId: { [Op.in]: groupIds },
+          role: { [Op.in]: [GroupMemberRole.OWNER, GroupMemberRole.MODERATOR] },
+          leftAt: null,
+        },
+      }),
+      this.groupModel.findAll({
+        where: { id: { [Op.in]: groupIds } },
+        attributes: ['id', 'name'],
+      }),
+      this.userModel.findByPk(authorId, {
+        attributes: ['id', 'firstName', 'lastName'],
+      }),
+    ]);
+    const groupNameById = new Map(groups.map((g) => [g.id, g.name]));
+    const authorName =
+      [author?.firstName, author?.lastName].filter(Boolean).join(' ').trim() ||
+      null;
 
     // One notification per (post, staffUser). Deduped by post id.
     for (const post of pending) {
@@ -306,12 +323,17 @@ export class PostService {
         .filter((m) => m.groupId === post.groupId && m.userId !== authorId)
         .map((m) => m.userId);
       if (recipients.length === 0) continue;
-      await this.notificationService.notifyMany(recipients, {
-        type: NotificationType.POST_PENDING_APPROVAL,
-        title: 'A post needs your review',
-        body: 'A member has posted in a group you moderate.',
-        data: { screen: 'post-pending', entityId: post.id },
-      });
+      await this.notificationService.notifyMany(
+        recipients,
+        postPendingApproval(
+          {
+            groupId: post.groupId,
+            groupName: groupNameById.get(post.groupId) ?? null,
+            postId: post.id,
+          },
+          authorName,
+        ),
+      );
     }
   }
 
@@ -529,22 +551,19 @@ export class PostService {
     }
 
     if (post.authorId !== userId) {
-      await this.notificationService.notify({
-        userId: post.authorId,
-        type:
-          dto.decision === ModerationDecision.APPROVED
-            ? NotificationType.POST_APPROVED
-            : NotificationType.POST_REJECTED,
-        title:
-          dto.decision === ModerationDecision.APPROVED
-            ? 'Your post was approved'
-            : 'Your post was not approved',
-        body:
-          dto.decision === ModerationDecision.APPROVED
-            ? 'Your post is now visible to the group.'
-            : 'A moderator removed your post from the group.',
-        data: { screen: 'post-detail', entityId: postId },
+      const group = await this.groupModel.findByPk(post.groupId, {
+        attributes: ['id', 'name'],
       });
+      const ctx = {
+        groupId: post.groupId,
+        groupName: group?.name ?? null,
+        postId,
+      };
+      const params =
+        dto.decision === ModerationDecision.APPROVED
+          ? postApprovedForAuthor(post.authorId, ctx)
+          : postRejectedForAuthor(post.authorId, ctx);
+      await this.notificationService.notify(params);
     }
   }
 
@@ -617,13 +636,28 @@ export class PostService {
     });
 
     if (post.authorId !== userId) {
-      await this.notificationService.notify({
-        userId: post.authorId,
-        type: NotificationType.POST_NEW_COMMENT,
-        title: 'New comment on your post',
-        body: 'Someone commented on your post.',
-        data: { screen: 'post-detail', entityId: postId },
-      });
+      const [group, commenter] = await Promise.all([
+        this.groupModel.findByPk(post.groupId, { attributes: ['id', 'name'] }),
+        this.userModel.findByPk(userId, {
+          attributes: ['id', 'firstName', 'lastName'],
+        }),
+      ]);
+      const commenterName =
+        [commenter?.firstName, commenter?.lastName]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || null;
+      await this.notificationService.notify(
+        postNewComment(
+          post.authorId,
+          {
+            groupId: post.groupId,
+            groupName: group?.name ?? null,
+            postId,
+          },
+          commenterName,
+        ),
+      );
     }
 
     return this.commentModel.findByPk(comment.id, {

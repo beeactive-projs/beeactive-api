@@ -17,6 +17,8 @@ import { InvoiceService } from './invoice.service';
 import { SubscriptionService } from './subscription.service';
 import { RefundService } from './refund.service';
 import { OrphanedWebhookError } from './webhook-errors';
+import { NotificationService } from '../../notification/notification.service';
+import { NotificationOutbox } from '../../notification/notification-outbox';
 
 /**
  * Result of processing a webhook, returned to the controller so it
@@ -107,6 +109,7 @@ export class WebhookHandlerService {
     private readonly invoiceService: InvoiceService,
     private readonly subscriptionService: SubscriptionService,
     private readonly refundService: RefundService,
+    private readonly notificationService: NotificationService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -208,13 +211,27 @@ export class WebhookHandlerService {
     // writes happen on the default connection and the rollback is a
     // no-op. The Phase 1 stub does nothing so this is latent until a
     // real handler lands.
+    // Notifications are deferred until after the transaction commits.
+    // If the tx rolls back, the outbox is discarded — never sending
+    // a "payment received" email for a payment that didn't actually
+    // finalize. See modules/notification/notification-outbox.ts for
+    // the rationale + future evolution to a durable outbox table.
+    const outbox = new NotificationOutbox(
+      this.notificationService,
+      this.logger,
+    );
     try {
       await this.sequelize.transaction(async (tx) => {
-        await this.dispatchHandler(event, tx);
+        await this.dispatchHandler(event, tx, outbox);
         auditRow.status = WebhookEventStatus.PROCESSED;
         auditRow.processedAt = new Date();
         await auditRow.save({ transaction: tx });
       });
+      // Tx committed successfully — flush queued notifications. Errors
+      // here are logged but never thrown (the webhook has already
+      // committed; we don't want a flaky notification to trigger a
+      // Stripe retry of work that's already done).
+      await outbox.flush();
       return {
         eventId: event.id,
         type: event.type,
@@ -222,6 +239,10 @@ export class WebhookHandlerService {
         status: WebhookEventStatus.PROCESSED,
       };
     } catch (err) {
+      // Tx rolled back — drop any queued notifications. Belt-and-
+      // suspenders: the outbox is request-scoped and will GC anyway,
+      // but explicit discard is safer if someone refactors later.
+      outbox.discard();
       // Orphan: webhook references a Stripe entity we have no local
       // mirror for. Stamp 'orphaned' and return 200 — Stripe should NOT
       // retry-spam us, the reconciliation worker (jobs sprint) sweeps
@@ -268,6 +289,7 @@ export class WebhookHandlerService {
   private async dispatchHandler(
     event: Stripe.Event,
     tx: Transaction,
+    outbox: NotificationOutbox,
   ): Promise<void> {
     switch (event.type) {
       // PHASE 2 — Connect onboarding
@@ -277,11 +299,11 @@ export class WebhookHandlerService {
         // capability flips state. Both feed the same sync routine — Stripe
         // gives us the full account on the event for `account.updated` and
         // we re-fetch when only the capability is in the payload.
-        await this.handleAccountUpdated(event, tx);
+        await this.handleAccountUpdated(event, tx, outbox);
         break;
 
       case 'account.application.deauthorized':
-        await this.handleAccountDeauthorized(event, tx);
+        await this.handleAccountDeauthorized(event, tx, outbox);
         break;
 
       // PHASE 3 — Invoices + payments
@@ -289,11 +311,19 @@ export class WebhookHandlerService {
       case 'invoice.finalized':
       case 'invoice.paid':
       case 'invoice.voided':
-        await this.invoiceService.syncFromStripeInvoice(event.data.object, tx);
+        await this.invoiceService.syncFromStripeInvoice(
+          event.data.object,
+          tx,
+          outbox,
+        );
         break;
 
       case 'invoice.payment_failed':
-        await this.invoiceService.handlePaymentFailed(event.data.object, tx);
+        await this.invoiceService.handlePaymentFailed(
+          event.data.object,
+          tx,
+          outbox,
+        );
         break;
 
       case 'payment_intent.succeeded':
@@ -306,12 +336,20 @@ export class WebhookHandlerService {
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
       case 'customer.subscription.trial_will_end':
-        await this.subscriptionService.syncFromWebhook(event.data.object, tx);
+        await this.subscriptionService.syncFromWebhook(
+          event.data.object,
+          tx,
+          outbox,
+        );
         break;
 
       // PHASE 5 — Refunds + disputes + payouts
       case 'charge.refunded':
-        await this.refundService.syncRefundFromWebhook(event.data.object, tx);
+        await this.refundService.syncRefundFromWebhook(
+          event.data.object,
+          tx,
+          outbox,
+        );
         break;
 
       case 'charge.dispute.created':
@@ -346,6 +384,7 @@ export class WebhookHandlerService {
   private async handleAccountUpdated(
     event: Stripe.Event,
     tx: Transaction,
+    outbox: NotificationOutbox,
   ): Promise<void> {
     if (event.type === 'capability.updated') {
       const capability = event.data.object;
@@ -362,12 +401,12 @@ export class WebhookHandlerService {
       }
       const fullAccount =
         await this.stripeService.stripe.accounts.retrieve(accountId);
-      await this.connectService.syncAccountFromWebhook(fullAccount, tx);
+      await this.connectService.syncAccountFromWebhook(fullAccount, tx, outbox);
       return;
     }
 
     const account = event.data.object as Stripe.Account;
-    await this.connectService.syncAccountFromWebhook(account, tx);
+    await this.connectService.syncAccountFromWebhook(account, tx, outbox);
   }
 
   /**
@@ -378,6 +417,7 @@ export class WebhookHandlerService {
   private async handleAccountDeauthorized(
     event: Stripe.Event,
     tx: Transaction,
+    outbox: NotificationOutbox,
   ): Promise<void> {
     const accountId = event.account;
     if (!accountId) {
@@ -387,6 +427,6 @@ export class WebhookHandlerService {
       );
       return;
     }
-    await this.connectService.handleDeauthorized(accountId, tx);
+    await this.connectService.handleDeauthorized(accountId, tx, outbox);
   }
 }

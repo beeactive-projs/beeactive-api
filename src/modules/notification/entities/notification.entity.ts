@@ -34,11 +34,17 @@ export enum NotificationSeverity {
 /**
  * Routing payload attached to a notification. Drives FE deep-linking
  * when the user clicks the bell entry.
+ *
+ * - `screen` + `entityId` → path-segment route (e.g. `/groups/<id>`).
+ * - `queryParams` → forwarded as URL query string (e.g.
+ *   `/profile?tab=memberships`). Used for tabbed pages with no detail
+ *   route. Producers should pick one or the other, not both.
  */
 export interface NotificationData {
   screen: string;
   entityId?: string;
   action?: string;
+  queryParams?: Record<string, string>;
   [key: string]: unknown;
 }
 

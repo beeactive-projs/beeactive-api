@@ -14,6 +14,7 @@ import { NotificationReceipt } from './entities/notification-receipt.entity';
 import { NotificationPreference } from './entities/notification-preference.entity';
 import { User } from '../user/entities/user.entity';
 import { EmailService } from '../../common/services/email.service';
+import { JobsService } from '../jobs/jobs.service';
 import {
   fakeTx,
   makeModelMock,
@@ -80,6 +81,10 @@ describe('NotificationService', () => {
   let userModel: ModelMock;
   let emailService: { sendNotificationEmail: jest.Mock };
   let configMock: { get: jest.Mock };
+  // Default: enqueue returns a fake Job ref → tests assert email is
+  // queued, NOT sent synchronously. The "Redis missing" fallback
+  // path is covered by a dedicated test that overrides this.
+  let jobsService: { enqueue: jest.Mock };
 
   beforeEach(async () => {
     notificationModel = makeModelMock();
@@ -96,6 +101,9 @@ describe('NotificationService', () => {
         key === 'FRONTEND_URL' ? 'http://app.test' : undefined,
       ),
     };
+    jobsService = {
+      enqueue: jest.fn().mockResolvedValue({ id: 'job-1' }),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -110,6 +118,7 @@ describe('NotificationService', () => {
         { provide: Sequelize, useValue: makeSequelizeMock() },
         { provide: EmailService, useValue: emailService },
         { provide: ConfigService, useValue: configMock },
+        { provide: JobsService, useValue: jobsService },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: makeSilentLogger() },
       ],
     }).compile();
@@ -146,15 +155,22 @@ describe('NotificationService', () => {
         { transaction: fakeTx },
       );
       expect(receiptModel.findOrCreate).toHaveBeenCalled();
-      expect(emailService.sendNotificationEmail).toHaveBeenCalledWith(
+      // Phase 6+: the email goes onto the BullMQ queue; the producer
+      // never calls EmailService directly.
+      expect(emailService.sendNotificationEmail).not.toHaveBeenCalled();
+      expect(jobsService.enqueue).toHaveBeenCalledWith(
+        'notifications.email_send',
         expect.objectContaining({
           to: 'u1@test.io',
           title: 'Invoice paid',
           ctaUrl: 'http://app.test/invoice/inv-9',
         }),
+        expect.objectContaining({
+          jobId: expect.stringContaining('email_send.') as string,
+        }),
       );
       expect(result.delivered.in_app).toBe('sent');
-      expect(result.delivered.email).toBe('sent');
+      expect(result.delivered.email).toBe('queued');
       expect(result.delivered.push).toBe('skipped:preference_off');
       expect(result.delivered.sms).toBe('skipped:preference_off');
       expect(result.deduped).toBe(false);
@@ -176,6 +192,7 @@ describe('NotificationService', () => {
         body: 'b',
       });
 
+      expect(jobsService.enqueue).not.toHaveBeenCalled();
       expect(emailService.sendNotificationEmail).not.toHaveBeenCalled();
       expect(result.delivered.email).toBe('skipped:no_email');
     });
@@ -202,13 +219,14 @@ describe('NotificationService', () => {
         body: 'b',
       });
 
+      expect(jobsService.enqueue).not.toHaveBeenCalled();
       expect(emailService.sendNotificationEmail).not.toHaveBeenCalled();
       expect(result.delivered.email).toBe('skipped:preference_off');
       // in_app default is still on for INVOICE_PAID
       expect(result.delivered.in_app).toBe('sent');
     });
 
-    it('records email failure in delivered_channels without throwing', async () => {
+    it('falls back to synchronous email when Redis is unavailable', async () => {
       notificationModel.findOne.mockResolvedValue(null);
       notificationModel.create.mockResolvedValue(makeNotificationRow());
       preferenceModel.findAll.mockResolvedValue([]);
@@ -216,10 +234,9 @@ describe('NotificationService', () => {
         { id: 'user-1', email: 'u1@test.io' },
       ]);
       receiptModel.findOrCreate.mockResolvedValue([makeReceiptRow(), true]);
-      emailService.sendNotificationEmail.mockResolvedValue({
-        ok: false,
-        reason: 'resend 503 service unavailable',
-      });
+      // JobsService returns null when REDIS_HOST isn't set —
+      // simulate that here.
+      jobsService.enqueue.mockResolvedValue(null);
 
       const result = await service.notify({
         userId: 'user-1',
@@ -228,12 +245,13 @@ describe('NotificationService', () => {
         body: 'b',
       });
 
-      expect(result.delivered.email).toBe(
-        'failed:resend 503 service unavailable',
+      expect(jobsService.enqueue).toHaveBeenCalled();
+      // Producer notices null → calls EmailService directly so
+      // emails still go out in dev mode without Redis.
+      expect(emailService.sendNotificationEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'u1@test.io' }),
       );
-      // The in-app receipt still happens — failure of one channel does
-      // not roll back the others.
-      expect(result.delivered.in_app).toBe('sent');
+      expect(result.delivered.email).toBe('sent');
     });
 
     it('dedupes by fingerprint — second call returns existing notification', async () => {

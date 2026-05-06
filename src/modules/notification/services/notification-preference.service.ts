@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
 import {
   ChannelPreferences,
@@ -7,28 +8,54 @@ import {
 } from '../entities/notification-preference.entity';
 import { NotificationType } from '../notification-types';
 import {
+  CATEGORY_DISPLAY_ORDER,
+  CATEGORY_META,
+  CATEGORY_TO_TYPES,
+  NotificationCategory,
+} from '../notification-categories';
+import {
   NOTIFICATION_DEFAULTS,
   resolveChannels,
 } from '../notification-defaults';
 
 /**
- * The shape returned to the FE settings page — every known
- * NotificationType with its effective channels (merged: user
- * override over system default), plus a flag indicating whether
- * the user has explicitly customized this row.
+ * Channels we expose on the settings page. We deliberately omit
+ * in-app — it's always on by design (the bell is the user's inbox)
+ * — push (not implemented yet) and sms (not implemented yet). When
+ * push ships we'll add it back as its own column.
  */
-export interface PreferenceView {
-  type: NotificationType;
-  channels: Required<ChannelPreferences>;
+export type ConfigurableChannel = 'email';
+
+export interface ConfigurableChannelPreferences {
+  email: boolean;
+}
+
+/**
+ * One category row in the settings page. The FE renders six of
+ * these; each gets a single Email toggle.
+ *
+ * `isCustomized` is true when ANY of the underlying NotificationTypes
+ * has a user override — that drives the "Reset to default" button.
+ */
+export interface CategoryPreferenceView {
+  category: NotificationCategory;
+  label: string;
+  description: string;
+  channels: ConfigurableChannelPreferences;
   isCustomized: boolean;
 }
 
 /**
  * NotificationPreferenceService
  *
- * Manages per-user channel toggles. Storage is sparse — rows only
- * exist when the user has overridden the default. Reads merge user
- * overrides over the in-code defaults map.
+ * Per-user channel toggles. The user-facing surface is grouped by
+ * NotificationCategory (~6 rows). Storage is per NotificationType
+ * (~30 rows) — when the user toggles a category, we fan the change
+ * out to all member types under the hood.
+ *
+ * This split keeps the FE simple while preserving the option to add
+ * per-type overrides later (a power-user feature) without a schema
+ * change.
  */
 @Injectable()
 export class NotificationPreferenceService {
@@ -38,76 +65,108 @@ export class NotificationPreferenceService {
     private readonly sequelize: Sequelize,
   ) {}
 
+  // ────────────────────────────────────────────────────────────
+  // Category-level surface (the only API the FE consumes)
+  // ────────────────────────────────────────────────────────────
+
   /**
-   * Return the full settings view for the user — one entry per
-   * known NotificationType, with effective channels and a flag for
-   * "user has customized this".
+   * Return one row per NotificationCategory with its effective
+   * configurable channels (merged: user override over system default).
+   *
+   * A category's `email` is "on" when **any** of its underlying types
+   * has email enabled in the resolved channels. That matches the
+   * mental model "do I get emails about this category?" — answer is
+   * yes if at least one event under it would email me. In practice,
+   * defaults are uniform across a category so the per-type values
+   * agree, but this rule keeps the UI honest if they ever diverge
+   * (e.g. via direct per-type writes from a power-user surface).
    */
-  async getForUser(userId: string): Promise<PreferenceView[]> {
-    const overrides = await this.preferenceModel.findAll({
-      where: { userId },
-    });
+  async getForUser(userId: string): Promise<CategoryPreferenceView[]> {
+    const overrides = await this.preferenceModel.findAll({ where: { userId } });
     const overrideByType = new Map(overrides.map((o) => [o.type, o.channels]));
 
-    const types = Object.keys(NOTIFICATION_DEFAULTS) as NotificationType[];
-    return types.map((type) => {
-      const override = overrideByType.get(type) ?? null;
+    return CATEGORY_DISPLAY_ORDER.map((category) => {
+      const types = CATEGORY_TO_TYPES[category];
+      const meta = CATEGORY_META[category];
+
+      const resolved = types.map((type) =>
+        resolveChannels(type, overrideByType.get(type) ?? null),
+      );
+      const anyEmail = resolved.some((r) => r.email);
+      const isCustomized = types.some((type) => overrideByType.has(type));
+
       return {
-        type,
-        channels: resolveChannels(type, override),
-        isCustomized: override !== null,
+        category,
+        label: meta.label,
+        description: meta.description,
+        channels: { email: anyEmail },
+        isCustomized,
       };
     });
   }
 
   /**
-   * Upsert a single preference. Returns the row that was written.
+   * Apply a category-level update. The user toggled "Sessions email
+   * = off"; we expand that into one upsert per type under the
+   * category, all in a single transaction.
+   *
+   * Other channels (in_app, push, sms) keep their current values —
+   * we only touch the channel(s) the user actually changed.
    */
-  async update(
+  async updateCategoriesForUser(
     userId: string,
-    type: NotificationType,
-    channels: ChannelPreferences,
-  ): Promise<NotificationPreference> {
-    const [row] = await this.preferenceModel.upsert({
-      userId,
-      type,
-      channels,
-    });
-    return row;
-  }
-
-  /**
-   * Bulk upsert — used by the settings page save. All rows go in a
-   * single transaction so the user never sees a half-saved state.
-   */
-  async bulkUpdate(
-    userId: string,
-    updates: { type: NotificationType; channels: ChannelPreferences }[],
+    updates: {
+      category: NotificationCategory;
+      channels: ConfigurableChannelPreferences;
+    }[],
   ): Promise<{ written: number }> {
     if (updates.length === 0) return { written: 0 };
-    await this.sequelize.transaction(async (tx) => {
-      await Promise.all(
-        updates.map((u) =>
-          this.preferenceModel.upsert(
-            { userId, type: u.type, channels: u.channels },
-            { transaction: tx },
-          ),
-        ),
-      );
+
+    // Pre-load existing overrides for everything we're about to touch
+    // so we can preserve channels the user didn't change.
+    const allTypes = updates.flatMap((u) => CATEGORY_TO_TYPES[u.category]);
+    const existing = await this.preferenceModel.findAll({
+      where: { userId, type: { [Op.in]: allTypes } },
     });
-    return { written: updates.length };
+    const existingByType = new Map(existing.map((e) => [e.type, e.channels]));
+
+    let written = 0;
+    await this.sequelize.transaction(async (tx) => {
+      for (const update of updates) {
+        for (const type of CATEGORY_TO_TYPES[update.category]) {
+          // Merge the new email value over the existing per-type
+          // channels, falling back to the system default for the
+          // channels we don't manage here (in_app/push/sms).
+          const base =
+            existingByType.get(type) ?? NOTIFICATION_DEFAULTS[type] ?? {};
+          const next: ChannelPreferences = {
+            ...base,
+            email: update.channels.email,
+          };
+          await this.preferenceModel.upsert(
+            { userId, type, channels: next },
+            { transaction: tx },
+          );
+          written++;
+        }
+      }
+    });
+    return { written };
   }
 
   /**
-   * Reset to defaults — deletes the override row(s). When `type` is
-   * omitted, resets every override for the user.
+   * Reset to defaults. Without `category` argument: wipe every
+   * override the user has. With `category`: wipe only the rows that
+   * belong to that category.
    */
   async resetToDefault(
     userId: string,
-    type?: NotificationType,
+    category?: NotificationCategory,
   ): Promise<{ removed: number }> {
     const where: Record<string, unknown> = { userId };
-    if (type) where.type = type;
+    if (category) {
+      where.type = { [Op.in]: CATEGORY_TO_TYPES[category] };
+    }
     const removed = await this.preferenceModel.destroy({ where });
     return { removed };
   }
