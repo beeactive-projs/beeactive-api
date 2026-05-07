@@ -33,50 +33,27 @@ import { SearchModule } from './modules/search/search.module';
 import { PostModule } from './modules/post/post.module';
 import { CamelCaseInterceptor } from './common/interceptors/camel-case.interceptor';
 
-/**
- * App Module
- *
- * The root module of the application.
- * This is where we import and configure all global modules:
- * - Configuration (environment variables)
- * - Database (Sequelize/MySQL)
- * - Queue system (Bull/Redis)
- * - Logging (Winston)
- * - Rate limiting (Throttler)
- * - Feature modules (User, Auth, Role, etc.)
- *
- * NestJS uses dependency injection, so everything declared here
- * is available throughout the application.
- */
 @Module({
   imports: [
-    // ✅ IMPROVEMENT: Environment variable validation
-    // App won't start if required env vars are missing
     ConfigModule.forRoot({
-      isGlobal: true, // Make ConfigService available everywhere
-      validationSchema: envValidationSchema, // Validate env vars on startup
-      validationOptions: {
-        abortEarly: false, // Show all validation errors, not just first one
-      },
+      isGlobal: true,
+      validationSchema: envValidationSchema,
+      validationOptions: { abortEarly: false },
     }),
 
-    // ✅ IMPROVEMENT: Winston logger (replaces console.log)
     WinstonModule.forRootAsync({
       useFactory: () => createLogger(),
     }),
 
-    // Database Configuration
     SequelizeModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: getDatabaseConfig,
     }),
 
-    // Redis / BullMQ Queue Configuration. Only registered when
-    // REDIS_HOST is set so a developer without Redis running locally
-    // can still boot — JobsModule then falls back to a no-op
-    // implementation and logs a warning. In production REDIS_HOST is
-    // required (enforced in env.validation.ts).
+    // BullMQ only when REDIS_HOST is set — lets devs boot without
+    // Redis. JobsService falls back to no-op + warn log. Production
+    // env validation requires REDIS_HOST.
     ...(process.env.REDIS_HOST
       ? [
           BullModule.forRootAsync({
@@ -87,11 +64,9 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
                 host: configService.get<string>('REDIS_HOST'),
                 port: configService.get<number>('REDIS_PORT'),
                 password: configService.get<string>('REDIS_PASSWORD'),
-                // TLS is required by Redis Cloud and other managed
-                // providers; local Docker Redis runs without it. We
-                // pass an empty object instead of `true` because some
-                // managed providers reject unverified certs unless
-                // we leave the rejectUnauthorized default in place.
+                // Empty object (not `true`) keeps rejectUnauthorized
+                // at its default — managed providers (Redis Cloud)
+                // reject unverified certs otherwise.
                 tls:
                   configService.get<string>('REDIS_TLS') === 'true'
                     ? {}
@@ -102,75 +77,42 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
         ]
       : []),
 
-    // ✅ SECURITY: Rate limiting (global)
-    // Protects ALL endpoints by default
-    // Individual routes can override with @Throttle() decorator
-    ThrottlerModule.forRoot([
-      {
-        name: 'default',
-        ttl: 60000, // Time window: 60 seconds
-        limit: 100, // Max 100 requests per window
-      },
-    ]),
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 100 }]),
 
-    // Task Scheduling (for cron jobs, intervals, etc.)
     ScheduleModule.forRoot(),
-
-    // Event Emitter (for pub/sub within the app)
     EventEmitterModule.forRoot(),
 
-    // Shared singletons (declared @Global() so any feature module
-    // can inject without listing them in its own imports[]).
     EmailModule,
 
-    // Feature Modules
-    HealthModule, // Health checks
-    UserModule, // User management
-    AuthModule, // Authentication
-    RoleModule, // RBAC (Roles & Permissions)
-    ProfileModule, // User & Instructor profiles
-    GroupModule, // Groups (fitness groups, training crews)
-    SessionModule, // Training sessions
-    InvitationModule, // Invitation management
-    ClientModule, // Instructor-Client relationships
-    BlogModule, // Blog posts + Cloudinary image uploads
-    NotificationModule, // Notification system (in-app + email delivery)
-    JobsModule, // BullMQ workers (Phase 6+) — async email/push/SMS delivery
-    AnalyticsModule, // Analytics & reporting
-    FeedbackModule, // User feedback (bugs, suggestions)
-    WaitlistModule, // Pre-launch waitlist signups
-    PaymentModule, // Stripe Connect: onboarding, invoices, subscriptions, webhooks
-    VenueModule, // Instructor venues (where training happens)
-    SearchModule, // Global search (search_doc index + GET /search)
-    PostModule, // Group posts (V1) — schema is forward-compatible for personal/public feeds
+    HealthModule,
+    UserModule,
+    AuthModule,
+    RoleModule,
+    ProfileModule,
+    GroupModule,
+    SessionModule,
+    InvitationModule,
+    ClientModule,
+    BlogModule,
+    NotificationModule,
+    JobsModule,
+    AnalyticsModule,
+    FeedbackModule,
+    WaitlistModule,
+    PaymentModule,
+    VenueModule,
+    SearchModule,
+    PostModule,
   ],
 
   controllers: [],
 
   providers: [
-    // ✅ SECURITY: Apply rate limiting globally
-    // This makes ThrottlerGuard check every request
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
-    // ✅ CONVENTION: Transform all response keys to camelCase
-    // DB uses snake_case, API responses use camelCase
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: CamelCaseInterceptor,
-    },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: CamelCaseInterceptor },
   ],
 })
 export class AppModule implements NestModule {
-  /**
-   * Configure Middleware
-   *
-   * Middleware runs BEFORE request reaches the route handler.
-   * Order matters! They execute in the order you apply them.
-   *
-   * Here we apply RequestIdMiddleware to ALL routes (*).
-   */
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(RequestIdMiddleware).forRoutes('*');
   }

@@ -270,8 +270,7 @@ export class InvitationService {
       'InvitationService',
     );
 
-    // Notify the inviter that the invitation was accepted
-    // TODO: [NOTIFICATION SYSTEM] Move to notification module when implemented
+    // Email + bell notification for the inviter.
     const inviterUser = await User.findByPk(invitation.inviterId, {
       attributes: ['email', 'firstName'],
     });

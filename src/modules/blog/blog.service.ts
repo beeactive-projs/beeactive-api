@@ -27,15 +27,10 @@ interface AuthContext {
 const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
 
 /**
- * Public blog post response — what the FE actually receives. Includes
- * the legacy `authorName` and `authorInitials` fields (now COMPUTED at
- * read time from the user join, or from `guestAuthorName` for guest
- * contributors). The legacy `authorRole` field is dropped — no FE
- * surface displayed it.
- *
- * The DB no longer stores `author_name` / `author_initials` /
- * `author_role` (migration 033). Storage is `authorUserId` (FK)
- * XOR `guestAuthorName` (string).
+ * Public blog post response. Storage is `authorUserId` (FK) XOR
+ * `guestAuthorName` (string). `authorName` / `authorInitials` /
+ * `authorAvatarUrl` are computed at read time from the user join
+ * (or from `guestAuthorName` for guest contributors).
  */
 export interface BlogPostResponse {
   id: string;

@@ -63,25 +63,9 @@ export interface GroupMembershipSnapshot {
 }
 
 /**
- * Lean row shape for the instructor's PrimeNG client management table.
- * Omits groupMemberships (expensive per-row join) — fetch those on demand.
- * Covers instructor_client rows only (ACTIVE / ARCHIVED / PENDING from that table).
- *
- * Filterable fields: status, initiatedBy, startedAt, createdAt, notes,
- *   client.firstName, client.lastName, client.email
+ * Row returned by the instructor's client list. Includes group
+ * memberships joined per row — the FE table renders both columns.
  */
-// export interface ClientTableRow {
-//   id: string;
-//   clientId: string;
-//   status: InstructorClientStatus;
-//   initiatedBy: InitiatedBy;
-//   notes: string | null;
-//   startedAt: Date | null;
-//   createdAt: Date;
-//   updatedAt: Date;
-//   client: ClientUserSnapshot | null;
-// }
-
 export interface ClientRow {
   id: string;
   instructorId: string;

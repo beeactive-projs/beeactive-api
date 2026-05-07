@@ -31,9 +31,10 @@
 12. [Errors](#12-errors)
 13. [Pagination](#13-pagination)
 14. [Naming conventions](#14-naming-conventions)
-15. [Type safety](#15-type-safety)
-16. [Tests](#16-tests)
-17. [Forbidden patterns](#17-forbidden-patterns)
+15. [Comments](#15-comments)
+16. [Type safety](#16-type-safety)
+17. [Tests](#17-tests)
+18. [Forbidden patterns](#18-forbidden-patterns)
 
 ---
 
@@ -600,7 +601,127 @@ return buildPaginatedResponse(items, totalItems, page, limit);
 
 ---
 
-## 15. Type safety
+## 15. Comments
+
+> Comments explain **why**, not **what**. If the code is clear, no comment. If something is non-obvious — a constraint, an invariant, a workaround for a specific bug, a security gotcha — write the shortest comment that captures it.
+
+### Default: write nothing
+
+A well-named function with a clear body needs no comment. Reserve comment budget for places where the reader genuinely cannot infer the intent from the code.
+
+### Always KEEP / WRITE comments for
+
+- **Constraints / invariants** — "the UNIQUE index covers left rows; we must revive, not insert"
+- **Stripe / Postgres / Sequelize quirks** — "PG treats NULL as distinct in UNIQUE indexes, so concurrent placeholder rows don't collide"
+- **Security-relevant non-obvious choices** — "trust proxy = 1 (single hop), not `true`, to keep throttler buckets keyed on the real client IP"
+- **Workarounds tied to a specific bug** — "Sequelize loses tx context on N+1 fetch; eager-load instead"
+- **Cross-file hints** — "see [`CODE_STANDARDS.md` §8](./CODE_STANDARDS.md#8-notifications)"
+- **TODOs with a ticket reference** — `// TODO(MOTI-123): handle X`
+
+### Always REMOVE comments that
+
+- **Tell a story** — multi-paragraph design narrative belongs in `docs/`, not above a class.
+- **Restate the code** — `// Generate URL-friendly slug` over `generateSlug`.
+- **Restate the type signature in JSDoc** — `@param email - The raw email address` adds nothing over `email: string`.
+- **Reference past iterations** — "we used to do X but now…", "Phase 2 will…", "v1 of this…".
+- **Are emoji-decorated labels** — `// ✅ SECURITY:`, `// ❌ NEVER`, `// ✅ IMPROVEMENT:`. Strip the emoji and the label; if the underlying point matters, write it as plain prose.
+- **Explain the framework** — "Passport is a popular authentication library", "JWT is used for authentication. Structure: Header.Payload.Signature".
+- **Use "Note:", "Important:", "Remember:" as section headers** — if it's important the comment text says why directly.
+- **Are bare TODOs without a ticket** — either fix it now, file a ticket, or delete the comment.
+- **Are stale TODOs** — if the system referenced is now built, remove the TODO and update the code.
+- **Are commented-out code** — delete it; git remembers.
+
+### Format
+
+- **Prefer `//`** for everything except public API on services that another module consumes. JSDoc only when it adds info beyond the type signature (an exception, a unit, a non-obvious constraint).
+- **No emoji.**
+- **Imperative mood** — "Resolve before saving", not "Resolves before saving".
+- **Max 3 lines per comment.** If you need more, link to a doc.
+- **No ASCII section dividers** in files under ~500 lines. Above ~500 lines, a single `// === Section name ===` line is allowed; a 3-line `// === / // SECTION / // ===` bracket is not.
+
+### JSDoc — when it pays its rent
+
+JSDoc is required only for:
+- Methods exported from a service that other modules call (the public API).
+- Functions whose type signature does not capture the constraint (e.g. "throws `ConflictException` on duplicate", "amount must be in cents", "returns null when the row exists but isn't visible to the viewer").
+
+```ts
+// ✅ Good — captures non-obvious constraint
+/**
+ * Finds the canonical (provider, sub) account row.
+ * Throws ConflictException if an unverified password account exists for the same email.
+ */
+async findOrCreateFromOAuth(...) {}
+
+// ❌ Bad — restates the type
+/** Find a user by their primary key (UUID).
+ *  @param id - The user's UUID
+ *  @returns The matching User, or null if not found */
+async findById(id: string): Promise<User | null> { ... }
+```
+
+### Examples
+
+#### ✅ Good
+
+```ts
+// The UNIQUE index on (group_id, user_id) covers ALL rows including
+// soft-left ones. Reviving the row beats inserting (which would 500).
+const existingMember = await this.memberModel.findOne({
+  where: { groupId, userId },
+});
+```
+
+```ts
+// Trust exactly one proxy hop (Railway's edge). `true` would let any
+// X-Forwarded-For value through and break per-IP throttling.
+app.set('trust proxy', 1);
+```
+
+```ts
+// notify-after-commit: tx already resolved above. Do NOT hoist this
+// inside the transaction block — a rollback would orphan the alert.
+await this.notificationService.notify(builder(...));
+```
+
+#### ❌ Bad
+
+```ts
+// ✅ SECURITY FIX: Reduced JWT expiry from 7d to 2h
+const expiresIn = '2h';
+```
+*Drop the marker. The history of how we got here lives in git. The fact that 2h is the chosen value either needs no comment or needs the rationale (e.g. "compromise between SCA-friendly and not nagging users every page-load").*
+
+```ts
+/**
+ * UserService
+ *
+ * Handles all business logic related to users:
+ * - Creating users
+ * - Finding users
+ * - Password validation
+ * - Account lockout
+ * - Token generation for password reset/email verification
+ *
+ * This is the "brain" of the user module.
+ * Controllers call these methods, services interact with the database.
+ */
+```
+*Delete entirely. The class name says it. The method names say the rest.*
+
+```ts
+// TODO: [JOB SYSTEM] Move to background job queue when Redis/Bull is configured
+this.emailService.sendWelcomeEmail(user.email).catch(...);
+```
+*Stale — `JobsService.enqueue` exists. Either move it to the queue and remove the TODO, or remove the TODO and explain why this one stays synchronous.*
+
+### Rule of thumb
+
+**If a reviewer would read your comment and think "that helped me", keep it. If they'd skim past it, remove it. If they'd be misled by it (stale, contradictory, narrative), definitely remove it.**
+
+---
+
+## 16. Type safety
 
 ### Forbidden
 
@@ -631,7 +752,7 @@ return buildPaginatedResponse(items, totalItems, page, limit);
 
 ---
 
-## 16. Tests
+## 17. Tests
 
 Every service that handles RBAC, money, or external integrations needs a spec. Specs live next to the source: `foo.service.ts` ↔ `foo.service.spec.ts`.
 
@@ -657,7 +778,7 @@ Every service that handles RBAC, money, or external integrations needs a spec. S
 
 ---
 
-## 17. Forbidden patterns
+## 18. Forbidden patterns
 
 A short list of patterns that fail review on sight.
 
@@ -679,6 +800,12 @@ A short list of patterns that fail review on sight.
 | `JSON_CONTAINS(...)` (MySQL) | `?` / `@>` Postgres operators |
 | `notify` from a webhook handler without outbox | `outbox.add(...)` then `flush()` post-commit |
 | Returning raw entities from a controller endpoint | Return a service-built DTO |
+| `// ✅ SECURITY:` / `// ✅ IMPROVEMENT:` emoji-decorated comments | Plain prose explaining the constraint, no emoji |
+| `// Phase 2 will…` / `// v1 of this…` lifecycle markers | Either ship it or remove the comment |
+| `/** Find a user by their primary key (UUID). @param id - The user's UUID @returns The matching User, or null if not found */` | Drop JSDoc that just restates the type |
+| Tutorial prose ("Passport is a popular library") | Delete — readers know the framework |
+| Multi-paragraph class docblocks describing the file's role | One sentence max, or delete |
+| `// TODO: when X is configured` next to code that uses X | Remove — the system already exists |
 
 ---
 

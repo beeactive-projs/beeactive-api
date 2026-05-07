@@ -74,19 +74,6 @@ export interface UserDataExport {
   invitations: Record<string, unknown>[];
 }
 
-/**
- * User Service
- *
- * Handles all business logic related to users:
- * - Creating users
- * - Finding users
- * - Password validation
- * - Account lockout
- * - Token generation for password reset/email verification
- *
- * This is the "brain" of the user module.
- * Controllers call these methods, services interact with the database.
- */
 @Injectable()
 export class UserService {
   constructor(
@@ -103,28 +90,13 @@ export class UserService {
     private readonly searchIndexService: SearchIndexService,
   ) {}
 
-  /**
-   * Find a user by email address (exact, case-sensitive match).
-   *
-   * Used by the auth flow for login, registration duplicate checks, and
-   * OAuth account linking. Callers are responsible for normalising the
-   * email (lowercase + trim) before passing it in.
-   *
-   * @param email - The raw email address to look up
-   * @returns The matching User, or null if no account exists with that email
-   */
+  /** Exact, case-sensitive match. Caller normalises (lowercase + trim). */
   async findByEmail(email: string): Promise<User | null> {
     return this.userModel.findOne({
       where: { email },
     });
   }
 
-  /**
-   * Find a user by their primary key (UUID).
-   *
-   * @param id - The user's UUID
-   * @returns The matching User, or null if no account exists with that ID
-   */
   async findById(id: string): Promise<User | null> {
     return this.userModel.findByPk(id);
   }
@@ -331,8 +303,7 @@ export class UserService {
       throw new ConflictException('User with this email already exists');
     }
 
-    // ✅ SECURITY FIX: Increased bcrypt rounds from 10 to 12
-    // More rounds = more secure but slower (12 is good balance)
+    // 12 rounds: balance between attack cost and signup latency.
     const bcryptRounds = this.configService.get<number>('BCRYPT_ROUNDS') || 12;
     const hashedPassword = await bcrypt.hash(userData.password, bcryptRounds);
 

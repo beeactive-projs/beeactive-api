@@ -13,27 +13,11 @@ import { Role } from '../../role/entities/role.entity';
 import { UserRole } from '../../role/entities/user-role.entity';
 import { SocialAccount } from './social-account.entity';
 
-/**
- * User Entity
- *
- * Represents a user in the system.
- * Maps to the 'user' table in PostgreSQL database.
- *
- * Sequelize decorators:
- * - @Table() → Configure table settings
- * - @Column() → Define database column
- * - @BelongsToMany() → Define relationship with other tables
- *
- * Settings:
- * - paranoid: true → Soft deletes (sets deleted_at instead of removing row)
- * - timestamps: true → Auto-manage created_at, updated_at
- * - underscored: true → Use snake_case in DB (firstName → first_name)
- */
 @Table({
   tableName: 'user',
-  paranoid: true, // Soft deletes - users are never truly deleted
-  timestamps: true, // Automatically manage created_at, updated_at
-  underscored: true, // Convert camelCase to snake_case for DB columns
+  paranoid: true,
+  timestamps: true,
+  underscored: true,
 })
 export class User extends Model {
   @Column({
@@ -43,11 +27,10 @@ export class User extends Model {
   })
   declare id: string;
 
-  // ✅ SECURITY FIX: Email is now required (allowNull: false)
   @Column({
     type: DataType.STRING(255),
     unique: true,
-    allowNull: false, // Email is required for authentication
+    allowNull: false,
   })
   declare email: string;
 
@@ -127,7 +110,7 @@ export class User extends Model {
   })
   declare isEmailVerified: boolean;
 
-  // ✅ SECURITY FIX: Tokens are now hashed (stores SHA-256 hash, not plain token)
+  // SHA-256 hash of the verification token; never stores plaintext.
   @Column({
     type: DataType.STRING(255),
     allowNull: true,
@@ -152,7 +135,6 @@ export class User extends Model {
   })
   declare passwordResetExpires: Date | null;
 
-  // ✅ SECURITY FEATURE: Account lockout after failed login attempts
   @Column({
     type: DataType.INTEGER,
     defaultValue: 0,

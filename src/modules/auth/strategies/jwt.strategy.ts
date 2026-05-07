@@ -6,21 +6,6 @@ import { UserService } from '../../user/user.service';
 import { RoleService } from '../../role/role.service';
 import type { JwtPayload } from '../types/jwt-payload';
 
-/**
- * JWT Strategy
- *
- * This is a Passport.js strategy that validates JWT tokens.
- * Passport is a popular authentication library for Node.js.
- *
- * How it works:
- * 1. Extract JWT from "Authorization: Bearer <token>" header
- * 2. Verify signature using JWT_SECRET
- * 3. If valid, call validate() with decoded payload
- * 4. validate() checks if user still exists in DB
- * 5. User object is attached to request (req.user)
- *
- * Used with @UseGuards(AuthGuard('jwt')) on protected routes
- */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -29,32 +14,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private roleService: RoleService,
   ) {
     const secret = configService.get<string>('JWT_SECRET');
-
-    // ✅ SECURITY FIX: No fallback secret!
-    // Fail fast if secret is missing (should be caught by env validation)
+    // Fail fast — env validation should already have caught this.
     if (!secret) {
-      throw new Error(
-        'JWT_SECRET is not configured! This is a critical security issue.',
-      );
+      throw new Error('JWT_SECRET is not configured.');
     }
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ignoreExpiration: false, // Reject expired tokens
+      ignoreExpiration: false,
       secretOrKey: secret,
     });
   }
 
   /**
-   * Validate JWT Payload
-   *
-   * Called after JWT signature is verified.
-   * Check if user still exists and is active.
-   * Load user's roles for authorization.
-   *
-   * @param payload - Decoded JWT payload { sub: userId, email: ... }
-   * @returns User object with roles (attached to req.user)
-   * @throws UnauthorizedException if user not found
+   * Runs after signature verification. Returns the user object that
+   * gets attached to `req.user`. Throws UnauthorizedException for any
+   * reason the token shouldn't be honored anymore.
    */
   async validate(payload: JwtPayload) {
     const user = await this.userService.findById(payload.sub);
@@ -67,7 +42,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User account is deactivated');
     }
 
-    // Reject tokens issued before password was changed
+    // Reject tokens issued before the user changed their password.
     if (user.passwordChangedAt && payload.iat) {
       const passwordChangedAtSec = Math.floor(
         user.passwordChangedAt.getTime() / 1000,

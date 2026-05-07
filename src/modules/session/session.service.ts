@@ -24,25 +24,15 @@ import { EmailService } from '../../common/services/email.service';
 import { SearchIndexService } from '../search/search-index.service';
 
 /**
- * Session Service
- *
- * Manages training sessions and participant registrations.
- *
  * Visibility rules:
- * - PUBLIC: Anyone can view
- * - GROUP: Must be member of session.groupId
- * - CLIENTS: Must be client of session.instructorId (check instructor_client table)
- * - PRIVATE: Only the instructor can view
- *
- * TODO: [JOB SYSTEM] When Redis/Bull is configured:
- * - Automated status transitions: SCHEDULED → IN_PROGRESS → COMPLETED (based on scheduledAt + durationMinutes)
- * - Recurring session generation from recurringRule
- * - Session reminders (email/push) sent X hours before scheduledAt
- * - Auto-mark NO_SHOW for participants who don't check in
+ *   PUBLIC   — anyone can view
+ *   GROUP    — must be a member of session.groupId
+ *   CLIENTS  — must have an active instructor_client row with instructorId
+ *   PRIVATE  — instructor only
  */
 @Injectable()
 export class SessionService {
-  // Cancellation policy: cannot leave within this many hours of session start
+  // Hours-before-start window during which a client can no longer leave.
   private readonly CANCELLATION_CUTOFF_HOURS = 2;
 
   constructor(
@@ -360,8 +350,7 @@ export class SessionService {
     const oldStatus = session.status;
     await session.update(dto);
 
-    // If session was cancelled, notify all registered participants
-    // TODO: [JOB SYSTEM] Move email notifications to background job queue
+    // Cancelled → notify all registered participants. Fire-and-forget.
     if (dto.status === 'CANCELLED' && oldStatus !== 'CANCELLED') {
       this.notifyParticipantsOfCancellation(session).catch((err) =>
         this.logger.error(
@@ -405,8 +394,7 @@ export class SessionService {
       );
     }
 
-    // Notify participants before deleting
-    // TODO: [JOB SYSTEM] Move to background job queue
+    // Notify participants before deleting. Fire-and-forget.
     this.notifyParticipantsOfCancellation(session).catch((err) =>
       this.logger.error(
         `Failed to notify participants of deletion: ${err.message}`,
@@ -520,7 +508,7 @@ export class SessionService {
 
     for (const participant of activeParticipants) {
       if (participant.user?.email) {
-        // TODO: Create dedicated reschedule email template
+        // No reschedule template exists yet — log only.
         this.logger.log(
           `[RESCHEDULE] Notify ${participant.user.email}: "${session.title}" moved from ${oldScheduledAt} to ${newScheduledAt}${reason ? ` — ${reason}` : ''}`,
           'SessionService',
@@ -1172,10 +1160,7 @@ export class SessionService {
   // NOTIFICATION HELPERS
   // =====================================================
 
-  /**
-   * Notify all registered participants of a session cancellation/deletion
-   * TODO: [JOB SYSTEM] Move to background job with Bull queue for better reliability
-   */
+  /** Email all registered participants when a session is cancelled/deleted. */
   private async notifyParticipantsOfCancellation(
     session: Session,
   ): Promise<void> {
@@ -1218,10 +1203,7 @@ export class SessionService {
     );
   }
 
-  /**
-   * Notify instructor when someone joins or leaves their session
-   * TODO: [JOB SYSTEM] Move to background job
-   */
+  /** Log-only notify — no join/leave email template exists yet. */
   private async notifyInstructorOfJoinLeave(
     session: Session,
     participantUserId: string,
@@ -1235,7 +1217,6 @@ export class SessionService {
     });
 
     if (instructor && participant) {
-      // TODO: Create a dedicated join/leave email template
       this.logger.log(
         `${participant.firstName} ${participant.lastName} ${action} session "${session.title}"`,
         'SessionService',

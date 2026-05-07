@@ -2,57 +2,14 @@ import type { LoggerService } from '@nestjs/common';
 import { NotificationService, NotifyParams } from './notification.service';
 
 /**
- * NotificationOutbox — collects pending notifications during a unit
- * of work (typically a webhook transaction) and flushes them AFTER
- * the transaction commits.
+ * Collects pending notifications inside a transaction and flushes
+ * them AFTER commit. Use this in webhook handlers that receive `tx`
+ * from a dispatcher — you can't call notify() directly because
+ * `notify()` opens its own transaction and a rollback would orphan
+ * the alert.
  *
- * Why we need this:
- *   `NotificationService.notify()` opens its own transaction. If we
- *   call notify() inside a webhook tx that later rolls back, the
- *   notification row + email job have already committed/enqueued —
- *   the user gets a "payment received" email for a payment that
- *   never finalized.
- *
- * WHEN TO USE THE OUTBOX vs DIRECT notify()
- * -----------------------------------------
- *   USE OUTBOX inside a transaction you do NOT own — e.g. webhook
- *   handlers that receive `tx` from a dispatcher. You can't safely
- *   call `notify()` there because rollback is decided after you
- *   return. The dispatcher creates the outbox, hands it through, and
- *   calls `flush()` on commit / `discard()` on rollback.
- *
- *   USE DIRECT notify() in service methods that own their own tx.
- *   Pattern: do the multi-table writes inside `sequelize.transaction
- *   (async tx => { ... })`, let it resolve (commit or throw), THEN
- *   call `await this.notificationService.notify(...)`. If the tx
- *   throws, control never reaches the notify, so no orphan
- *   notifications fire. This is the dominant pattern across
- *   group/client/invitation/post services today.
- *
- *   ❌ NEVER call notify() *inside* the transaction callback. That
- *   re-introduces the rollback bug the outbox was built to prevent.
- *
- * Usage (outbox path):
- *   const outbox = new NotificationOutbox(notificationService, log);
- *   await sequelize.transaction(async (tx) => {
- *     await someService.syncStuff(payload, tx, outbox);
- *     // service calls outbox.add({...}) instead of notify()
- *   });
- *   await outbox.flush();  // ← only fires if the tx committed
- *
- * Failures during flush are logged but never thrown — the webhook
- * has already returned 200 to Stripe at that point and we don't want
- * a flaky notification to trigger a webhook retry of work that's
- * already committed. Operators see the failure in logs and Bull
- * Board (since the email job would also fail to enqueue).
- *
- * Future evolution: this is a stepping stone toward the proper
- * outbox pattern from research file 08, where pending notifications
- * are persisted to a `notification_outbox` table inside the same
- * transaction as the domain change, then drained by a background
- * worker. That gives at-least-once durability across crashes; the
- * in-memory version here gives at-most-once-after-commit, which is
- * a strict improvement over the current "fire inside the tx" pattern.
+ * For service methods that own their own tx, place `notify()` AFTER
+ * the transaction wrapper resolves instead. See CODE_STANDARDS.md §8.
  */
 export class NotificationOutbox {
   private readonly pending: NotifyParams[] = [];
@@ -62,32 +19,19 @@ export class NotificationOutbox {
     private readonly logger?: LoggerService,
   ) {}
 
-  /**
-   * Queue a notification for delivery after the surrounding
-   * transaction commits. Idempotent against duplicate calls in the
-   * same outbox lifecycle (we don't dedupe — but multiple `add`s
-   * with the same fingerprint will dedupe at the
-   * NotificationService level when flushed).
-   */
+  /** Queue a notification; deduped at flush time via fingerprint. */
   add(params: NotifyParams): void {
     this.pending.push(params);
   }
 
-  /**
-   * Drop everything queued. Use when the surrounding transaction
-   * has rolled back — these notifications shouldn't fire.
-   */
+  /** Drop the queue; call when the surrounding tx rolled back. */
   discard(): void {
     this.pending.length = 0;
   }
 
   /**
-   * Fire every queued notification. Called AFTER the surrounding
-   * transaction commits successfully. Each notify is wrapped in a
-   * try/catch so one failure doesn't prevent the others — webhook
-   * handlers usually have multiple side effects (one notify for
-   * the instructor, one for the client) and we want both to fire
-   * even if one user's row was just deleted.
+   * Fire all queued notifications. Per-item failures are logged and
+   * swallowed so one bad recipient doesn't block siblings.
    */
   async flush(): Promise<void> {
     if (this.pending.length === 0) return;
@@ -107,7 +51,7 @@ export class NotificationOutbox {
     }
   }
 
-  /** Diagnostic helper for tests. */
+  /** Test-only diagnostic. */
   size(): number {
     return this.pending.length;
   }

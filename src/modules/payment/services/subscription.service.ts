@@ -725,17 +725,7 @@ export class SubscriptionService {
     return sub;
   }
 
-  // =====================================================================
-  // WEBHOOK SYNC
-  // =====================================================================
-
-  // (NOTE: the previous push-model used `setup_intent.succeeded` to
-  // attach a PM after Checkout setup-mode and retry the open invoice.
-  // The always-confirm policy uses the invoice's hosted_invoice_url
-  // directly, so Stripe handles the entire pay-and-activate cycle and
-  // we just react to the resulting `invoice.paid` +
-  // `customer.subscription.updated` webhooks via syncFromWebhook below.
-  // No SetupIntent handler needed.)
+  // === Webhook sync ===
 
   async syncFromWebhook(
     stripeSub: Stripe.Subscription,

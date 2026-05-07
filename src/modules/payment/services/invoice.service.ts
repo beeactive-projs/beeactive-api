@@ -42,19 +42,17 @@ import {
 import { CreateInvoiceDto } from '../dto/create-invoice.dto';
 
 /**
- * InvoiceService
- *
+/**
  * Owns the lifecycle of every Stripe Invoice mirror row. Two creation
- * paths:
- *   1. createOneOff           — instructor builds an ad-hoc invoice
- *   2. ingestFromWebhook      — Stripe pushed an invoice (e.g. subscription
- *                               billing cycle invoice — Phase 4)
+ * paths: ad-hoc (createOneOff) and Stripe-pushed (subscription billing
+ * cycle invoices land via webhook → syncFromStripeInvoice).
  *
  * Stripe rules enforced here:
- *   - Cannot create an invoice if instructor.charges_enabled = false → 422
+ *   - Cannot create when instructor.charges_enabled = false → 422
  *   - Cannot void a PAID invoice → 400 (issue refund instead)
  *   - Cannot mark-paid an already-paid invoice → 409
- *   - applicationFeeAmount=0 is OMITTED from the API call (StripeService.buildFeeParams)
+ *   - applicationFeeAmount=0 is OMITTED from the API call
+ *     (StripeService.buildFeeParams)
  */
 export interface InvoiceResponse {
   [key: string]: unknown;
@@ -236,11 +234,9 @@ export class InvoiceService {
             instructorId,
             clientId: dto.clientUserId ?? null,
             stripeCustomerId: customer.stripeCustomerId,
-            // Left NULL until the Stripe API call below returns the real
-            // id. The column is UNIQUE and Postgres treats NULLs as
-            // distinct, so concurrent drafts with NULL placeholders don't
-            // collide on the unique index. Setting this to '' (as we used
-            // to) causes the 2nd draft ever created to fail that UNIQUE.
+            // NULL until the Stripe API returns the id. PG treats
+            // NULL as distinct in UNIQUE, so concurrent placeholder
+            // drafts don't collide; '' would fail on the 2nd insert.
             stripeInvoiceId: null,
             subscriptionId: null,
             number: null,
@@ -928,24 +924,17 @@ export class InvoiceService {
     return this.enrich(invoice);
   }
 
-  // =====================================================================
-  // WEBHOOK SYNC
-  // =====================================================================
+  // === Webhook sync ===
 
   /**
-   * Upsert from a Stripe Invoice webhook payload. Called inside the
-   * webhook handler's transaction — DO NOT open a new transaction here.
+   * Upsert from a Stripe Invoice webhook payload. Runs inside the
+   * dispatcher's transaction — do NOT open a new one.
    *
-   * Returns null when the local row is missing (race) so the caller can
-   * decide whether to log + ignore (Phase 1 stub for sub-generated
-   * invoices that don't exist locally yet) or treat as orphaned.
+   * Returns null when the local row is missing (race with the
+   * subscription create flow); caller decides ignore vs. orphan.
    *
-   * `outbox` is the post-commit notification queue from the webhook
-   * handler. Notifications go in there instead of being fired
-   * directly — see modules/notification/notification-outbox.ts. The
-   * parameter is optional so non-webhook callers (tests, future cron)
-   * can omit it; when missing, notifications are dropped silently
-   * (the tests cover that behaviour explicitly).
+   * `outbox` is optional; non-webhook callers can omit it and
+   * notifications are dropped silently.
    */
   async syncFromStripeInvoice(
     stripeInvoice: Stripe.Invoice,

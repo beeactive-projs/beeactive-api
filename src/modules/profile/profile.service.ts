@@ -21,16 +21,9 @@ import { buildSearchTerm } from '../../common/utils/search.utils';
 import { SearchIndexService } from '../search/search-index.service';
 
 /**
- * Profile Service
- *
- * Manages the instructor profile; the person's identity (name, email,
- * country, city) lives on `user`. Prior to migration 027 this module
- * also owned a `user_profile` table with health/fitness data, but no
- * UI consumed it and it has been dropped.
- *
- * Instructor location comes from `user.countryCode` / `user.city` now,
- * not a duplicate on `instructor_profile`. Discovery queries therefore
- * JOIN through the user row.
+ * Manages the instructor profile. Identity (name, email, country,
+ * city) lives on `user` — `instructor_profile` doesn't duplicate
+ * location, so discovery queries JOIN through the user row.
  */
 @Injectable()
 export class ProfileService {
@@ -401,12 +394,7 @@ export class ProfileService {
   // PROFILE OVERVIEW
   // =====================================================
 
-  /**
-   * Get complete profile overview.
-   *
-   * Returns the account + roles + instructor profile (if any). The
-   * historical `fitnessProfile` section is gone — see migration 027.
-   */
+  /** Account + roles + instructor profile (if any). */
   async getProfileOverview(
     user: Pick<
       User,

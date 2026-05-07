@@ -54,15 +54,9 @@ export interface NotifyResult {
 }
 
 /**
- * NotificationService — Phase 2
- *
- * Synchronously persists notifications and delivers in-app + email
- * channels in the request path. Push and SMS channels are stubbed
- * to `'skipped:not_implemented'` until the worker phase lands.
- *
- * The signature is unchanged from the Phase-1 stub — existing call
- * sites continue to work without modification, they just stop being
- * silent log lines.
+ * Persists a notification, writes per-recipient receipts, and triggers
+ * in-app + email delivery. Push and SMS channels are stubbed (set to
+ * `'skipped:not_implemented'`) until those workers land.
  */
 @Injectable()
 export class NotificationService {
@@ -108,10 +102,6 @@ export class NotificationService {
    * Send the same notification to many users (e.g. all session
    * participants). Creates ONE notification row + N receipts, then
    * fans out per-channel delivery in parallel.
-   *
-   * Note: blocks the request path during delivery in Phase 2. This
-   * is deliberate — it makes the latency cost visible and motivates
-   * moving to workers next.
    */
   async notifyMany(
     userIds: string[],
@@ -142,8 +132,7 @@ export class NotificationService {
           return { notification: existing, deduped: true };
         }
 
-        // Phase 2 only emits USER-audience notifications. GROUP/
-        // PLATFORM are reserved by the schema for the worker phase.
+        // Only USER audience today; GROUP/PLATFORM are reserved.
         const audienceType = NotificationAudienceType.USER;
         const audienceId = uniqueUserIds.length === 1 ? uniqueUserIds[0] : null;
 
@@ -248,15 +237,10 @@ export class NotificationService {
       ? 'sent'
       : ('skipped:preference_off' as DeliveredChannelStatus);
 
-    // ── email ───────────────────────────────────────────────
-    // Phase 6+: email delivery moved off the request path to a
-    // BullMQ worker. We enqueue here and the worker writes the
-    // final 'sent'/'failed:...' status onto delivered_channels via
-    // NotificationReceiptService.recordChannelOutcome.
-    //
-    // We use the receipt id as the BullMQ jobId so re-running this
-    // path for the same notification (idempotent producer retries)
-    // doesn't enqueue duplicate sends.
+    // ── email ──
+    // Enqueued as a BullMQ job; the worker writes the final
+    // 'sent'/'failed:...' status to delivered_channels. jobId =
+    // receipt.id so retry-enqueue is deduped at the queue level.
     if (!channels.email) {
       delivered.email = 'skipped:preference_off';
     } else if (!userEmail) {
@@ -295,8 +279,7 @@ export class NotificationService {
       }
     }
 
-    // ── push / sms ──────────────────────────────────────────
-    // Phase 2 placeholders. Worker phase wires actual delivery.
+    // ── push / sms ── Stubbed until those workers ship.
     delivered.push = channels.push
       ? 'skipped:not_implemented'
       : 'skipped:preference_off';

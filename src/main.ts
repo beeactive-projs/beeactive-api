@@ -9,102 +9,48 @@ import * as express from 'express';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { setupBullBoard } from './modules/jobs/bull-board.setup';
 
-/**
- * Bootstrap Function
- *
- * This is the entry point of the application.
- * It:
- * 1. Creates the NestJS application
- * 2. Configures security middleware (helmet, CORS)
- * 3. Enables validation and sanitization
- * 4. Sets up Swagger documentation
- * 5. Enables API versioning
- * 6. Starts the HTTP server
- * 7. Sets up graceful shutdown handlers
- */
 async function bootstrap() {
-  // Create NestJS application
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    bufferLogs: true, // Buffer logs until logger is ready
+    bufferLogs: true,
   });
 
-  // Replace default logger with Winston
   const logger = app.get<LoggerService>(WINSTON_MODULE_NEST_PROVIDER);
   app.useLogger(logger);
 
-  // ===================================================================
-  // ✅ SECURITY: Trust exactly ONE proxy hop (Railway's edge).
-  // ===================================================================
-  // Without this, Express reports `req.ip` as the load-balancer IP, so
-  // every rate limit (@Throttle, ThrottlerGuard) collapses onto a single
-  // shared bucket — three bad actors burn the quota for everyone else.
-  //
-  // `1` means: trust the IP the LAST upstream proxy wrote into
-  // X-Forwarded-For, and ignore anything further left in the chain. That
-  // defeats header spoofing — an attacker-controlled XFF value is
-  // overwritten by Railway before it reaches us.
-  //
-  // Do NOT use `true` here: it trusts the leftmost XFF entry, which an
-  // attacker CAN set directly, reopening the spoofing hole.
-  //
-  // If a second proxy is ever added in front of Railway (e.g. Cloudflare
-  // in strict proxy mode), bump this to `2`.
+  // Trust exactly one proxy hop (Railway's edge). Without this, Express
+  // reports req.ip as the load-balancer IP and per-IP throttling
+  // collapses onto a single shared bucket. Do NOT use `true` — it
+  // trusts the leftmost X-Forwarded-For entry, which an attacker can
+  // set directly. Bump to 2 if Cloudflare ever sits in front.
   app.set('trust proxy', 1);
 
-  // ✅ SECURITY: Apply global exception filter
-  // Catches all errors and formats them consistently
   app.useGlobalFilters(new HttpExceptionFilter(logger));
 
-  // ===================================================================
-  // ✅ STRIPE WEBHOOKS: Raw body middleware (MUST run before ValidationPipe)
-  // ===================================================================
-  // Stripe signs the RAW request bytes. If we let NestJS parse JSON first,
-  // the body gets re-serialized and the signature no longer matches.
-  //
-  // We scope express.raw() to ONLY the /webhooks/stripe route so every
-  // other endpoint keeps the normal JSON body parser behavior.
-  //
-  // The webhook controller reads `req.body` — which here will be a Buffer
-  // containing the untouched request body — and passes it to
-  // stripe.webhooks.constructEvent(rawBody, signatureHeader, secret).
-  //
-  // Order matters: this MUST be registered before app.useGlobalPipes().
+  // Stripe signs the raw request bytes. Re-serialized JSON breaks the
+  // signature check, so express.raw() is scoped to /webhooks/stripe
+  // only. Must run before useGlobalPipes().
   app.use(
     '/webhooks/stripe',
     express.raw({ type: 'application/json', limit: '1mb' }),
   );
 
-  // ✅ SECURITY: Enable Helmet for HTTP security headers
-  // Sets headers like:
-  // - X-Content-Type-Options: nosniff
-  // - X-Frame-Options: DENY
-  // - Strict-Transport-Security (HSTS)
-  // - Content-Security-Policy (CSP)
   app.use(
     helmet({
-      // Disable CSP for Swagger UI to work
+      // CSP off in dev so Swagger UI works.
       contentSecurityPolicy:
         process.env.NODE_ENV === 'production' ? undefined : false,
-      // HSTS: Force HTTPS in production
       hsts: process.env.NODE_ENV === 'production',
     }),
   );
 
-  // ✅ SECURITY: Global validation and sanitization
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Strip properties not in DTO
-      forbidNonWhitelisted: true, // Throw error if extra properties
-      transform: true, // Auto-transform payloads to DTO instances
-      transformOptions: {
-        enableImplicitConversion: true, // Convert string to number if DTO expects number
-      },
-      // Note: class-sanitizer is applied automatically via class-validator
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
-
-  // API prefix removed — routes are /auth/login, /users/me, etc.
-  // If you need versioning later, add: app.setGlobalPrefix('v1');
 
   // Swagger Configuration
   const config = new DocumentBuilder()
@@ -232,16 +178,13 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
       .swagger-ui .info .title { font-size: 2.5em }
     `,
     swaggerOptions: {
-      persistAuthorization: true, // Persist JWT token in Swagger UI
-      docExpansion: 'none', // Collapse all by default
-      filter: true, // Enable search
-      tagsSorter: 'alpha', // Sort tags alphabetically
+      persistAuthorization: true,
+      docExpansion: 'none',
+      filter: true,
+      tagsSorter: 'alpha',
     },
   });
 
-  // ✅ SECURITY: CORS configuration
-  // In development: allow common localhost ports
-  // In production: allow FRONTEND_URL + Railway/Vercel preview domains + DEV_ORIGINS
   const productionOrigins = (
     [
       process.env.FRONTEND_URL,
@@ -257,18 +200,18 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
   ).filter((o): o is string | RegExp => Boolean(o));
 
   const developmentOrigins = [
-    'http://localhost:4200', // Angular default
-    'http://localhost:3000', // React/Next.js default
-    'http://localhost:8100', // Ionic default
-    'http://localhost:5173', // Vite default
-    'http://localhost:8080', // Common dev port
-    'http://127.0.0.1:4200', // Angular on 127.0.0.1
+    'http://localhost:4200',
+    'http://localhost:3000',
+    'http://localhost:8100',
+    'http://localhost:5173',
+    'http://localhost:8080',
+    'http://127.0.0.1:4200',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:8100',
   ];
 
-  // Allow additional dev origins in production via env var (comma-separated)
-  // Example: DEV_ORIGINS=http://localhost:4200,http://192.168.1.100:4200
+  // Comma-separated extra origins for prod (e.g. tunnel hosts during a
+  // demo). DEV_ORIGINS=http://localhost:4200,http://192.168.1.100:4200
   const additionalDevOrigins = process.env.DEV_ORIGINS
     ? process.env.DEV_ORIGINS.split(',').map((origin) => origin.trim())
     : [];
@@ -280,7 +223,7 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 
   app.enableCors({
     origin: allowedOrigins,
-    credentials: true, // Allow cookies
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
@@ -289,29 +232,25 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
       'Accept',
       'Origin',
     ],
-    exposedHeaders: ['X-Request-ID'], // Expose request ID to client
-    maxAge: 3600, // Cache preflight for 1 hour
+    exposedHeaders: ['X-Request-ID'],
+    maxAge: 3600,
   });
 
-  // Mount the Bull Board admin UI (gated by HTTP basic auth via
-  // BULL_BOARD_USER + BULL_BOARD_PASSWORD env). No-op when those
-  // aren't set — see modules/jobs/bull-board.setup.ts.
+  // No-op when BULL_BOARD_USER / BULL_BOARD_PASSWORD aren't set —
+  // see modules/jobs/bull-board.setup.ts.
   setupBullBoard(app, new Logger('BullBoard'));
 
-  // Start server
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
 
-  // Log startup information
   const appLogger = new Logger('Bootstrap');
   appLogger.log(`🚀 Application is running on: http://localhost:${port}`);
   appLogger.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
   appLogger.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
   appLogger.log(`💚 Health check: http://localhost:${port}/health`);
 
-  // ✅ IMPROVEMENT: Graceful shutdown handlers
-  // Properly close database connections, finish in-flight requests, etc.
-  // Railway/Docker sends SIGTERM when stopping the container
+  // Railway/Docker sends SIGTERM on container stop; we drain in-flight
+  // requests + close DB connections before exiting.
   const gracefulShutdown = async (signal: string) => {
     appLogger.warn(`${signal} signal received: closing HTTP server`);
 
@@ -325,7 +264,6 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
     }
   };
 
-  // Listen for termination signals
   process.on('SIGTERM', () => {
     void gracefulShutdown('SIGTERM');
   });
@@ -333,7 +271,6 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
     void gracefulShutdown('SIGINT');
   });
 
-  // Handle uncaught errors (last resort)
   process.on('uncaughtException', (error) => {
     appLogger.error('Uncaught Exception:', error);
     process.exit(1);
