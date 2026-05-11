@@ -421,9 +421,9 @@ export function baseLayout(
                   </td>
                 </tr>
                 <tr>
-                  <td style="font-family:${FONT_BODY};font-size:11px;line-height:1.6;color:${COLORS.ink2};padding-top:4px;">
-                    MotionHive &middot; Legal address placeholder, City, Country
-                  </td>
+                  // <td style="font-family:${FONT_BODY};font-size:11px;line-height:1.6;color:${COLORS.ink2};padding-top:4px;">
+                  //   MotionHive &middot; Legal address placeholder, City, Country
+                  // </td>
                 </tr>
               </table>
             </td>
@@ -835,7 +835,7 @@ export function plainTextLayout(params: {
     footerNote ||
       `(c) ${new Date().getFullYear()} MotionHive. All rights reserved.`,
   );
-  lines.push('MotionHive · Legal address placeholder, City, Country');
+  // lines.push('MotionHive · Legal address placeholder, City, Country');
 
   return lines.join('\n');
 }
