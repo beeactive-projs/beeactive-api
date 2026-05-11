@@ -1,11 +1,14 @@
 import { escapeHtml } from '../../utils/html.utils';
 import {
   baseLayout,
-  COLORS,
+  calloutBox,
   divider,
   expiryNote,
+  eyebrow,
   heading,
   paragraph,
+  personCard,
+  plainTextLayout,
   primaryButton,
   securityNote,
   subheading,
@@ -26,30 +29,55 @@ export function invitationTemplate(
   const safeGroup = escapeHtml(groupName);
   const safeMessage = escapeHtml(message);
   const messageBlock = message
-    ? `
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 24px;">
-        <tr>
-          <td style="background-color:#f8fafc;border-radius:8px;padding:16px 20px;border-left:4px solid ${COLORS.accent};">
-            <p style="margin:0 0 4px;font-size:12px;color:${COLORS.textMuted};text-transform:uppercase;letter-spacing:0.5px;">Personal message</p>
-            <p style="margin:0;font-size:15px;color:${COLORS.textBody};font-style:italic;line-height:1.5;">"${safeMessage}"</p>
-          </td>
-        </tr>
-      </table>`
+    ? calloutBox('info', `<em>"${safeMessage}"</em>`)
     : '';
 
   const content = `
+    ${eyebrow('INVITATION', 'action')}
     ${heading("You're invited!")}
     ${subheading(`${safeInviter} wants you to join their team`)}
+    ${personCard({ name: inviterName, role: 'Sent you an invitation' })}
     ${paragraph(`<strong>${safeInviter}</strong> has invited you to join <strong>${safeGroup}</strong> on MotionHive — a fitness platform for instructors and clients.`)}
     ${messageBlock}
     ${primaryButton('&#129309; Accept invitation', acceptLink)}
     ${divider()}
-    <p style="margin:0 0 16px;font-size:14px;color:${COLORS.textBody};line-height:1.5;">
-      By accepting, you'll be added as a member of <strong>${safeGroup}</strong> and can start joining training sessions.
-    </p>
+    ${paragraph(`By accepting, you'll be added as a member of <strong>${safeGroup}</strong> and can start joining training sessions.`)}
     ${expiryNote('This invitation expires in <strong>7 days</strong>.')}
     ${securityNote("If you don't know the person who sent this, you can safely ignore this email.")}
   `;
 
-  return baseLayout(content, `${safeInviter} invited you to join ${safeGroup}`);
+  return baseLayout(content, {
+    preheader: `${safeInviter} invited you to join ${safeGroup}`,
+    category: 'action',
+  });
+}
+
+export function invitationTemplateText(
+  inviterName: string,
+  groupName: string,
+  acceptLink: string,
+  message?: string,
+): string {
+  const sections = [
+    {
+      heading: "You're invited",
+      body: [
+        `${inviterName} has invited you to join ${groupName} on MotionHive — a fitness platform for instructors and clients.`,
+        ...(message ? [`Personal message: "${message}"`] : []),
+      ],
+      ctas: [{ label: 'Accept invitation', url: acceptLink }],
+    },
+    {
+      body: [
+        `By accepting, you'll be added as a member of ${groupName} and can start joining training sessions.`,
+        'This invitation expires in 7 days.',
+        "If you don't know the person who sent this, you can safely ignore this email.",
+      ],
+    },
+  ];
+
+  return plainTextLayout({
+    preheader: `${inviterName} invited you to join ${groupName}`,
+    sections,
+  });
 }

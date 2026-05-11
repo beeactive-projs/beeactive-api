@@ -17,12 +17,10 @@ import {
 
 describe('NotificationPreferenceService', () => {
   let service: NotificationPreferenceService;
-  let prefModel: ModelMock & { upsert: jest.Mock };
+  let prefModel: ModelMock;
 
   beforeEach(async () => {
-    prefModel = Object.assign(makeModelMock(), {
-      upsert: jest.fn(),
-    });
+    prefModel = makeModelMock();
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -78,9 +76,13 @@ describe('NotificationPreferenceService', () => {
   });
 
   describe('updateCategoriesForUser', () => {
-    it('expands a category-level email toggle into upserts for every member type', async () => {
+    it('creates one row per type when the user has no existing overrides', async () => {
       prefModel.findAll.mockResolvedValue([]);
-      prefModel.upsert.mockResolvedValue([{ id: 'p-x' }]);
+      // `create()` returns the created row; we only need an object that
+      // looks model-ish for the cache write in the service.
+      prefModel.create.mockImplementation((attrs: object) =>
+        Promise.resolve({ ...attrs, update: jest.fn() }),
+      );
 
       const result = await service.updateCategoriesForUser('user-1', [
         {
@@ -89,13 +91,13 @@ describe('NotificationPreferenceService', () => {
         },
       ]);
 
-      const expectedUpserts =
+      const expectedCreates =
         CATEGORY_TO_TYPES[NotificationCategory.Coaching].length;
-      expect(prefModel.upsert).toHaveBeenCalledTimes(expectedUpserts);
-      expect(result.written).toBe(expectedUpserts);
+      expect(prefModel.create).toHaveBeenCalledTimes(expectedCreates);
+      expect(result.written).toBe(expectedCreates);
 
-      // Spot-check the first upsert payload — userId, type, and merged channels.
-      const firstCall = prefModel.upsert.mock.calls[0][0] as {
+      // Spot-check the first create payload — userId, type, and merged channels.
+      const firstCall = prefModel.create.mock.calls[0][0] as {
         userId: string;
         type: NotificationType;
         channels: { email: boolean };
@@ -105,14 +107,23 @@ describe('NotificationPreferenceService', () => {
     });
 
     it('preserves existing in_app/push/sms when only email is toggled', async () => {
+      // Existing override is a fake model instance with an `update` method
+      // so the service can call `row.update(...)` on it. This matches the
+      // sequelize-typescript Model API and is the whole point of the bug
+      // fix (the old code used `model.upsert(...)` which conflicted on PK
+      // and exploded on the (user_id, type) unique constraint).
+      const reminderUpdate = jest.fn().mockResolvedValue(undefined);
       prefModel.findAll.mockResolvedValue([
         {
           userId: 'user-1',
           type: NotificationType.SESSION_REMINDER_24H,
           channels: { in_app: true, email: true, push: true, sms: false },
+          update: reminderUpdate,
         },
       ]);
-      prefModel.upsert.mockResolvedValue([{ id: 'p-y' }]);
+      prefModel.create.mockImplementation((attrs: object) =>
+        Promise.resolve({ ...attrs, update: jest.fn() }),
+      );
 
       await service.updateCategoriesForUser('user-1', [
         {
@@ -121,24 +132,19 @@ describe('NotificationPreferenceService', () => {
         },
       ]);
 
-      // Find the upsert that touched SESSION_REMINDER_24H — its push/in_app
-      // should be preserved at their previous values, only email changes.
-      const calls = prefModel.upsert.mock.calls as Array<
-        [{ type: NotificationType; channels: Record<string, boolean> }]
-      >;
-      const reminderCall = calls.find(
-        ([arg]) => arg.type === NotificationType.SESSION_REMINDER_24H,
-      );
-      expect(reminderCall).toBeDefined();
-      expect(reminderCall![0].channels.email).toBe(false);
-      expect(reminderCall![0].channels.in_app).toBe(true);
-      expect(reminderCall![0].channels.push).toBe(true);
-      expect(reminderCall![0].channels.sms).toBe(false);
+      expect(reminderUpdate).toHaveBeenCalledTimes(1);
+      const updatedChannels = reminderUpdate.mock.calls[0][0] as {
+        channels: Record<string, boolean>;
+      };
+      expect(updatedChannels.channels.email).toBe(false);
+      expect(updatedChannels.channels.in_app).toBe(true);
+      expect(updatedChannels.channels.push).toBe(true);
+      expect(updatedChannels.channels.sms).toBe(false);
     });
 
     it('is a no-op when called with empty updates', async () => {
       const result = await service.updateCategoriesForUser('user-1', []);
-      expect(prefModel.upsert).not.toHaveBeenCalled();
+      expect(prefModel.create).not.toHaveBeenCalled();
       expect(result.written).toBe(0);
     });
   });

@@ -1,11 +1,15 @@
 import { escapeHtml } from '../../utils/html.utils';
 import {
   baseLayout,
-  COLORS,
+  dataCard,
+  dataRow,
   divider,
+  eyebrow,
   heading,
   paragraph,
+  plainTextLayout,
   primaryButton,
+  secondaryButton,
   subheading,
 } from '../_layouts/base-layout';
 
@@ -44,31 +48,82 @@ export function invoiceSendTemplate(params: {
   const greeting = recipientName
     ? `Hi ${escapeHtml(recipientName)},`
     : 'Hi there,';
-  const numberLine = invoiceNumber ? ` (${safeNumber})` : '';
+
+  const rows =
+    dataRow('Invoice #', invoiceNumber ? safeNumber : '—') +
+    dataRow('From', safeInstructor) +
+    dataRow('Amount', safeAmount) +
+    (dueDateLabel ? dataRow('Due', safeDue) : '');
 
   const content = `
+    ${eyebrow('INVOICE', 'action')}
+    ${paragraph(greeting)}
     ${heading('You have a new invoice')}
     ${subheading(`${safeInstructor} sent you an invoice on MotionHive`)}
-    ${paragraph(`${greeting} ${safeInstructor} has issued you invoice${numberLine} for <strong>${safeAmount}</strong>${dueDateLabel ? `, due <strong>${safeDue}</strong>` : ''}.`)}
-
+    ${dataCard(rows)}
     ${primaryButton('View &amp; pay invoice', hostedInvoiceUrl)}
-
-    ${
-      invoicePdfUrl
-        ? `<p style="margin:0 0 16px;font-size:13px;color:${COLORS.textMuted};line-height:1.5;text-align:center;">
-             Prefer a copy for your records?
-             <a href="${invoicePdfUrl}" style="color:${COLORS.accent};text-decoration:none;font-weight:600;">Download PDF</a>
-           </p>`
-        : ''
-    }
-
+    ${invoicePdfUrl ? secondaryButton('Download PDF', invoicePdfUrl) : ''}
     ${divider()}
     ${paragraph('Payment is handled securely by Stripe.')}
   `;
 
-  return baseLayout(
-    content,
-    `${safeInstructor} sent you an invoice for ${safeAmount}`,
-    "You're receiving this because an invoice was sent to this address on MotionHive.",
-  );
+  return baseLayout(content, {
+    preheader: `${safeInstructor} sent you an invoice for ${safeAmount}`,
+    footerNote:
+      "You're receiving this because an invoice was sent to this address on MotionHive.",
+    category: 'action',
+  });
+}
+
+export function invoiceSendTemplateText(params: {
+  instructorName: string;
+  amountLabel: string;
+  dueDateLabel: string | null;
+  invoiceNumber: string | null;
+  hostedInvoiceUrl: string;
+  invoicePdfUrl: string | null;
+  recipientName?: string | null;
+}): string {
+  const {
+    instructorName,
+    amountLabel,
+    dueDateLabel,
+    invoiceNumber,
+    hostedInvoiceUrl,
+    invoicePdfUrl,
+    recipientName,
+  } = params;
+  const greeting = recipientName ? `Hi ${recipientName},` : 'Hi there,';
+
+  const details = [
+    { label: 'Invoice #', value: invoiceNumber || '—' },
+    { label: 'From', value: instructorName },
+    { label: 'Amount', value: amountLabel },
+    ...(dueDateLabel ? [{ label: 'Due', value: dueDateLabel }] : []),
+  ];
+
+  const ctas = [
+    { label: 'View & pay invoice', url: hostedInvoiceUrl },
+    ...(invoicePdfUrl ? [{ label: 'Download PDF', url: invoicePdfUrl }] : []),
+  ];
+
+  return plainTextLayout({
+    preheader: `${instructorName} sent you an invoice for ${amountLabel}`,
+    footerNote:
+      "You're receiving this because an invoice was sent to this address on MotionHive.",
+    sections: [
+      {
+        heading: 'You have a new invoice',
+        body: [
+          greeting,
+          `${instructorName} sent you an invoice on MotionHive.`,
+        ],
+        details,
+        ctas,
+      },
+      {
+        body: ['Payment is handled securely by Stripe.'],
+      },
+    ],
+  });
 }

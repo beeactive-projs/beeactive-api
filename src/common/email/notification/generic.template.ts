@@ -1,8 +1,10 @@
 import { escapeHtml } from '../../utils/html.utils';
 import {
   baseLayout,
+  eyebrow,
   heading,
   paragraph,
+  plainTextLayout,
   primaryButton,
 } from '../_layouts/base-layout';
 
@@ -32,10 +34,34 @@ export function genericNotificationTemplate(params: {
       : '';
 
   const content = `
+    ${eyebrow('UPDATE', 'update')}
     ${heading(safeTitle)}
     ${paragraph(safeBody)}
     ${cta}
   `;
 
-  return baseLayout(content, safeTitle);
+  return baseLayout(content, {
+    preheader: safeTitle,
+    category: 'update',
+  });
+}
+
+export function genericNotificationTemplateText(params: {
+  title: string;
+  body: string;
+  ctaUrl?: string;
+  ctaLabel?: string;
+}): string {
+  return plainTextLayout({
+    preheader: params.title,
+    sections: [
+      {
+        heading: params.title,
+        body: [params.body],
+        ...(params.ctaUrl && params.ctaLabel
+          ? { ctas: [{ label: params.ctaLabel, url: params.ctaUrl }] }
+          : {}),
+      },
+    ],
+  });
 }
