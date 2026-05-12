@@ -660,6 +660,47 @@ export class GroupService {
   }
 
   /**
+   * Public groups owned by a single instructor.
+   *
+   * Feeds the Groups tab on the Public Profile page (`/@<handle>`). We
+   * only surface groups the instructor has marked public and active —
+   * INVITE_ONLY private groups stay invisible. Sorted by member count
+   * so the most active group appears first.
+   */
+  async listPublicGroupsForInstructor(instructorUserId: string) {
+    const memberCountLiteral = literal(
+      '(SELECT COUNT(*)::int FROM group_member WHERE group_member.group_id = "Group"."id" AND group_member.left_at IS NULL)',
+    );
+
+    const groups = await this.groupModel.findAll({
+      where: {
+        instructorId: instructorUserId,
+        isPublic: true,
+        isActive: true,
+      },
+      attributes: {
+        include: [
+          'id',
+          'name',
+          'slug',
+          'description',
+          'logoUrl',
+          'joinPolicy',
+          'tags',
+          'city',
+          'country',
+          'createdAt',
+          [memberCountLiteral, 'memberCount'],
+        ],
+      },
+      order: [[memberCountLiteral, 'DESC']],
+      limit: 20,
+    });
+
+    return groups.map((g) => g.toJSON());
+  }
+
+  /**
    * Get public profile of a group
    *
    * Returns group details, instructor info, and upcoming public sessions.

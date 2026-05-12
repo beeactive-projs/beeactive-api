@@ -83,6 +83,71 @@ export const ProfileDocs = {
     ],
   } as ApiEndpointOptions,
 
+  getInstructorPublicProfileByHandle: {
+    summary: 'Get public instructor profile by handle',
+    description:
+      "Same as `GET /profile/instructors/:id` but looked up by the instructor's short handle (case-insensitive). " +
+      'Powers the `/@<handle>` Public Profile page. Returns 404 when no instructor uses that handle. ' +
+      'No authentication required.',
+    auth: false,
+    responses: [
+      {
+        status: 200,
+        description: 'Instructor public profile retrieved',
+        example: {
+          id: 'profile-uuid',
+          userId: 'user-uuid',
+          handle: 'ionut',
+          firstName: 'Ionut',
+          lastName: 'Popescu',
+          avatarId: 1,
+          avatarUrl: null,
+          displayName: 'Coach Ionut',
+          bio: 'Certified HIIT and strength trainer',
+          specializations: ['hiit', 'strength'],
+          certifications: [{ name: 'ACE Personal Trainer', year: 2018 }],
+          yearsOfExperience: 8,
+          isAcceptingClients: true,
+          city: 'Bucharest',
+          countryCode: 'RO',
+          socialLinks: {
+            instagram: 'https://instagram.com/coach',
+          },
+          showEmail: true,
+          showPhone: false,
+          joinedAt: '2024-01-15T08:00:00.000Z',
+          rating: { average: 4.9, total: 86 },
+        },
+      },
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  getInstructorPublicGroups: {
+    summary: 'List public groups owned by an instructor',
+    description:
+      'Returns groups where the user is the owning instructor and the group is marked public. Powers the Groups tab of the Public Profile page. No authentication required.',
+    auth: false,
+    responses: [
+      {
+        status: 200,
+        description: 'Array of public groups',
+        example: [
+          {
+            id: 'group-uuid',
+            name: 'Morning HIIT',
+            slug: 'morning-hiit',
+            description: 'Outdoor HIIT in Herastrau every weekday at 7am',
+            logoUrl: null,
+            city: 'Bucharest',
+            country: 'RO',
+            memberCount: 24,
+          },
+        ],
+      },
+    ],
+  } as ApiEndpointOptions,
+
   getProfileOverview: {
     summary: 'Get full profile overview',
     description:
@@ -220,6 +285,86 @@ export const ProfileDocs = {
       },
       { status: 409, description: 'Instructor profile already exists' },
       ApiStandardResponses.Unauthorized,
+    ],
+  } as ApiEndpointOptions,
+
+  getPublicUserProfileByHandle: {
+    summary: 'Get public profile by handle (any user)',
+    description:
+      'Resolves a `/@<handle>` profile for any user, not just instructors. ' +
+      'Anonymous viewers receive the PUBLIC slice; signed-in viewers may see ' +
+      'more — coaches connected to the profile owner see COACHES_ONLY fields, ' +
+      'and the owner themselves sees every field. Returns the audience tier ' +
+      'so the UI does not have to recompute it. Fields not visible to the ' +
+      'viewer are returned as `null`.',
+    auth: false,
+    responses: [
+      {
+        status: 200,
+        description: 'Public user profile retrieved',
+        example: {
+          userId: 'user-uuid',
+          handle: 'jane-doe',
+          audience: 'PUBLIC',
+          firstName: 'Jane',
+          lastName: 'Doe',
+          avatarUrl: 'https://res.cloudinary.com/.../jane.jpg',
+          email: null,
+          phone: null,
+          city: 'Cluj-Napoca',
+          countryCode: 'RO',
+          language: null,
+          timezone: null,
+          displayRoles: [],
+          memberSince: '2024-08-12T10:00:00.000Z',
+          isInstructor: false,
+        },
+      },
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  updatePrivacySettings: {
+    summary: 'Update per-field profile privacy',
+    description:
+      'Patch one or more keys in `user.privacy_settings`. Body keys must be ' +
+      'in {firstName, lastName, avatarUrl, email, phone, city, language, ' +
+      'timezone}; values must be in {PUBLIC, COACHES_ONLY, ONLY_ME}. Missing ' +
+      'keys are left untouched.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Privacy settings merged',
+        example: {
+          privacySettings: {
+            email: 'PUBLIC',
+            phone: 'COACHES_ONLY',
+          },
+        },
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+    ],
+  } as ApiEndpointOptions,
+
+  updateHandle: {
+    summary: 'Claim or rename the profile handle',
+    description:
+      'Sets `user.handle` (the URL slug used by `/@<handle>`). The handle is ' +
+      'normalised to lowercase, must be 3-40 chars of letters, digits, "_" ' +
+      'or "-", and must start and end with an alphanumeric. Uniqueness is ' +
+      'case-insensitive.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Handle updated',
+        example: { handle: 'jane-doe' },
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      { status: 409, description: 'Handle already taken' },
     ],
   } as ApiEndpointOptions,
 };

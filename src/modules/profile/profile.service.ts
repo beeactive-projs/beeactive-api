@@ -7,18 +7,82 @@ import {
 import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Sequelize } from 'sequelize-typescript';
-import { Op, Transaction, literal } from 'sequelize';
+import { Op, Transaction, UniqueConstraintError, literal } from 'sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { InstructorProfile } from './entities/instructor-profile.entity';
 import { CreateInstructorProfileDto } from './dto/create-instructor-profile.dto';
 import { UpdateInstructorProfileDto } from './dto/update-instructor-profile.dto';
 import { UpdateFullProfileDto } from './dto/update-full-profile.dto';
 import { DiscoverInstructorsDto } from './dto/discover-instructors.dto';
+import { UpdatePrivacySettingsDto } from './dto/update-privacy-settings.dto';
+import { UpdateHandleDto } from './dto/update-handle.dto';
 import { RoleService } from '../role/role.service';
 import { UserService } from '../user/user.service';
-import { User } from '../user/entities/user.entity';
+import {
+  User,
+  type PrivacyControlledField,
+  type ProfilePrivacyLevel,
+  type UserPrivacySettings,
+} from '../user/entities/user.entity';
+import {
+  InstructorClient,
+  InstructorClientStatus,
+} from '../client/entities/instructor-client.entity';
 import { buildSearchTerm } from '../../common/utils/search.utils';
 import { SearchIndexService } from '../search/search-index.service';
+import { ReviewService } from '../review/review.service';
+import { GroupService } from '../group/group.service';
+
+/**
+ * Audience tier resolved server-side per request. Order matters: when
+ * a viewer is both the owner and (logically) a coach of themselves, we
+ * pick the higher-privilege tier first.
+ */
+export type PublicProfileAudience = 'OWNER' | 'COACH' | 'PUBLIC';
+
+/**
+ * Per-field default visibility, applied when `user.privacy_settings`
+ * has no entry for the field. Kept in one table so the FE helper
+ * (`resolveFieldPrivacy` in core) and the server stay aligned.
+ */
+const PRIVACY_DEFAULTS: Record<PrivacyControlledField, ProfilePrivacyLevel> = {
+  firstName: 'PUBLIC',
+  lastName: 'PUBLIC',
+  avatarUrl: 'PUBLIC',
+  email: 'ONLY_ME',
+  phone: 'ONLY_ME',
+  city: 'PUBLIC',
+  language: 'COACHES_ONLY',
+  timezone: 'COACHES_ONLY',
+};
+
+/**
+ * Pure helper — returns true iff the field is visible to the given
+ * audience tier. Exported for unit testing the matrix in isolation.
+ */
+export function isFieldVisible(
+  level: ProfilePrivacyLevel,
+  audience: PublicProfileAudience,
+): boolean {
+  if (audience === 'OWNER') return true;
+  if (audience === 'COACH') return level !== 'ONLY_ME';
+  return level === 'PUBLIC';
+}
+
+function resolveLevel(
+  settings: UserPrivacySettings | null | undefined,
+  field: PrivacyControlledField,
+): ProfilePrivacyLevel {
+  return settings?.[field] ?? PRIVACY_DEFAULTS[field];
+}
+
+/**
+ * Roles that are uninteresting on a public profile. `USER` is implicit
+ * for every account; staff roles are surfaced via the existing badge
+ * pattern (`displayBadges` on the FE), so this list is just the noise
+ * filter the API applies before returning `displayRoles`.
+ */
+const HIDDEN_DISPLAY_ROLES = new Set(['USER']);
 
 /**
  * Manages the instructor profile. Identity (name, email, country,
@@ -36,6 +100,8 @@ export class ProfileService {
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
     private readonly searchIndexService: SearchIndexService,
+    private readonly reviewService: ReviewService,
+    private readonly groupService: GroupService,
   ) {}
 
   // =====================================================
@@ -305,6 +371,7 @@ export class ProfileService {
             'avatarUrl',
             'city',
             'countryCode',
+            'handle',
           ],
           where: Object.keys(userWhere).length ? userWhere : undefined,
           required: Object.keys(userWhere).length > 0,
@@ -329,9 +396,11 @@ export class ProfileService {
     return profiles.map((profile) => ({
       id: profile.id,
       userId: profile.userId,
+      handle: profile.user?.handle ?? null,
       firstName: profile.user?.firstName,
       lastName: profile.user?.lastName,
       avatarId: profile.user?.avatarId,
+      avatarUrl: profile.user?.avatarUrl ?? null,
       displayName: profile.displayName,
       bio: profile.bio,
       specializations: profile.specializations,
@@ -356,9 +425,11 @@ export class ProfileService {
             'id',
             'firstName',
             'lastName',
+            'avatarId',
             'avatarUrl',
             'city',
             'countryCode',
+            'createdAt',
           ],
         },
       ],
@@ -370,23 +441,96 @@ export class ProfileService {
       );
     }
 
+    return this.toPublicProfileDto(profile);
+  }
+
+  /**
+   * Get a public instructor profile by handle (case-insensitive).
+   *
+   * Mirrors `getInstructorPublicProfile` but resolves the profile by
+   * its short URL slug — used by the `/@<handle>` page.
+   */
+  async getInstructorPublicProfileByHandle(handle: string) {
+    const normalized = handle.trim().toLowerCase();
+    if (!normalized) {
+      throw new NotFoundException('Instructor profile not found');
+    }
+
+    // Handle lives on `user.handle`; the endpoint only resolves
+    // instructor accounts, so we join through to instructor_profile.
+    // Non-instructor handles fall through to
+    // `/profile/users/by-handle/:handle` instead.
+    const profile = await this.instructorProfileModel.findOne({
+      include: [
+        {
+          model: User,
+          required: true,
+          where: this.sequelize.where(
+            this.sequelize.fn('LOWER', this.sequelize.col('user.handle')),
+            normalized,
+          ),
+          attributes: [
+            'id',
+            'firstName',
+            'lastName',
+            'avatarId',
+            'avatarUrl',
+            'city',
+            'countryCode',
+            'createdAt',
+            'handle',
+          ],
+        },
+      ],
+    });
+
+    if (!profile) {
+      throw new NotFoundException('Instructor profile not found');
+    }
+
+    return this.toPublicProfileDto(profile);
+  }
+
+  /**
+   * Public groups owned by an instructor — feeds the Groups tab on
+   * the Public Profile page. Delegates to GroupService so the actual
+   * query lives next to other group lookups.
+   */
+  async getInstructorPublicGroups(instructorUserId: string) {
+    return this.groupService.listPublicGroupsForInstructor(instructorUserId);
+  }
+
+  /**
+   * Shared DTO shape for both `getInstructorPublicProfile` and the
+   * by-handle lookup. Enriches the raw entity with rating summary
+   * (from `ReviewService`) and surfaces `joinedAt` / `handle` for the
+   * Public Profile screen.
+   */
+  private async toPublicProfileDto(profile: InstructorProfile) {
+    const rating = await this.reviewService.getSummaryForProfile(profile.id);
+
     return {
       id: profile.id,
       userId: profile.userId,
+      handle: profile.user?.handle ?? null,
       firstName: profile.user?.firstName,
       lastName: profile.user?.lastName,
       avatarId: profile.user?.avatarId,
+      avatarUrl: profile.user?.avatarUrl ?? null,
       displayName: profile.displayName,
       bio: profile.bio,
       specializations: profile.specializations,
-      certifications: profile.certifications,
+      certifications: normalizeCertifications(profile.certifications),
       yearsOfExperience: profile.yearsOfExperience,
       isAcceptingClients: profile.isAcceptingClients,
+      isPublic: profile.isPublic,
       city: profile.user?.city ?? null,
       countryCode: profile.user?.countryCode ?? null,
       socialLinks: profile.showSocialLinks ? profile.socialLinks : null,
       showEmail: profile.showEmail,
       showPhone: profile.showPhone,
+      joinedAt: profile.user?.createdAt ?? profile.createdAt,
+      rating: rating.total === 0 ? null : rating,
     };
   }
 
@@ -413,9 +557,16 @@ export class ProfileService {
       | 'city'
     >,
   ) {
-    const [instructorProfile, roles] = await Promise.all([
+    // `req.user` from the JWT strategy doesn't include the new
+    // `handle` / `privacySettings` columns, so re-read the row to keep
+    // the overview shape correct for the FE (owner UI needs them to
+    // render the privacy choosers and handle editor).
+    const [instructorProfile, roles, full] = await Promise.all([
       this.getInstructorProfile(user.id),
       this.roleService.getUserRoles(user.id),
+      User.findByPk(user.id, {
+        attributes: ['handle', 'privacySettings'],
+      }),
     ]);
 
     return {
@@ -433,6 +584,8 @@ export class ProfileService {
         createdAt: user.createdAt,
         countryCode: user.countryCode,
         city: user.city,
+        handle: full?.handle ?? null,
+        privacySettings: full?.privacySettings ?? {},
       },
       roles: roles.map((r) => r.name),
       hasInstructorProfile: !!instructorProfile,
@@ -449,4 +602,254 @@ export class ProfileService {
         : null,
     };
   }
+
+  // =====================================================
+  // PRIVACY & HANDLE (auth required)
+  // =====================================================
+
+  /**
+   * Merge `dto` into the user's existing `privacy_settings`. The DTO
+   * is partial, so single-field toggles ship a tiny payload — the
+   * service does the read/merge/write under a transaction so two
+   * concurrent toggles can't drop one of each other's keys.
+   *
+   * Returns the full merged settings object so the caller doesn't have
+   * to re-fetch.
+   */
+  async updatePrivacySettings(
+    userId: string,
+    dto: UpdatePrivacySettingsDto,
+  ): Promise<{ privacySettings: UserPrivacySettings }> {
+    // class-validator strips unknown keys (whitelist), but the DTO is
+    // still a plain object — strip undefined keys so we never overwrite
+    // an existing entry with `undefined`.
+    const patch: UserPrivacySettings = {};
+    for (const [k, v] of Object.entries(dto)) {
+      if (v !== undefined) {
+        patch[k as PrivacyControlledField] = v as ProfilePrivacyLevel;
+      }
+    }
+    if (Object.keys(patch).length === 0) {
+      const current = await User.findByPk(userId, {
+        attributes: ['privacySettings'],
+      });
+      if (!current) throw new NotFoundException('User not found');
+      return { privacySettings: current.privacySettings ?? {} };
+    }
+
+    return this.sequelize.transaction(async (tx) => {
+      const user = await User.findByPk(userId, {
+        attributes: ['id', 'privacySettings'],
+        transaction: tx,
+        lock: tx.LOCK.UPDATE,
+      });
+      if (!user) throw new NotFoundException('User not found');
+
+      const merged: UserPrivacySettings = {
+        ...(user.privacySettings ?? {}),
+        ...patch,
+      };
+      // Sequelize doesn't dirty-track plain object mutations on JSONB
+      // columns — assign a fresh object and persist explicitly.
+      await user.update({ privacySettings: merged }, { transaction: tx });
+      return { privacySettings: merged };
+    });
+  }
+
+  /**
+   * Claim a new handle for the authenticated user. Case-insensitive
+   * uniqueness is enforced by the DB index; we still pre-check so the
+   * caller gets a friendly 409 instead of a generic UniqueConstraint
+   * error from a concurrent claim.
+   */
+  async updateHandle(
+    userId: string,
+    dto: UpdateHandleDto,
+  ): Promise<{ handle: string }> {
+    const normalized = dto.handle.trim().toLowerCase();
+
+    return this.sequelize.transaction(async (tx) => {
+      const conflict = await User.findOne({
+        where: this.sequelize.where(
+          this.sequelize.fn('LOWER', this.sequelize.col('handle')),
+          normalized,
+        ),
+        attributes: ['id'],
+        transaction: tx,
+      });
+      if (conflict && conflict.id !== userId) {
+        throw new ConflictException('That handle is already taken.');
+      }
+
+      const user = await User.findByPk(userId, { transaction: tx });
+      if (!user) throw new NotFoundException('User not found');
+
+      try {
+        await user.update({ handle: normalized }, { transaction: tx });
+      } catch (err) {
+        if (err instanceof UniqueConstraintError) {
+          throw new ConflictException('That handle is already taken.');
+        }
+        throw err;
+      }
+
+      return { handle: normalized };
+    });
+  }
+
+  // =====================================================
+  // PUBLIC USER PROFILE (works for any user, not just instructors)
+  // =====================================================
+
+  /**
+   * `/@<handle>` for any user. Resolves the audience tier from the
+   * caller's identity, applies per-field privacy, and includes the
+   * `isInstructor` flag so the UI can decide whether to also fetch
+   * the richer instructor public payload (offerings, reviews, …).
+   */
+  async getPublicUserProfileByHandle(handle: string, viewerId: string | null) {
+    const normalized = handle.trim().toLowerCase();
+    if (!normalized) {
+      throw new NotFoundException('Profile not found');
+    }
+
+    const user = await User.findOne({
+      where: this.sequelize.where(
+        this.sequelize.fn('LOWER', this.sequelize.col('handle')),
+        normalized,
+      ),
+    });
+    if (!user) {
+      throw new NotFoundException('Profile not found');
+    }
+
+    const audience = await this.resolveAudience(viewerId, user.id);
+
+    // Cheap parallel check — we want both the instructor flag (for the
+    // FE branch) and the role list (for the public role badges).
+    const [instructorProfile, roles] = await Promise.all([
+      this.instructorProfileModel.findOne({
+        where: { userId: user.id },
+        attributes: ['id'],
+      }),
+      this.roleService.getUserRoles(user.id),
+    ]);
+
+    const settings = user.privacySettings ?? {};
+    const mask = <T>(field: PrivacyControlledField, value: T): T | null =>
+      isFieldVisible(resolveLevel(settings, field), audience) ? value : null;
+
+    return {
+      userId: user.id,
+      handle: user.handle,
+      audience,
+      firstName: mask('firstName', user.firstName),
+      lastName: mask('lastName', user.lastName),
+      avatarUrl: mask('avatarUrl', user.avatarUrl),
+      email: mask('email', user.email),
+      phone: mask('phone', user.phone),
+      city: mask('city', user.city),
+      countryCode: mask('city', user.countryCode),
+      language: mask('language', user.language),
+      timezone: mask('timezone', user.timezone),
+      displayRoles: roles
+        .map((r) => r.name)
+        .filter((name) => !HIDDEN_DISPLAY_ROLES.has(name)),
+      memberSince: user.createdAt,
+      isInstructor: !!instructorProfile,
+    };
+  }
+
+  /**
+   * Owner > coach > public. Done as a single query when a viewer is
+   * present so we don't pay two round-trips on the public-by-default
+   * path.
+   */
+  private async resolveAudience(
+    viewerId: string | null,
+    ownerId: string,
+  ): Promise<PublicProfileAudience> {
+    if (!viewerId) return 'PUBLIC';
+    if (viewerId === ownerId) return 'OWNER';
+
+    const coachLink = await InstructorClient.findOne({
+      where: {
+        instructorId: viewerId,
+        clientId: ownerId,
+        status: InstructorClientStatus.ACTIVE,
+      },
+      attributes: ['id'],
+    });
+    return coachLink ? 'COACH' : 'PUBLIC';
+  }
+}
+
+/**
+ * Public shape of a single certification. The DB column is JSON and
+ * historical data uses two different field conventions (the entity's
+ * `{ issuingBody, issuedAt, expiresAt, credentialUrl }` and an older
+ * UI-side `{ issuer, year }`). We accept either and emit a single,
+ * stable shape so the FE doesn't have to branch.
+ */
+export interface PublicCertificationDto {
+  name: string;
+  issuer: string | null;
+  year: number | null;
+  credentialUrl: string | null;
+}
+
+interface RawCertification {
+  name?: unknown;
+  issuer?: unknown;
+  issuingBody?: unknown;
+  year?: unknown;
+  issuedAt?: unknown;
+  credentialUrl?: unknown;
+}
+
+function normalizeCertifications(raw: unknown): PublicCertificationDto[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): PublicCertificationDto | null => {
+      if (!item || typeof item !== 'object') return null;
+      const c = item as RawCertification;
+      const name = typeof c.name === 'string' ? c.name.trim() : '';
+      if (!name) return null;
+
+      const issuer =
+        typeof c.issuer === 'string' && c.issuer.trim()
+          ? c.issuer.trim()
+          : typeof c.issuingBody === 'string' && c.issuingBody.trim()
+            ? c.issuingBody.trim()
+            : null;
+
+      const credentialUrl =
+        typeof c.credentialUrl === 'string' && c.credentialUrl.trim()
+          ? c.credentialUrl.trim()
+          : null;
+
+      return {
+        name,
+        issuer,
+        year: coerceYear(c.year ?? c.issuedAt),
+        credentialUrl,
+      };
+    })
+    .filter((c): c is PublicCertificationDto => c !== null);
+}
+
+function coerceYear(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    // Pure year like "2018"
+    if (/^\d{4}$/.test(trimmed)) return Number(trimmed);
+    // ISO date or anything Date() understands
+    const date = new Date(trimmed);
+    if (!Number.isNaN(date.getTime())) return date.getUTCFullYear();
+  }
+  return null;
 }

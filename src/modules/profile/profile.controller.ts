@@ -13,11 +13,14 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { ProfileService } from './profile.service';
 import { CreateInstructorProfileDto } from './dto/create-instructor-profile.dto';
 import { UpdateInstructorProfileDto } from './dto/update-instructor-profile.dto';
 import { UpdateFullProfileDto } from './dto/update-full-profile.dto';
 import { DiscoverInstructorsDto } from './dto/discover-instructors.dto';
+import { UpdatePrivacySettingsDto } from './dto/update-privacy-settings.dto';
+import { UpdateHandleDto } from './dto/update-handle.dto';
 import { ApiEndpoint } from '../../common/decorators/api-response.decorator';
 import { ProfileDocs } from '../../common/docs/profile.docs';
 
@@ -51,10 +54,40 @@ export class ProfileController {
     return this.profileService.discoverInstructors(dto);
   }
 
+  @Get('instructors/by-handle/:handle')
+  @ApiEndpoint(ProfileDocs.getInstructorPublicProfileByHandle)
+  async getInstructorPublicProfileByHandle(@Param('handle') handle: string) {
+    return this.profileService.getInstructorPublicProfileByHandle(handle);
+  }
+
+  /**
+   * Public profile of ANY user (not only instructors), addressed by
+   * handle. Uses `OptionalJwtAuthGuard` so anonymous viewers get the
+   * `PUBLIC`-tier slice while authenticated viewers may see more
+   * (owner sees everything; an active coach of the owner sees the
+   * `COACHES_ONLY` slice). Audience resolution happens server-side.
+   */
+  @Get('users/by-handle/:handle')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiEndpoint(ProfileDocs.getPublicUserProfileByHandle)
+  async getPublicUserProfileByHandle(
+    @Param('handle') handle: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const viewerId = req.user?.id ?? null;
+    return this.profileService.getPublicUserProfileByHandle(handle, viewerId);
+  }
+
   @Get('instructors/:id')
   @ApiEndpoint(ProfileDocs.getInstructorPublicProfile)
   async getInstructorPublicProfile(@Param('id', ParseUUIDPipe) id: string) {
     return this.profileService.getInstructorPublicProfile(id);
+  }
+
+  @Get('instructors/:id/groups')
+  @ApiEndpoint(ProfileDocs.getInstructorPublicGroups)
+  async getInstructorPublicGroups(@Param('id', ParseUUIDPipe) id: string) {
+    return this.profileService.getInstructorPublicGroups(id);
   }
 
   // =====================================================
@@ -85,6 +118,43 @@ export class ProfileController {
     @Body() dto: UpdateFullProfileDto,
   ) {
     return this.profileService.updateFullProfile(req.user.id, dto);
+  }
+
+  // =====================================================
+  // PRIVACY & HANDLE (auth required)
+  // =====================================================
+
+  /**
+   * Patch one or more fields in `user.privacy_settings`. The body is a
+   * partial map keyed by `PrivacyControlledField`; values not present
+   * are left untouched, so the FE can ship a one-field PATCH whenever
+   * the user flips a single chooser.
+   */
+  @Patch('privacy')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiEndpoint({
+    ...ProfileDocs.updatePrivacySettings,
+    body: UpdatePrivacySettingsDto,
+  })
+  async updatePrivacySettings(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: UpdatePrivacySettingsDto,
+  ) {
+    return this.profileService.updatePrivacySettings(req.user.id, dto);
+  }
+
+  /**
+   * Claim/rename the user's handle (the vanity URL slug). 409 if
+   * already taken (case-insensitive).
+   */
+  @Patch('handle')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiEndpoint({ ...ProfileDocs.updateHandle, body: UpdateHandleDto })
+  async updateHandle(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: UpdateHandleDto,
+  ) {
+    return this.profileService.updateHandle(req.user.id, dto);
   }
 
   // =====================================================

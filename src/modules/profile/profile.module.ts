@@ -6,6 +6,8 @@ import { ProfileController } from './profile.controller';
 import { RoleModule } from '../role/role.module';
 import { UserModule } from '../user/user.module';
 import { SearchModule } from '../search/search.module';
+import { ReviewModule } from '../review/review.module';
+import { GroupModule } from '../group/group.module';
 
 /**
  * Profile Module
@@ -23,6 +25,8 @@ import { SearchModule } from '../search/search.module';
     RoleModule,
     UserModule,
     SearchModule,
+    ReviewModule,
+    GroupModule,
   ],
   controllers: [ProfileController],
   providers: [ProfileService],

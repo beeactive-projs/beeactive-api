@@ -31,6 +31,7 @@ import { PaymentModule } from './modules/payment/payment.module';
 import { VenueModule } from './modules/venue/venue.module';
 import { SearchModule } from './modules/search/search.module';
 import { PostModule } from './modules/post/post.module';
+import { ReviewModule } from './modules/review/review.module';
 import { CamelCaseInterceptor } from './common/interceptors/camel-case.interceptor';
 
 @Module({
@@ -103,6 +104,7 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     VenueModule,
     SearchModule,
     PostModule,
+    ReviewModule,
   ],
 
   controllers: [],
