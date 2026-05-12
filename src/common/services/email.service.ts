@@ -13,12 +13,21 @@ import {
   emailVerificationTemplate,
   feedbackConfirmationTemplate,
   genericNotificationTemplate,
+  groupJoinRequestDecidedTemplate,
+  groupJoinRequestReceivedTemplate,
+  groupMemberLeftTemplate,
+  groupMemberRemovedTemplate,
+  groupOwnershipTransferredTemplate,
+  groupRoleChangedTemplate,
+  invitationDeclinedTemplate,
   invitationAcceptedTemplate,
   invitationTemplate,
   invoiceSendTemplate,
   participantStatusTemplate,
+  passwordChangedTemplate,
   passwordResetTemplate,
   sessionCancelledTemplate,
+  sessionRescheduledTemplate,
   subscriptionSetupTemplate,
   waitlistConfirmationTemplate,
   welcomeTemplate,
@@ -151,7 +160,8 @@ export class EmailService {
     groupName: string,
     message?: string,
   ): Promise<void> {
-    const acceptLink = `${this.frontendUrl}/accept-invitation?token=${invitationToken}`;
+    // Token lives on the path, not the query — FE route is `/join/:token`.
+    const acceptLink = `${this.frontendUrl}/join/${invitationToken}`;
 
     const subject = `You're invited to join ${groupName} on MotionHive`;
     const html = invitationTemplate(
@@ -204,7 +214,9 @@ export class EmailService {
     requestId: string,
     message?: string,
   ): Promise<void> {
-    const reviewLink = `${this.frontendUrl}/coaching/clients?requestId=${encodeURIComponent(requestId)}`;
+    // Land on the pending-requests page (not the active clients list) and
+    // highlight the specific row via the ?requestId param.
+    const reviewLink = `${this.frontendUrl}/coaching/pending-requests?requestId=${encodeURIComponent(requestId)}`;
     const subject = `${clientName} wants to work with you on MotionHive`;
     const html = clientRequestToInstructorTemplate({
       instructorFirstName,
@@ -328,6 +340,7 @@ export class EmailService {
       inviterName,
       accepterName,
       groupName,
+      this.frontendUrl,
     );
 
     await this.send(email, subject, html);
@@ -584,6 +597,292 @@ export class EmailService {
       );
       return { ok: false, reason };
     }
+  }
+
+  // =====================================================
+  // SECURITY / ACCOUNT EMAILS
+  // =====================================================
+
+  /**
+   * Sent to a logged-in user after they change their password via
+   * `PATCH /auth/change-password`. Security flag: if it wasn't them,
+   * the email gives them a one-click path back to /auth/forgot-password.
+   * Does NOT fire on the forgot-password → reset-password flow — that
+   * one self-confirms by sending the reset link.
+   */
+  async sendPasswordChangedEmail(
+    email: string,
+    firstName: string | null,
+    changedAt: Date,
+  ): Promise<void> {
+    const changedAtLabel = changedAt.toLocaleString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
+    const resetLink = `${this.frontendUrl}/auth/reset-password`;
+    const subject = 'Your MotionHive password was changed';
+    const html = passwordChangedTemplate({
+      firstName,
+      changedAtLabel,
+      resetLink,
+    });
+    await this.send(email, subject, html);
+  }
+
+  // =====================================================
+  // GROUP MEMBERSHIP EMAILS
+  // =====================================================
+
+  /**
+   * Sent to a group owner when a member leaves the group voluntarily.
+   * Owner doesn't need to act — informational.
+   */
+  async sendGroupMemberLeftEmail(params: {
+    to: string;
+    ownerFirstName: string | null;
+    memberName: string;
+    groupName: string;
+    groupId: string;
+  }): Promise<void> {
+    const { to, ownerFirstName, memberName, groupName, groupId } = params;
+    const groupLink = `${this.frontendUrl}/groups/${groupId}`;
+    const subject = `${memberName} left ${groupName}`;
+    const html = groupMemberLeftTemplate({
+      ownerFirstName,
+      memberName,
+      groupName,
+      groupLink,
+    });
+    await this.send(to, subject, html);
+  }
+
+  /**
+   * Sent to a member who was removed by the group owner. CTA goes to
+   * the groups list — they no longer have access to the group itself.
+   */
+  async sendGroupMemberRemovedEmail(params: {
+    to: string;
+    memberFirstName: string | null;
+    groupName: string;
+  }): Promise<void> {
+    const { to, memberFirstName, groupName } = params;
+    const groupsListLink = `${this.frontendUrl}/groups`;
+    const subject = `You were removed from ${groupName}`;
+    const html = groupMemberRemovedTemplate({
+      memberFirstName,
+      groupName,
+      groupsListLink,
+    });
+    await this.send(to, subject, html);
+  }
+
+  /**
+   * Sent to a group owner when someone requests to join their
+   * APPROVAL-policy group. CTA deep-links to the group's join-requests
+   * page so the owner can approve or decline.
+   */
+  async sendGroupJoinRequestReceivedEmail(params: {
+    to: string;
+    ownerFirstName: string | null;
+    requesterName: string;
+    groupName: string;
+    groupId: string;
+    requestId: string;
+    message?: string;
+  }): Promise<void> {
+    const {
+      to,
+      ownerFirstName,
+      requesterName,
+      groupName,
+      groupId,
+      requestId,
+      message,
+    } = params;
+    // Join requests live inside the group-detail Members tab; the FE
+    // can read ?requestId= and scroll-highlight the row (same pattern
+    // as /profile?tab=coaches&requestId= and the instructor
+    // pending-requests page).
+    const reviewLink = `${this.frontendUrl}/groups/${groupId}/members?requestId=${encodeURIComponent(requestId)}`;
+    const subject = `${requesterName} wants to join ${groupName}`;
+    const html = groupJoinRequestReceivedTemplate({
+      ownerFirstName,
+      requesterName,
+      groupName,
+      reviewLink,
+      message,
+    });
+    await this.send(to, subject, html);
+  }
+
+  /**
+   * Sent to BOTH parties when group ownership is transferred. The
+   * `direction` flag selects the right copy ("you received" vs "you
+   * transferred"), so the same method serves both recipients — same
+   * pattern as `sendCollaborationEndedEmail`.
+   */
+  async sendGroupOwnershipTransferredEmail(params: {
+    to: string;
+    direction: 'received' | 'transferred';
+    recipientFirstName: string | null;
+    otherPartyName: string;
+    groupName: string;
+    groupId: string;
+  }): Promise<void> {
+    const {
+      to,
+      direction,
+      recipientFirstName,
+      otherPartyName,
+      groupName,
+      groupId,
+    } = params;
+    const groupLink = `${this.frontendUrl}/groups/${groupId}`;
+    const subject =
+      direction === 'received'
+        ? `${otherPartyName} transferred ${groupName} to you`
+        : `You transferred ownership of ${groupName}`;
+    const html = groupOwnershipTransferredTemplate({
+      direction,
+      recipientFirstName,
+      otherPartyName,
+      groupName,
+      groupLink,
+    });
+    await this.send(to, subject, html);
+  }
+
+  /**
+   * Sent to the user who requested to join an APPROVAL-policy group,
+   * once the owner decides. One method, two flavors — `decision`
+   * picks the right copy and category.
+   */
+  async sendGroupJoinRequestDecidedEmail(params: {
+    to: string;
+    decision: 'approved' | 'rejected';
+    requesterFirstName: string | null;
+    groupName: string;
+    groupId: string;
+  }): Promise<void> {
+    const { to, decision, requesterFirstName, groupName, groupId } = params;
+    const groupLink = `${this.frontendUrl}/groups/${groupId}`;
+    const groupsListLink = `${this.frontendUrl}/groups/discover`;
+    const subject =
+      decision === 'approved'
+        ? `You're in — ${groupName} accepted your request`
+        : `Update on your request to join ${groupName}`;
+    const html = groupJoinRequestDecidedTemplate({
+      decision,
+      requesterFirstName,
+      groupName,
+      groupLink,
+      groupsListLink,
+    });
+    await this.send(to, subject, html);
+  }
+
+  /**
+   * Sent to a group inviter when the recipient declines the invite.
+   * Symmetric to `sendInvitationAcceptedEmail`.
+   */
+  async sendGroupInvitationDeclinedEmail(
+    email: string,
+    inviterName: string,
+    declinerName: string,
+    groupName: string,
+  ): Promise<void> {
+    const subject = `${declinerName} declined your invitation to ${groupName}`;
+    const html = invitationDeclinedTemplate(
+      inviterName,
+      declinerName,
+      groupName,
+    );
+    await this.send(email, subject, html);
+  }
+
+  /**
+   * Sent to a member when their role in a group changes (typically
+   * member ↔ moderator).
+   */
+  async sendGroupRoleChangedEmail(params: {
+    to: string;
+    memberFirstName: string | null;
+    groupName: string;
+    groupId: string;
+    oldRoleLabel: string;
+    newRoleLabel: string;
+  }): Promise<void> {
+    const {
+      to,
+      memberFirstName,
+      groupName,
+      groupId,
+      oldRoleLabel,
+      newRoleLabel,
+    } = params;
+    const groupLink = `${this.frontendUrl}/groups/${groupId}`;
+    const subject = `Your role in ${groupName} changed to ${newRoleLabel}`;
+    const html = groupRoleChangedTemplate({
+      memberFirstName,
+      groupName,
+      oldRoleLabel,
+      newRoleLabel,
+      groupLink,
+    });
+    await this.send(to, subject, html);
+  }
+
+  // =====================================================
+  // SESSION RESCHEDULE
+  // =====================================================
+
+  /**
+   * Sent to every active participant when an instructor reschedules a
+   * session. Caller iterates participants and calls this once per
+   * recipient. Errors are logged inside `send()` and never thrown.
+   */
+  async sendSessionRescheduledEmail(params: {
+    to: string;
+    participantName: string;
+    sessionTitle: string;
+    instructorName: string;
+    oldScheduledAt: Date | string;
+    newScheduledAt: Date | string;
+    reason?: string;
+  }): Promise<void> {
+    const {
+      to,
+      participantName,
+      sessionTitle,
+      instructorName,
+      oldScheduledAt,
+      newScheduledAt,
+      reason,
+    } = params;
+    const format = (d: Date | string): string =>
+      (typeof d === 'string' ? new Date(d) : d).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    const subject = `"${sessionTitle}" rescheduled`;
+    const html = sessionRescheduledTemplate({
+      participantName,
+      sessionTitle,
+      instructorName,
+      oldScheduledAtLabel: format(oldScheduledAt),
+      newScheduledAtLabel: format(newScheduledAt),
+      reason,
+    });
+    await this.send(to, subject, html);
   }
 
   // =====================================================

@@ -2,8 +2,10 @@ import { escapeHtml } from '../../utils/html.utils';
 import {
   baseLayout,
   divider,
+  eyebrow,
   heading,
   paragraph,
+  plainTextLayout,
   subheading,
 } from '../_layouts/base-layout';
 
@@ -46,6 +48,7 @@ export function collaborationEndedTemplate(params: {
         );
 
   const content = `
+    ${eyebrow('UPDATE', 'update')}
     ${heading('Collaboration ended')}
     ${subheading(headlineText)}
     ${paragraph(`${greeting} ${bodyText}`)}
@@ -54,9 +57,47 @@ export function collaborationEndedTemplate(params: {
     ${paragraph('You can always reconnect later by sending a new invitation.')}
   `;
 
-  return baseLayout(
-    content,
-    headlineText,
-    "You're receiving this because a coaching collaboration on your MotionHive account changed status.",
-  );
+  return baseLayout(content, {
+    preheader: headlineText,
+    footerNote:
+      "You're receiving this because a coaching collaboration on your MotionHive account changed status.",
+    category: 'update',
+  });
+}
+
+export function collaborationEndedTemplateText(params: {
+  recipientName: string | null;
+  otherPartyName: string;
+  endedBy: 'self' | 'other';
+  recipientRole: 'instructor' | 'client';
+}): string {
+  const { recipientName, otherPartyName, endedBy, recipientRole } = params;
+  const greeting = recipientName ? `Hi ${recipientName},` : 'Hi there,';
+  const headlineText =
+    endedBy === 'self'
+      ? `You ended your collaboration with ${otherPartyName}`
+      : `${otherPartyName} ended your collaboration`;
+  const bodyText =
+    endedBy === 'self'
+      ? `You ended your coaching collaboration with ${otherPartyName} on MotionHive. They no longer appear in your ${recipientRole === 'instructor' ? 'client list' : 'coaches list'}, and they can no longer ${recipientRole === 'instructor' ? 'see your private sessions' : 'invite you to their sessions'}.`
+      : `${otherPartyName} ended your coaching collaboration on MotionHive. They no longer appear in your ${recipientRole === 'instructor' ? 'client list' : 'coaches list'}.`;
+  const subscriptionNote =
+    recipientRole === 'client'
+      ? 'If you have an active membership with this trainer, it remains active until you cancel it from your billing page.'
+      : "Any active memberships this client has with you remain in place until they (or you) cancel them — ending the collaboration doesn't auto-cancel subscriptions.";
+
+  return plainTextLayout({
+    preheader: headlineText,
+    footerNote:
+      "You're receiving this because a coaching collaboration on your MotionHive account changed status.",
+    sections: [
+      {
+        heading: 'Collaboration ended',
+        body: [headlineText, `${greeting} ${bodyText}`, subscriptionNote],
+      },
+      {
+        body: ['You can always reconnect later by sending a new invitation.'],
+      },
+    ],
+  });
 }

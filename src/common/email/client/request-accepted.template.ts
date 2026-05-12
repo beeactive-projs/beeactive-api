@@ -1,4 +1,13 @@
 import { escapeHtml } from '../../utils/html.utils';
+import {
+  baseLayout,
+  eyebrow,
+  heading,
+  paragraph,
+  personCard,
+  plainTextLayout,
+  secondaryButton,
+} from '../_layouts/base-layout';
 
 /**
  * Tells the request sender their client request was accepted.
@@ -15,12 +24,39 @@ export function clientRequestAcceptedTemplate(params: {
   const safeResponder = escapeHtml(responderName);
   const greeting = recipientFirstName ? `Hi ${safeFirst},` : 'Hi,';
 
-  return `
-    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-      <p>${greeting}</p>
-      <h2 style="margin: 0 0 12px;">Request accepted</h2>
-      <p><strong>${safeResponder}</strong> accepted your request. You can now coordinate sessions, memberships and invoices together.</p>
-      <a href="${appLink}" style="display: inline-block; padding: 12px 24px; background: #f59e0b; color: #fff; text-decoration: none; border-radius: 8px; font-weight: bold;">Open MotionHive</a>
-    </div>
+  const content = `
+    ${eyebrow('REQUEST ACCEPTED', 'confirmation')}
+    ${paragraph(greeting)}
+    ${heading('Request accepted')}
+    ${personCard({ name: responderName, role: 'Coach' })}
+    ${paragraph(`<strong>${safeResponder}</strong> accepted your request. You can now coordinate sessions, memberships and invoices together.`)}
+    ${secondaryButton('Open MotionHive', appLink)}
   `;
+
+  return baseLayout(content, {
+    preheader: `${responderName} accepted your request on MotionHive`,
+    category: 'confirmation',
+  });
+}
+
+export function clientRequestAcceptedTemplateText(params: {
+  recipientFirstName: string | null;
+  responderName: string;
+  appLink: string;
+}): string {
+  const { recipientFirstName, responderName, appLink } = params;
+  const greeting = recipientFirstName ? `Hi ${recipientFirstName},` : 'Hi,';
+  return plainTextLayout({
+    preheader: `${responderName} accepted your request on MotionHive`,
+    sections: [
+      {
+        heading: 'Request accepted',
+        body: [
+          greeting,
+          `${responderName} accepted your request. You can now coordinate sessions, memberships and invoices together.`,
+        ],
+        ctas: [{ label: 'Open MotionHive', url: appLink }],
+      },
+    ],
+  });
 }

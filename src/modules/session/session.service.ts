@@ -479,6 +479,11 @@ export class SessionService {
           required: false,
           include: [{ model: User, attributes: ['email', 'firstName'] }],
         },
+        {
+          model: User,
+          as: 'instructor',
+          attributes: ['firstName', 'lastName'],
+        },
       ],
     });
 
@@ -501,18 +506,36 @@ export class SessionService {
     const oldScheduledAt = session.scheduledAt;
     await session.update({ scheduledAt: newScheduledAt });
 
-    // Notify participants (fire-and-forget)
+    const instructorName =
+      [session.instructor?.firstName, session.instructor?.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || 'Your instructor';
+
+    // Notify participants (fire-and-forget). Each send is independently
+    // caught so one failing recipient doesn't block the others.
     const activeParticipants = (session.participants || []).filter(
       (p) => !['CANCELLED', 'NO_SHOW'].includes(p.status),
     );
 
     for (const participant of activeParticipants) {
       if (participant.user?.email) {
-        // No reschedule template exists yet — log only.
-        this.logger.log(
-          `[RESCHEDULE] Notify ${participant.user.email}: "${session.title}" moved from ${oldScheduledAt} to ${newScheduledAt}${reason ? ` — ${reason}` : ''}`,
-          'SessionService',
-        );
+        this.emailService
+          .sendSessionRescheduledEmail({
+            to: participant.user.email,
+            participantName: participant.user.firstName ?? 'there',
+            sessionTitle: session.title,
+            instructorName,
+            oldScheduledAt,
+            newScheduledAt,
+            reason,
+          })
+          .catch((err: Error) =>
+            this.logger.error(
+              `[reschedule] sendSessionRescheduledEmail failed for ${participant.user?.email}, session ${sessionId}: ${err.message}`,
+              'SessionService',
+            ),
+          );
       }
     }
 
