@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MotionHive Messaging — Tutorial &amp; Maintenance Guide</title>
+    <style>
+      :root {
+        --ink: #0f172a;
+        --ink-2: #334155;
+        --ink-3: #64748b;
+        --line: rgba(15, 23, 42, 0.08);
+        --bg: #fcfaf6;
+        --card: #ffffff;
+        --honey: #f59e0b;
+        --honey-bg: #fef3c7;
+        --honey-ink: #92400e;
+        --danger: #dc2626;
+        --danger-bg: #fef2f2;
+        --danger-line: #fca5a5;
+        --warn-bg: #fff7ed;
+        --warn-line: #fdba74;
+        --warn-ink: #9a3412;
+        --ok-bg: #ecfdf5;
+        --ok-line: #6ee7b7;
+        --ok-ink: #065f46;
+        --code-bg: #0f172a;
+        --code-ink: #e2e8f0;
+        --code-keyword: #fbbf24;
+        --code-str: #86efac;
+        --code-fn: #93c5fd;
+        --code-comment: #64748b;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 15px; line-height: 1.6; }
+      a { color: #b45309; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+      nav.toc { background: #ffffff; border-right: 1px solid var(--line); padding: 28px 18px; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
+      nav.toc h1 { font-size: 14px; font-weight: 700; margin: 0 0 16px; letter-spacing: 0.02em; color: var(--ink); }
+      nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: section; }
+      nav.toc ol > li { counter-increment: section; margin-bottom: 6px; font-size: 13px; }
+      nav.toc ol > li > a { color: var(--ink-2); display: block; padding: 4px 6px; border-radius: 6px; }
+      nav.toc ol > li > a:hover { background: rgba(15, 23, 42, 0.04); text-decoration: none; }
+      nav.toc ol > li > a::before { content: counter(section) "."; display: inline-block; min-width: 22px; color: var(--ink-3); font-weight: 600; }
+      nav.toc ol ol { list-style: none; padding: 4px 0 4px 24px; counter-reset: subsection; }
+      nav.toc ol ol > li { counter-increment: subsection; font-size: 12.5px; margin-bottom: 2px; }
+      nav.toc ol ol > li > a { color: var(--ink-3); }
+      nav.toc ol ol > li > a::before { content: counter(section) "." counter(subsection) " "; color: var(--ink-3); }
+      main { padding: 40px 56px 100px; max-width: 1080px; }
+      h1.title { margin: 0 0 6px; font-size: 32px; font-weight: 700; letter-spacing: -0.01em; }
+      .lede { color: var(--ink-2); margin: 0 0 28px; font-size: 16px; }
+      .meta { font-size: 13px; color: var(--ink-3); margin-bottom: 36px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+      h2 { font-size: 24px; font-weight: 700; margin: 56px 0 14px; padding-top: 8px; letter-spacing: -0.01em; }
+      h3 { font-size: 18px; font-weight: 600; margin: 32px 0 10px; }
+      h4 { font-size: 15px; font-weight: 600; margin: 20px 0 6px; color: var(--ink-2); }
+      p { margin: 0 0 14px; }
+      ul, ol { margin: 0 0 16px; padding-left: 22px; }
+      li { margin-bottom: 6px; }
+      code, .inline { font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace; font-size: 13px; background: rgba(15, 23, 42, 0.06); padding: 1px 6px; border-radius: 4px; color: var(--ink); }
+      pre { background: var(--code-bg); color: var(--code-ink); padding: 16px 18px; border-radius: 10px; overflow-x: auto; font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace; font-size: 12.5px; line-height: 1.55; margin: 12px 0 20px; }
+      pre code { background: transparent; padding: 0; color: inherit; }
+      .callout { border-radius: 10px; padding: 12px 16px; margin: 14px 0 22px; border: 1px solid var(--line); background: var(--card); }
+      .callout--warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
+      .callout--danger { background: var(--danger-bg); border-color: var(--danger-line); color: #7f1d1d; }
+      .callout--ok { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-ink); }
+      .callout--honey { background: var(--honey-bg); border-color: #fbbf24; color: var(--honey-ink); }
+      .callout p:last-child { margin-bottom: 0; }
+      .callout strong { display: block; margin-bottom: 4px; font-size: 13px; letter-spacing: 0.02em; text-transform: uppercase; }
+      table { border-collapse: collapse; width: 100%; margin: 14px 0 26px; font-size: 13.5px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { background: rgba(15, 23, 42, 0.04); font-weight: 600; font-size: 12.5px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink-2); }
+      tr:last-child td { border-bottom: none; }
+      tbody tr:hover { background: rgba(15, 23, 42, 0.02); }
+      .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; margin-right: 4px; }
+      .pill--be { background: #ddd6fe; color: #5b21b6; }
+      .pill--fe { background: #bfdbfe; color: #1d4ed8; }
+      .pill--db { background: #fde68a; color: #78350f; }
+      .pill--sec { background: #fecaca; color: #991b1b; }
+      .pill--ok { background: #a7f3d0; color: #065f46; }
+      .grid { display: grid; gap: 14px; margin: 12px 0 24px; }
+      .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+      .card h4 { margin-top: 0; }
+      .stages { counter-reset: stage; }
+      .stage { counter-increment: stage; position: relative; padding: 4px 0 4px 36px; margin-bottom: 6px; font-size: 14px; }
+      .stage::before { content: counter(stage); position: absolute; left: 0; top: 4px; width: 24px; height: 24px; border-radius: 50%; background: var(--honey); color: #0f172a; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+      .flow { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.75; margin: 14px 0 20px; }
+      .flow .who { color: var(--honey-ink); }
+      .flow .arrow { color: var(--ink-3); }
+      .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13.5px; }
+      .kv dt { font-weight: 600; color: var(--ink-2); }
+      .kv dd { margin: 0; color: var(--ink); }
+      hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+      .small { font-size: 12.5px; color: var(--ink-3); }
+      .anchor { display: block; height: 0; transform: translateY(-12px); }
+      @media (max-width: 920px) {
+        .layout { grid-template-columns: 1fr; }
+        nav.toc { position: relative; max-height: none; }
+        main { padding: 28px 22px 80px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <nav class="toc">
+        <h1>MotionHive Messaging</h1>
+        <ol>
+          <li><a href="#overview">Overview</a></li>
+          <li><a href="#stack">Stack &amp; technology choices</a>
+            <ol>
+              <li><a href="#stack-sse">Why SSE, not WebSockets</a></li>
+              <li><a href="#stack-no-e2ee">Why no E2EE</a></li>
+            </ol>
+          </li>
+          <li><a href="#architecture">Architecture map</a></li>
+          <li><a href="#schema">Database schema</a>
+            <ol>
+              <li><a href="#schema-tables">Tables &amp; columns</a></li>
+              <li><a href="#schema-direct-key">The <code>direct_key</code> trick</a></li>
+              <li><a href="#schema-soft-delete">Soft delete vs tombstone</a></li>
+            </ol>
+          </li>
+          <li><a href="#flows">End-to-end flows</a>
+            <ol>
+              <li><a href="#flow-send">Send a message</a></li>
+              <li><a href="#flow-receive">Receive a message (SSE)</a></li>
+              <li><a href="#flow-block">Block a user</a></li>
+              <li><a href="#flow-mute">Mute a conversation</a></li>
+              <li><a href="#flow-report">Report a conversation</a></li>
+              <li><a href="#flow-silent-drop">Silent-drop (block leakage)</a></li>
+              <li><a href="#flow-cold-load">Cold-load &amp; mark-read</a></li>
+            </ol>
+          </li>
+          <li><a href="#safety">Safety pipeline</a></li>
+          <li><a href="#rate-limit">Rate limiting</a></li>
+          <li><a href="#sse">SSE: replay buffer, auth, reconnect</a></li>
+          <li><a href="#fe-store">Frontend store anatomy</a></li>
+          <li><a href="#standards">Coding standards in use</a></li>
+          <li><a href="#testing">Testing strategy</a></li>
+          <li><a href="#pitfalls">Common pitfalls when building messaging</a></li>
+          <li><a href="#maintenance">Future maintenance hotspots</a></li>
+          <li><a href="#operations">Operations &amp; smoke checks</a></li>
+          <li><a href="#roadmap">Known gaps &amp; v2 roadmap</a></li>
+          <li><a href="#glossary">Glossary &amp; file map</a></li>
+        </ol>
+      </nav>
+
+      <main>
+        <h1 class="title">MotionHive Messaging</h1>
+        <p class="lede">A tutorial and maintenance guide for the messaging feature — backend (NestJS), database (PostgreSQL), and frontend (Angular 21).</p>
+        <p class="meta">v1, 2026-05-13. Covers F1–F8 plus the post-launch audit + fixes. Read top-to-bottom for a complete mental model; jump via the TOC for a specific subsystem.</p>
+
+        <span class="anchor" id="overview"></span>
+        <h2>1 · Overview</h2>
+        <p>Messaging in MotionHive is a 1:1 (direct) instant messenger between any two registered users. It uses Server-Sent Events for live delivery, an in-memory ring buffer for replay across short disconnects, and a deterministic <code>direct_key</code> to make first-send races safe. Group chats are schema-ready but not wired in v1.</p>
+
+        <div class="callout callout--ok">
+          <strong>Mental model in one paragraph</strong>
+          <p>Two users have at most one DIRECT conversation row. Sending a message goes through three layers: a <em>safety gate</em> (blocks, suspensions, new-account rule, rate limits), a <em>content scan</em> (URLs, payment handles, off-platform contact patterns), and a <em>persistence layer</em> (the message row + a fresh inbox-row snapshot). On commit, an SSE event is fanned out to the other participants AND a stored notification is queued (with the in-app channel suppressed — see <a href="#notifications-channel-policy">notification channel policy</a>).</p>
+        </div>
+
+        <span class="anchor" id="stack"></span>
+        <h2>2 · Stack &amp; technology choices</h2>
+
+        <div class="grid grid-2">
+          <div class="card">
+            <h4>Backend</h4>
+            <ul>
+              <li>NestJS 11, TypeScript ES2023</li>
+              <li>Sequelize 6 (<code>sequelize-typescript</code>) on PostgreSQL (Neon)</li>
+              <li>Passport JWT + a dedicated <code>'messaging-sse'</code> strategy for the SSE endpoint</li>
+              <li>EventEmitter2 for in-process fan-out (Redis Pub/Sub when we scale to multi-instance)</li>
+              <li>Jest 30 + Supertest for unit + integration tests</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>Frontend</h4>
+            <ul>
+              <li>Angular 21 standalone components, signal-based state (no NgRx)</li>
+              <li>PrimeNG for Dialog / Toast / Button surfaces</li>
+              <li>Browser <code>EventSource</code> for SSE; JWT delivered via <code>?token=</code></li>
+              <li>HttpClient with global error + auth interceptors (refresh-token flow)</li>
+            </ul>
+          </div>
+        </div>
+
+        <span class="anchor" id="stack-sse"></span>
+        <h3>2.1 — Why SSE, not WebSockets</h3>
+        <p>SSE was chosen deliberately. The reasoning, in order of weight:</p>
+        <ol>
+          <li><strong>Cost.</strong> Long-lived TCP connections behind a managed PaaS (Railway / similar) are billed and limited. SSE multiplexes cleanly over HTTP/2 and survives most reverse proxies without per-connection sticky-session work. WebSockets need explicit sticky routing for fan-out across instances.</li>
+          <li><strong>Operational simplicity.</strong> Browsers handle reconnect natively. The server emits text events; no framing protocol, no ping/pong dance, no <code>upgrade</code> negotiation. The implementation is ~120 lines.</li>
+          <li><strong>Read-only is enough.</strong> We never push writes from the client over the same channel — sends go via <code>POST /messaging/messages</code>. SSE's read-only nature matches the use case.</li>
+          <li><strong>Auth fit.</strong> Tokens live in <code>?token=</code> on the stream URL (because <code>EventSource</code> can't set headers). We accept the tradeoff because it's a single read-only endpoint and we route the token through a separate Passport strategy (see <a href="#sse">§8</a>) that's named <code>'messaging-sse'</code> precisely so it's grep-visible.</li>
+        </ol>
+
+        <span class="anchor" id="stack-no-e2ee"></span>
+        <h3>2.2 — Why no E2EE in v1</h3>
+        <p>Adding end-to-end encryption would mean: client-side key management (with backup &amp; recovery), per-device session ratchets (Signal Protocol), an inability to do server-side moderation (the whole point of content scanning + reports), and operational pain when keys are lost. The trade for v1 is server-side encryption at rest (Postgres TDE, Cloudflare-fronted TLS in transit) plus a published policy that admins can read flagged messages in defined moderation contexts.</p>
+
+        <span class="anchor" id="architecture"></span>
+        <h2>3 · Architecture map</h2>
+
+        <h3>Service layout (BE)</h3>
+        <pre><code>src/modules/messaging/
+├── auth/
+│   ├── sse-jwt.strategy.ts        # Passport strategy: 'messaging-sse'
+│   └── sse-jwt.guard.ts            # AuthGuard('messaging-sse')
+├── dto/                            # Joi/class-validator DTOs
+├── entities/                       # Sequelize models (one per table)
+├── guards/                         # Permission guards
+├── messaging.module.ts             # Wiring
+├── messaging.controller.ts         # User-facing routes (DMs, mute, block, etc.)
+├── messaging-admin.controller.ts   # Moderation routes (SUPER_ADMIN/SUPPORT)
+├── messaging-sse.controller.ts     # GET /messaging/stream
+├── messaging.service.ts            # Core CRUD + safety/notify orchestration
+├── messaging-safety.service.ts     # canMessage decision tree
+├── messaging-content.service.ts    # Threat scanner (URLs, handles, etc.)
+├── messaging-rate-limit.service.ts # In-memory sliding window
+├── messaging-events.service.ts     # EventEmitter2 fan-out + replay buffer
+├── messaging-stream-ack.service.ts # SSE ack tracking (per-user cursor)
+├── messaging-velocity.service.ts   # Background alarm: >100 msgs/hr
+├── messaging-moderation.service.ts # Reports, suspensions, admin reads
+└── notifications.ts                # MESSAGE_RECEIVED notification builder
+</code></pre>
+
+        <h3>Service layout (FE)</h3>
+        <pre><code>projects/core/src/lib/
+├── stores/messaging.store.ts                  # The single signal store
+├── services/messaging/
+│   ├── messaging.service.ts                   # HTTP wrapper (REST)
+│   └── messaging-realtime.service.ts          # EventSource wrapper (SSE)
+└── models/messaging/                          # FE mirrors of BE contracts
+
+projects/web/src/app/main/messages/
+├── pages/inbox/                                # Inbox shell + new-message picker
+├── components/
+│   ├── conversation-list, conversation-row     # Left rail
+│   ├── conversation-pane                       # Right pane (header + thread + composer + rail)
+│   ├── chat-header, chat-thread, chat-composer
+│   ├── message-bubble, day-divider, system-event
+│   ├── threat-banner                           # Sender-only safety warning
+│   └── dm-detail-rail                          # Mute/Report/Block actions
+├── _dialogs/
+│   ├── block-confirm-dialog
+│   └── report-conversation-dialog
+└── utils/
+    ├── participant.ts                          # displayName / initialsOf
+    └── group-messages.ts                       # bubble grouping rules
+
+projects/web/src/app/main/profile/tabs/safety/  # Blocked-users UI
+</code></pre>
+
+        <h3>Data flow at a glance</h3>
+        <div class="flow">
+<span class="who">Sender</span> <span class="arrow">→</span> POST /messaging/messages<br>
+&nbsp;&nbsp;<span class="arrow">→</span> SafetyService (block? suspended? new-account? rate-limit?)<br>
+&nbsp;&nbsp;<span class="arrow">→</span> ContentService (threat scan, always runs)<br>
+&nbsp;&nbsp;<span class="arrow">→</span> findOrCreateDirectConversation (deterministic <code>direct_key</code> + savepoint)<br>
+&nbsp;&nbsp;<span class="arrow">→</span> insert <code>message</code> row + update <code>conversation.last_message_at</code><br>
+&nbsp;&nbsp;<span class="arrow">→</span> tx commits<br>
+&nbsp;&nbsp;<span class="arrow">→</span> EventsService.emitMessageCreated(recipients) <span class="arrow">→</span> SSE fan-out<br>
+&nbsp;&nbsp;<span class="arrow">→</span> NotificationService.notify(messageReceived(...)) <span class="arrow">→</span> queues email if first in hour-window<br>
+&nbsp;&nbsp;<span class="arrow">→</span> VelocityService.recordSendAndMaybeAlarm (out-of-band)<br>
+<span class="who">Recipient</span> <span class="arrow">←</span> SSE event.message.created on /messaging/stream<br>
+&nbsp;&nbsp;<span class="arrow">→</span> MessagingStore.applyMessageCreated <span class="arrow">→</span> dedup vs optimistic insert, upsert inbox row
+        </div>
+
+        <span class="anchor" id="schema"></span>
+        <h2>4 · Database schema</h2>
+
+        <span class="anchor" id="schema-tables"></span>
+        <h3>4.1 — Tables &amp; columns</h3>
+        <p>Migrations <code>042_messaging_foundation.sql</code> (core), <code>043_messaging_direct_key.sql</code> (race protection), <code>044_messaging_audit_fk_restrict.sql</code> (FK semantics fix), and <code>045_messaging_timestamptz.sql</code> (tz-aware columns) create everything below. All PKs are CHAR(36) UUIDs. <em>Note: these were renumbered from 038–041 after a develop-branch merge introduced an upstream <code>038_reviews_…</code> migration.</em></p>
+
+        <table>
+          <thead><tr><th>Table</th><th>Purpose</th><th>Key columns</th></tr></thead>
+          <tbody>
+            <tr><td><code>conversation</code></td><td>One row per thread (DIRECT or GROUP).</td><td><code>id</code>, <code>type</code>, <code>direct_key</code> (unique for DIRECT), <code>created_by_id</code>, <code>last_message_at</code>, <code>last_message_preview</code></td></tr>
+            <tr><td><code>conversation_participant</code></td><td>Many-to-many. One row per (user, conversation).</td><td><code>conversation_id</code>, <code>user_id</code>, <code>role</code>, <code>last_read_at</code>, <code>muted_until</code>, <code>left_at</code></td></tr>
+            <tr><td><code>conversation_membership_event</code></td><td>Audit trail of joins / leaves / role changes.</td><td><code>conversation_id</code>, <code>user_id</code>, <code>kind</code>, <code>actor_id</code></td></tr>
+            <tr><td><code>message</code></td><td>Every sent message.</td><td><code>id</code>, <code>conversation_id</code>, <code>sender_id</code>, <code>kind</code> (TEXT / SYSTEM_*), <code>body</code>, <code>metadata</code> (jsonb), <code>deleted_at</code>, <code>created_at</code></td></tr>
+            <tr><td><code>user_block</code></td><td>"Blocker → blocked". Unidirectional.</td><td><code>blocker_id</code>, <code>blocked_id</code>, <code>reason</code></td></tr>
+            <tr><td><code>message_report</code></td><td>User-submitted abuse reports.</td><td><code>reporter_id</code>, <code>reported_user_id</code>, <code>message_id?</code>, <code>conversation_id?</code>, <code>category</code>, <code>status</code></td></tr>
+            <tr><td><code>messaging_suspension</code></td><td>Admin-imposed message ban (per-user).</td><td><code>user_id</code>, <code>applied_by_id</code>, <code>starts_at</code>, <code>expires_at</code>, <code>lifted_at</code></td></tr>
+            <tr><td><code>admin_message_access_log</code></td><td>Audit row each time an admin reads a conversation.</td><td><code>admin_user_id</code>, <code>conversation_id</code>, <code>related_report_id</code>, <code>reason</code></td></tr>
+            <tr><td><code>messaging_velocity_alarm</code></td><td>Informational alarm when a user exceeds the velocity threshold.</td><td><code>user_id</code>, <code>window_start</code>, <code>window_end</code>, <code>message_count</code></td></tr>
+          </tbody>
+        </table>
+
+        <h4>Index summary (most load-bearing)</h4>
+        <ul>
+          <li><code>UNIQUE INDEX uk_conversation_direct_key</code> on <code>conversation(direct_key) WHERE type='DIRECT'</code> — race protection for first send.</li>
+          <li><code>UNIQUE(blocker_id, blocked_id)</code> on <code>user_block</code> — idempotent blocks.</li>
+          <li><code>INDEX</code> on <code>conversation_participant(user_id)</code> + <code>(conversation_id, user_id)</code> — every inbox query reads these.</li>
+          <li><code>INDEX</code> on <code>message(conversation_id, created_at DESC)</code> — thread pagination cursor.</li>
+        </ul>
+
+        <span class="anchor" id="schema-direct-key"></span>
+        <h3>4.2 — The <code>direct_key</code> trick</h3>
+        <p>The naive "find-or-create DIRECT conversation" is a classic race: two senders click "send first message to X" at the same millisecond, both find no existing conversation, both try to <code>INSERT</code>, both succeed, the user now has <em>two</em> conversations with the same person. Refreshing the inbox shows duplicates that can never merge cleanly.</p>
+
+        <p>The fix is migration <code>039</code>: a deterministic <code>direct_key</code> column that's a SHA-256 of the two participant UUIDs (sorted) plus a partial UNIQUE index. Same two users → same key → exactly one row can ever exist.</p>
+
+        <pre><code>// src/modules/messaging/messaging.service.ts (excerpt)
+private async findOrCreateDirectConversation(
+  aId: string,
+  bId: string,
+  tx: Transaction,
+): Promise&lt;Conversation&gt; {
+  const directKey = directKeyFor(aId, bId);     // sha256(sorted([a, b]))
+  const existing = await this.conversationModel.findOne({
+    where: { type: ConversationType.DIRECT, directKey },
+    transaction: tx,
+  });
+  if (existing) return existing;
+
+  // Create inside a SAVEPOINT. If the UNIQUE(direct_key) index trips
+  // because a concurrent sender beat us, only the savepoint rolls
+  // back — the outer tx remains usable for the retry read.
+  try {
+    return await this.sequelize.transaction(
+      { transaction: tx },
+      async (sp) =&gt; { /* ... create conv + 2 participants ... */ },
+    );
+  } catch (err) {
+    if (err instanceof UniqueConstraintError) {
+      const winner = await this.conversationModel.findOne({
+        where: { type: ConversationType.DIRECT, directKey },
+        transaction: tx,
+      });
+      if (winner) return winner;
+    }
+    throw err;
+  }
+}</code></pre>
+
+        <div class="callout callout--warn">
+          <strong>Why the savepoint</strong>
+          <p>Postgres aborts the <em>entire</em> transaction on a unique-constraint violation. Without the savepoint, the catch-block's retry read would fail with "current transaction is aborted, commands ignored until end of transaction block". The savepoint scopes the rollback to just the failed <code>create</code>, leaving the outer tx healthy.</p>
+        </div>
+
+        <span class="anchor" id="schema-soft-delete"></span>
+        <h3>4.3 — Soft delete vs tombstone</h3>
+        <p>Messages soft-delete: <code>deleted_at</code> + <code>deleted_by_id</code> are set, the <code>body</code> is replaced with the literal tombstone <code>"[deleted]"</code>, and the row stays for thread continuity. The FE never has to compute the tombstone — the BE returns it. Soft delete is reversible only at the DB level; the BE does not expose an undelete route.</p>
+
+        <span class="anchor" id="flows"></span>
+        <h2>5 · End-to-end flows</h2>
+
+        <span class="anchor" id="flow-send"></span>
+        <h3>5.1 — Send a message</h3>
+        <ol class="stages">
+          <li class="stage"><strong>FE composer</strong> calls <code>store.sendMessage({ conversationId, recipientId, body })</code>. Trims body, honours active rate-limit window.</li>
+          <li class="stage"><strong>Optimistic insert</strong>: a temp bubble with id <code>"optim-…"</code> is added to the active thread.</li>
+          <li class="stage"><strong>POST /messaging/messages</strong> hits the BE. Sender + recipient are loaded in parallel.</li>
+          <li class="stage"><strong>Safety gate</strong>: <code>MessagingSafetyService.canMessage()</code> walks the decision tree — am I suspended? does the recipient block me? does the new-account rule apply? am I rate-limited?</li>
+          <li class="stage"><strong>Content scan</strong>: pure function over the body, always runs. Returns <code>{ urls, hasShortenerUrl, hasOffPlatformContact, hasPaymentHandle, anyFlag }</code>.</li>
+          <li class="stage"><strong>findOrCreateDirectConversation</strong>: the deterministic-key + savepoint pattern from §4.2.</li>
+          <li class="stage"><strong>Insert</strong> the <code>message</code> row + update <code>conversation.last_message_at</code> / <code>last_message_preview</code>, all inside one transaction.</li>
+          <li class="stage"><strong>After commit</strong>: <code>EventsService.emitMessageCreated</code> + <code>NotificationService.notify</code> + <code>VelocityService.recordSendAndMaybeAlarm</code> all run post-commit so a rollback never orphans live state.</li>
+          <li class="stage"><strong>FE receives 201</strong>: optimistic bubble is swapped for the canonical row; threat banner appears if <code>anyFlag</code>; the inbox row promotes to top.</li>
+        </ol>
+
+        <span class="anchor" id="flow-receive"></span>
+        <h3>5.2 — Receive a message (SSE)</h3>
+        <p>The recipient's <code>EventSource</code> at <code>/messaging/stream?token=&lt;jwt&gt;</code> receives a <code>message.created</code> event. The FE store handles it via <code>applyMessageCreated</code>:</p>
+
+        <ul>
+          <li>De-dups against the optimistic insert (skips when <code>senderId === currentUserId</code>).</li>
+          <li>If the conversation is currently being viewed, appends to the thread cache and schedules a debounced <code>markRead</code>.</li>
+          <li>Otherwise, bumps the inbox row's unread count.</li>
+          <li>If the conversation isn't in the inbox at all (first message from a stranger), calls <code>getConversation()</code> to materialise it.</li>
+          <li>Acks the event via <code>POST /messaging/stream/ack</code> so the BE can prune its per-user replay buffer.</li>
+        </ul>
+
+        <span class="anchor" id="flow-block"></span>
+        <h3>5.3 — Block a user</h3>
+        <ol>
+          <li>From the conversation rail, user clicks <em>Block</em>. The confirm dialog opens.</li>
+          <li>On confirm, FE calls <code>store.blockUser({ blockedId, reason, conversationId })</code>.</li>
+          <li>The store hits <code>POST /messaging/blocks</code>. The BE inserts the <code>user_block</code> row.</li>
+          <li>On success, the store: removes the conversation from the inbox, drops messages/drafts/threat-flag caches, navigates away if it was active.</li>
+          <li>Future sends from the blocked user are <strong>silent-dropped</strong> by the BE — they get a 201 with a synthetic conversation shell and never see the block.</li>
+          <li>To unblock: <code>/profile?tab=safety</code> → click Unblock on the row. Calls <code>DELETE /messaging/blocks/:blockedId</code>.</li>
+        </ol>
+
+        <span class="anchor" id="flow-mute"></span>
+        <h3>5.4 — Mute a conversation</h3>
+        <p>Mute writes <code>conversation_participant.muted_until</code> on the actor's row only — never on the other side's. The BE emits a <code>conversation.muted</code> SSE event to the actor themselves so other tabs sync. Muting an indefinite "forever" uses the sentinel ISO <code>'2099-12-31T23:59:59.000Z'</code>. Unmute passes <code>untilIso: null</code>.</p>
+
+        <div class="callout callout--warn">
+          <strong>Mute does NOT suppress notifications today</strong>
+          <p>Muting affects the local indicator and (in the future) email throttling. The BE's email-send worker does not currently check <code>muted_until</code> before sending the MESSAGE_RECEIVED email — see <a href="#maintenance">§14, item 1</a>.</p>
+        </div>
+
+        <span class="anchor" id="flow-report"></span>
+        <h3>5.5 — Report a conversation</h3>
+        <p>The report dialog collects a category (SPAM / SCAM / HARASSMENT / IMPERSONATION / SEXUAL / OTHER) and optional notes. Calls <code>POST /messaging/reports</code>. The BE:</p>
+        <ol>
+          <li>Resolves the report target (the other DIRECT participant, or the sender of a specific message).</li>
+          <li><strong>Gates on participant membership</strong> — the reporter MUST be in the conversation. Otherwise anyone with a leaked conversation UUID could file abuse reports.</li>
+          <li>Checks the dedup rule (one OPEN report per reporter+target+conversation).</li>
+          <li>Writes a <code>message_report</code> row with status OPEN and a velocity alarm if applicable.</li>
+        </ol>
+
+        <span class="anchor" id="flow-silent-drop"></span>
+        <h3>5.6 — Silent-drop (block leakage protection)</h3>
+        <p>If the BE returned a 404 when the recipient had blocked the sender, the sender could probe "who blocked me" by mass-sending. So the BE always returns a 201 with <code>delivered: false</code> and a synthetic conversation shell that doesn't persist. The FE's <code>sendMessage</code> handles this:</p>
+
+        <ul>
+          <li>If <code>!res.delivered &amp;&amp; conversationId</code>: keep the optimistic bubble visible (swap for canonical row), show inline <code>sendError</code>: "Message couldn't be delivered. They may have left or blocked messages from you."</li>
+          <li>If <code>!res.delivered &amp;&amp; !conversationId</code> (from the picker): exit compose mode so the user isn't trapped on a frozen screen.</li>
+          <li>Never upsert the synthetic conversation into the inbox. Never navigate to it (it 404s on click).</li>
+        </ul>
+
+        <span class="anchor" id="flow-cold-load"></span>
+        <h3>5.7 — Cold-load &amp; mark-read</h3>
+        <p>"Cold load" = the user arrives at <code>/messages/:id</code> via permalink before the conversation list has loaded. <code>activeConversation()</code> is null until the list lands. The route subscriber calls <code>markReadOnEntry(id)</code> <em>unconditionally</em> — the BE markRead is idempotent (sets <code>last_read_at = NOW()</code>) so it's safe to call even when local state has nothing to update. Without this, the unread cursor would lag behind.</p>
+
+        <h3>5.8 — markRead callsite policy</h3>
+        <p>There are three places markRead could fire:</p>
+        <ol>
+          <li><code>openConversation(id)</code> — clicking a row in the inbox.</li>
+          <li><code>ConversationPane</code> route subscriber — entering <code>/messages/:id</code>.</li>
+          <li><code>applyMessageCreated</code> — SSE message arrives while the conversation is being viewed.</li>
+        </ol>
+        <p>To avoid 3× PATCH per click (audit finding FE-C4), only the <strong>route subscriber</strong> owns mark-on-entry. <code>openConversation</code> just navigates and trusts the subscriber to fire. <code>applyMessageCreated</code> uses a 1.5s debounced <code>scheduleLiveMarkRead</code> so a burst of incoming messages coalesces into one PATCH.</p>
+
+        <span class="anchor" id="safety"></span>
+        <h2>6 · Safety pipeline</h2>
+
+        <p><code>MessagingSafetyService.canMessage(senderId, recipientId)</code> is the single source of truth. It walks:</p>
+
+        <ol>
+          <li><strong>Suspension?</strong> Is the sender currently within an active <code>messaging_suspension</code> window? → throw 403 (visible to sender).</li>
+          <li><strong>Blocked by recipient?</strong> Does <code>user_block(blockerId=recipient, blockedId=sender)</code> exist? → silent-drop (NOT 403). The sender must never learn they were blocked.</li>
+          <li><strong>Blocked the recipient yourself?</strong> Symmetric check — if A blocked B, A cannot send to B either. Treated as 403 "You blocked this user."</li>
+          <li><strong>New-account rule?</strong> Account created &lt; 24h ago and sender is not an INSTRUCTOR? → 403. Reduces spam-account abuse.</li>
+          <li><strong>Rate limit?</strong> Per-user 30/min, per-conversation 10/sec — see <a href="#rate-limit">§7</a>.</li>
+        </ol>
+
+        <p>The content scanner (<code>MessagingContentService.detectThreats</code>) is <em>not</em> a gate — it always runs and returns flags. The FE shows the warning banner to the sender; the recipient never sees it (BE deliberately doesn't broadcast threat flags via SSE).</p>
+
+        <h3>Content-scan rules</h3>
+        <table>
+          <thead><tr><th>Flag</th><th>What triggers it</th></tr></thead>
+          <tbody>
+            <tr><td><code>urls</code></td><td>Any URL pattern (http/https/www. + bare-domain heuristic).</td></tr>
+            <tr><td><code>hasShortenerUrl</code></td><td>Domain matches the known shortener set (<code>bit.ly</code>, <code>tinyurl.com</code>, <code>t.co</code>, etc.).</td></tr>
+            <tr><td><code>hasOffPlatformContact</code></td><td>Phone numbers (E.164-ish), Telegram/Signal/WhatsApp handles, "DM me on X" patterns.</td></tr>
+            <tr><td><code>hasPaymentHandle</code></td><td>Revolut/PayPal/Venmo/CashApp handles, IBANs, "send to <span class="inline">@user</span>" patterns.</td></tr>
+            <tr><td><code>anyFlag</code></td><td>True if <em>any</em> of the above produced a hit — even a plain non-shortener URL.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout--honey">
+          <strong>FE banner empty-reason fallback</strong>
+          <p>If <code>anyFlag</code> is true but only <code>urls</code> matched (no shortener / contact / payment), the FE banner reads "Your last message contains a link." instead of an empty list. See <code>threat-banner.ts</code>.</p>
+        </div>
+
+        <span class="anchor" id="rate-limit"></span>
+        <h2>7 · Rate limiting</h2>
+        <p>An in-memory sliding-window rate limiter (<code>messaging-rate-limit.service.ts</code>) with three windows:</p>
+        <table>
+          <thead><tr><th>Key</th><th>Limit</th><th>Window</th></tr></thead>
+          <tbody>
+            <tr><td>per-user send</td><td>30</td><td>60 s</td></tr>
+            <tr><td>per-conversation send</td><td>10</td><td>1 s</td></tr>
+            <tr><td>per-(recipient, conversation) email</td><td>1</td><td>60 min</td></tr>
+          </tbody>
+        </table>
+        <p>On hit, the BE throws <code>429</code> with a <code>retryAfter</code> field in the response body. The FE composer reads it, sets <code>sendRateLimitedUntil</code>, and disables the input with a countdown tooltip.</p>
+
+        <div class="callout callout--warn">
+          <strong>In-memory means state resets on deploy</strong>
+          <p>Restarting the API zeroes the buckets. Acceptable for v1 because we deploy infrequently, but plan to swap for Redis when we scale to multiple API instances or deploy hourly. The interface is intentionally narrow (<code>assertSendAllowed</code> / <code>shouldSuppressMessageEmail</code>) so the Redis swap is mechanical.</p>
+        </div>
+
+        <h3>Velocity alarm (separate from rate limit)</h3>
+        <p>An <em>informational</em> alarm fires when a single user sends &gt; 100 messages in 60 min. It does NOT block — it just writes a <code>messaging_velocity_alarm</code> row for admin review. After the audit, the counter is read from the <code>message</code> table directly (not the in-memory rate-limit bucket, which is capped at 30/min and could never reach 100).</p>
+
+        <span class="anchor" id="sse"></span>
+        <h2>8 · SSE: replay buffer, auth, reconnect</h2>
+
+        <h3>Auth</h3>
+        <p><code>EventSource</code> can't set headers, so the JWT goes in <code>?token=&lt;jwt&gt;</code>. A dedicated Passport strategy <code>'messaging-sse'</code> accepts query-string tokens. It's named <em>only</em> for the SSE endpoint — applying <code>AuthGuard('messaging-sse')</code> anywhere else would be a security bug (query-string tokens leak via browser history, referrer headers, proxy access logs). Grep for the literal <code>'messaging-sse'</code> to verify there is exactly one call site.</p>
+
+        <h3>Replay buffer</h3>
+        <p>An in-process ring buffer per user: 100 events, 10-minute TTL. On reconnect, the browser sends <code>Last-Event-ID</code>; the BE returns the events <em>after</em> that id from the buffer, then continues with live events. Heartbeats are NOT buffered (no value to replay).</p>
+
+        <div class="callout callout--warn">
+          <strong>What breaks at scale</strong>
+          <p>The EventEmitter2 bus + the replay buffer are single-process. The day we run two API instances, a user connected to instance A won't see events emitted by instance B. The plan is to swap to Redis Pub/Sub when that lands — search for <em>"swap the implementation for a Redis Pub/Sub adapter"</em> in <code>messaging-events.service.ts</code>.</p>
+        </div>
+
+        <h3>Reconnect with network awareness</h3>
+        <p>The FE realtime service handles two failure modes:</p>
+        <ul>
+          <li><strong>Token expiry / transient server error</strong>: <code>EventSource</code> emits <code>error</code>, readyState flips to <code>CLOSED</code>. We schedule a 3-second backoff, then re-open with a fresh token (which the auth interceptor has refreshed in the meantime).</li>
+          <li><strong>Offline</strong>: <code>navigator.onLine === false</code>. We do NOT spam reconnect attempts — we attach a one-shot <code>window.addEventListener('online', …)</code> listener and wait for connectivity to return.</li>
+        </ul>
+
+        <span class="anchor" id="fe-store"></span>
+        <h2>9 · Frontend store anatomy</h2>
+
+        <p><code>MessagingStore</code> at <code>projects/core/src/lib/stores/messaging.store.ts</code> is the single signal store for the whole feature. It owns:</p>
+
+        <ul>
+          <li>Conversation list, filter / search state, unread badge total.</li>
+          <li>Per-conversation message cache + pagination cursors.</li>
+          <li>Active conversation id (URL is still source of truth — <code>ConversationPane</code> writes it).</li>
+          <li>Composer drafts, send state, rate-limit window, inline error.</li>
+          <li>Threat-flags captured from send responses (sender-only).</li>
+          <li>SSE event fan-in (<code>message.created</code>, <code>.deleted</code>, <code>.read</code>, <code>.muted</code>, <code>heartbeat</code>).</li>
+          <li>Block / mute / report actions.</li>
+        </ul>
+
+        <h3>The auth transition effect</h3>
+        <p>The store is root-scoped so it survives logout/login in the same tab. The auth effect collapses noisy boot sequences into a single load:</p>
+
+        <pre><code>effect(() =&gt; {
+  const isAuthed = this._auth.isAuthenticated();
+  const userId = this._auth.user()?.id ?? null;
+  const sameAuthState = isAuthed === this.lastAuthState;
+  const sameUser = userId === this.lastAuthedUserId;
+  if (sameAuthState && sameUser) return;
+
+  this.lastAuthState = isAuthed;
+  this.lastAuthedUserId = userId;
+
+  if (!isAuthed) { this.onLogout(); return; }
+  if (!sameUser) this.reset();   // identity changed → drop residual state
+  this.onLogin();
+});</code></pre>
+
+        <p>The user-id check guards the rare case where the auth state transitions <code>true → true</code> (different account). Without it, residual messages / drafts from the previous identity would be visible to the new user.</p>
+
+        <h3>LRU cache for messages</h3>
+        <p>Switching through 50+ conversations would otherwise keep every thread's full message array in memory until logout. The store touches an LRU on every <code>patchMessages</code> call; when the cache exceeds <code>MAX_CACHED_CONVERSATIONS</code> (10), the least-recently-touched conversation is evicted — but never the currently-active one.</p>
+
+        <h3>Optimistic send + rollback</h3>
+        <pre><code>const optimisticId = `optim-${cryptoRandom()}`;
+this.patchMessages(conversationId, {
+  items: [...this.messagesFor(conversationId).items, optimistic],
+  hasLoaded: true,
+});
+
+this._api.sendMessage(recipientId, trimmed).pipe(
+  tap((res) =&gt; {
+    // Race guard: blockUser may have dropped this conversation
+    // while we were in flight. If so, don't re-create caches.
+    if (conversationId && !this._conversations().some((c) =&gt; c.id === conversationId)
+        && !(conversationId in this._messagesByConv())) {
+      this._composerDraft.update((all) =&gt; omitKey(all, draftKey));
+      return;
+    }
+    // Replace optimistic bubble with the canonical row.
+    this.patchMessages(conversationId!, {
+      items: this.messagesFor(conversationId!).items.map((m) =&gt;
+        m.id === optimisticId ? res.message : m,
+      ),
+    });
+  }),
+  catchError((err) =&gt; {
+    // Strip the optimistic bubble on failure.
+    if (conversationId) this.patchMessages(conversationId, {
+      items: this.messagesFor(conversationId).items.filter((m) =&gt; m.id !== optimisticId),
+    });
+    /* … 429 / 403 / 400 / 0 / 5xx handling … */
+  }),
+).subscribe();</code></pre>
+
+        <span class="anchor" id="notifications-channel-policy"></span>
+        <h3>Notification channel policy</h3>
+        <p><code>MESSAGE_RECEIVED</code> notifications always set <code>channelOverride.in_app = false</code>. Reason: the Messages sidebar badge is the persistent in-app signal — a bell entry would duplicate it. Email is gated by an hour-window throttle so the user gets one email per (recipient, conversation) per hour, regardless of message volume.</p>
+
+        <span class="anchor" id="standards"></span>
+        <h2>10 · Coding standards in use</h2>
+        <p>Every standard below is enforced by the existing CLAUDE.md and was followed throughout messaging.</p>
+
+        <ul>
+          <li><strong>Thin controllers</strong>: request → service call → response. No business logic.</li>
+          <li><strong>DTOs everywhere</strong>: class-validator on input, <code>PaginationDto</code> as the base for list params.</li>
+          <li><strong>ParseUUIDPipe</strong> on every UUID <code>@Param</code>. A bare <code>:id</code> would let a malformed UUID 500 in Sequelize.</li>
+          <li><strong>Underscored tables</strong>: <code>conversation_participant</code>, <code>message_report</code>, etc. Entities use <code>underscored: true</code>.</li>
+          <li><strong>Transactions</strong>: every multi-table write wrapped in a tx. Every ORM call inside passes <code>{ transaction: tx }</code> explicitly.</li>
+          <li><strong>notify-after-commit</strong>: <code>NotificationService.notify(...)</code> always runs after the surrounding tx commits. For webhook-style flows we don't own, use <code>NotificationOutbox</code>.</li>
+          <li><strong>Builders, never literals</strong>: producers call <code>notify(messageReceived(...))</code>, not an object literal. Builders take primitive arguments only.</li>
+          <li><strong>data.screen + queryParams</strong>: notifications use <code>{ screen: 'messages', queryParams: { conversationId } }</code> rather than <code>entityId</code> (matches the FE routing convention).</li>
+          <li><strong>Pagination shape</strong>: <code>{ items, total, page, pageSize }</code> — frontend contract, never change.</li>
+          <li><strong>Errors</strong>: NestJS built-ins (<code>NotFoundException</code>, <code>BadRequestException</code>, <code>ConflictException</code>, etc.). Never throw <code>new Error()</code>.</li>
+          <li><strong>Signal-based FE state</strong>: <code>signal()</code>, <code>computed()</code>, <code>effect()</code>. Reads in templates are <code>store.foo()</code> — never inject a <code>BehaviorSubject</code>.</li>
+          <li><strong>Standalone components</strong>: every component has <code>standalone: true</code> (implicit in Angular 21 but explicit for clarity).</li>
+          <li><strong>OnPush change detection</strong> everywhere — signals work natively with it.</li>
+          <li><strong>kebab-case file names</strong>, <strong>PascalCase classes</strong>, <strong>UPPER_SNAKE enum values</strong>.</li>
+        </ul>
+
+        <span class="anchor" id="testing"></span>
+        <h2>11 · Testing strategy</h2>
+
+        <h3>Backend (Jest 30)</h3>
+        <p>The BE has <strong>12 suites / 201 tests</strong> covering the messaging module. Coverage by file:</p>
+        <table>
+          <thead><tr><th>Spec</th><th>What it covers</th></tr></thead>
+          <tbody>
+            <tr><td><code>messaging.service.spec.ts</code></td><td>Core service: send happy-path, safety gate, silent-drop, concurrent first-send retry, notification wiring, threat scan persistence, velocity recorder ordering.</td></tr>
+            <tr><td><code>messaging-safety.service.spec.ts</code></td><td>canMessage decision tree exhaustively.</td></tr>
+            <tr><td><code>messaging-content.service.spec.ts</code></td><td>Threat scanner positives + edge cases (emails are NOT URLs, etc.).</td></tr>
+            <tr><td><code>messaging-rate-limit.service.spec.ts</code></td><td>Sliding-window boundaries, Retry-After payload.</td></tr>
+            <tr><td><code>messaging-events.service.spec.ts</code></td><td>Per-user fan-out, replay buffer eviction, recipientIds filter.</td></tr>
+            <tr><td><code>messaging-stream-ack.service.spec.ts</code></td><td>Ack cursor tracking + per-user isolation.</td></tr>
+            <tr><td><code>messaging-velocity.service.spec.ts</code></td><td>Threshold reach, idempotency window, table-count source (post-audit).</td></tr>
+            <tr><td><code>messaging-moderation.service.spec.ts</code></td><td>Report submission + dedup, suspension lifecycle, admin reads, <strong>participant gate (post-audit)</strong>.</td></tr>
+            <tr><td><code>messaging.idor.spec.ts</code></td><td>Cross-user IDOR sweep: every route refuses non-participant access.</td></tr>
+            <tr><td><code>messaging.controller.integration.spec.ts</code></td><td>HTTP layer: DTOs, ParseUUIDPipe, ApiEndpoint wiring.</td></tr>
+            <tr><td><code>notifications.spec.ts</code></td><td>Notification builder: shape, channel override, deep-link.</td></tr>
+            <tr><td><code>constants.spec.ts</code></td><td>Tombstone literal stability, key derivation.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Frontend</h3>
+        <p>The FE currently has <strong>no Jest/Karma spec coverage</strong> for messaging. Setting up test infra is a separate sprint. Recommended additions when that lands (in priority order):</p>
+
+        <ol>
+          <li><code>messaging.store.spec.ts</code> — every action: sendMessage happy-path, 429/403/silent-drop/5xx branches, SSE handlers (created/deleted/read/muted), block/mute/report, auth-transition effect, LRU eviction.</li>
+          <li><code>messaging-realtime.service.spec.ts</code> — offline detection, online-listener cleanup, reconnect token-refresh path.</li>
+          <li><code>group-messages.spec.ts</code> — bubble grouping classification, midnight day-divider in local time.</li>
+          <li><code>threat-banner.spec.ts</code> — empty-reasons fallback ("a link" / "links"), dismiss scope.</li>
+        </ol>
+
+        <span class="anchor" id="pitfalls"></span>
+        <h2>12 · Common pitfalls when building messaging</h2>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 1 — First-send race</strong>
+          <p>Two users hit "send first message" at the same instant. Without a deterministic key + UNIQUE index, both create rows and the user ends up with duplicate conversations. We solved this with <code>direct_key</code> + a savepoint-protected retry. See §4.2.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 2 — Block leakage via 404</strong>
+          <p>If "you blocked me" returns 404 and "you don't exist" returns 404 but "you exist and accept messages" returns 201, an attacker can probe arbitrary user IDs. Solution: ALL three return 201 with <code>delivered: false</code>; only the blocker's UI ever changes. The sender can never distinguish.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 3 — Aborted transaction retry</strong>
+          <p>Postgres aborts the entire transaction on a unique-constraint violation. A retry read inside the same tx fails with <em>"current transaction is aborted, commands ignored until end of transaction block"</em>. The savepoint-based retry pattern in §4.2 is the fix.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 4 — Triple markRead on entry</strong>
+          <p>It's easy to call markRead from <em>three</em> places: the click handler, the route subscriber, and the SSE-message handler when the conv is active. Result: three PATCH requests per click. Pick a single owner (we chose the route subscriber) and debounce live-arrival marks.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 5 — Notify inside the transaction</strong>
+          <p>If <code>notify()</code> runs inside the surrounding tx and the tx rolls back, you've fired a notification for a message that doesn't exist. Always run notifications <em>after</em> commit. For webhook flows you don't own, use <code>NotificationOutbox</code> + <code>flush()</code> on commit / <code>discard()</code> on rollback.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 6 — N+1 in inbox refresh</strong>
+          <p>Computing unread counts via one <code>COUNT(*)</code> per conversation is fine for 5 conversations and a disaster for 500. Either use a single grouped query (<code>SELECT conversation_id, COUNT(*) … GROUP BY</code>) or denormalise an unread counter on the participant row.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 7 — SSE retry storm while offline</strong>
+          <p><code>EventSource</code> reconnects forever on error. Combined with a 3-second backoff and an offline browser, you'll churn a connection every 3 seconds. Check <code>navigator.onLine</code> + attach an <code>online</code> listener; suspend the timer when offline.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 8 — Cache leaks</strong>
+          <p>An unbounded per-conversation message cache + per-conversation drafts + per-conversation threat flags will grow forever in a long-running tab. LRU-bound them and evict caches together (a conv that's not in memory shouldn't have a draft floating around either).</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 9 — Stale pagination cursor</strong>
+          <p>A user scrolls back into history; the cursor message has since been moderator-deleted. The BE 400s with "cursor not found", the FE swallows it, and "Load earlier messages…" spins forever. Always handle the 400 by clearing <code>nextBefore</code> so the affordance hides.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 10 — Cross-user state leak in a long-lived tab</strong>
+          <p>If your store is root-scoped (one instance for the app lifetime), logging out and back in as a different user can leak messages/drafts from the previous identity. Track the auth state AND the user id; reset on identity change even when the auth state transition was <code>true → true</code>.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 11 — Mute that doesn't mute notifications</strong>
+          <p>A user mutes a conversation, then gets emailed every message. Make sure the notification builder checks <code>muted_until</code> before suppressing or short-circuiting the email channel. (We have this gap today — see §14.)</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 12 — Optimistic insert that doesn't roll back</strong>
+          <p>Add a fake "sent" bubble, the POST fails, the bubble stays forever with no error. Roll back the optimistic insert on every error branch — 429, 403, 400, 0 (offline), 5xx — and surface an inline error so the user knows.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 13 — One PATCH per incoming message in a busy thread</strong>
+          <p>If you call markRead every time SSE delivers a message while the user is viewing the thread, a chat-heavy moment becomes a PATCH storm. Debounce the live mark-read (we use 1.5 s).</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 14 — Velocity counter from an upper-bounded source</strong>
+          <p>If your "&gt;100 msgs in 60 min" alarm reads from a counter that's capped at 30 (because of the per-minute rate limit), the alarm can never fire. Query the table directly, or maintain an independent counter.</p>
+        </div>
+
+        <div class="callout callout--danger">
+          <strong>Pitfall 15 — Query-string token strategy bleed</strong>
+          <p>A Passport strategy accepting <code>?token=</code> tokens is globally registered. If any other endpoint accidentally uses <code>AuthGuard('that-strategy')</code>, it suddenly accepts query-string auth too. Name the strategy something obviously scoped (we use <code>'messaging-sse'</code>) and grep before merge.</p>
+        </div>
+
+        <span class="anchor" id="maintenance"></span>
+        <h2>13 · Future maintenance hotspots</h2>
+
+        <p>Things that work today but will need attention as load grows or features arrive:</p>
+
+        <ol>
+          <li><strong>Mute doesn't suppress notifications.</strong> <code>notification.service.ts</code> needs a check against <code>conversation_participant.muted_until</code> before queuing the MESSAGE_RECEIVED email. Today muted users still receive emails.</li>
+          <li><strong>SSE replay buffer is single-process.</strong> Swap <code>messaging-events.service.ts</code> for a Redis Pub/Sub adapter the day we deploy a second API instance. The interface is the seam — preserve it.</li>
+          <li><strong>Rate-limit buckets are in-memory.</strong> Same as above — a restart resets every counter. Move to Redis when scaling out.</li>
+          <li><strong>Unread count is N+1.</strong> <code>getUnreadCount</code> fires one <code>COUNT(*)</code> per conversation. With 50+ conversations per active user, this becomes a hot spot. Switch to a grouped query or denormalised counter.</li>
+          <li><strong>SSE auth: no proactive token refresh.</strong> The realtime service waits for an SSE error before reconnecting with a new token. An idle user with no REST traffic for an hour will get a forced reconnect then. Consider a proactive <code>setTimeout</code> &lt; the JWT expiry to call <code>reconnect()</code>.</li>
+          <li><strong>FE has no test infra.</strong> Set up Jest (or Karma → Jest migration) for <code>projects/core</code> + <code>projects/web</code>, then add the spec list from §11.</li>
+          <li><strong>Per-message reporting is wired BE-side, missing FE.</strong> Add a kebab menu on each <code>message-bubble</code> bubble to report a specific message (the BE already accepts <code>messageId</code>).</li>
+          <li><strong>Groups schema is ready, no UI.</strong> When groups land: create-group page, member rail, role management, SYSTEM_* event rendering in the thread.</li>
+          <li><strong>Indefinite mute uses a sentinel ISO.</strong> <code>'2099-12-31T23:59:59.000Z'</code> is fine but fragile. Migrate to a nullable <code>muted_indefinitely</code> boolean OR document the sentinel in the DTO.</li>
+          <li><strong>Velocity table-count is one extra query per send.</strong> Cheap today but could be moved out-of-band (background worker reading the audit log).</li>
+          <li><strong>Soft-deleted messages accumulate forever.</strong> No purge job runs. Add a nightly task that hard-deletes <code>message</code> rows with <code>deleted_at &lt; NOW() - INTERVAL '90 days'</code> (or whatever the retention policy is).</li>
+          <li><strong>Admin moderation UI is missing.</strong> Reports go to a queue with no review tooling. The BE routes exist; build a <code>/super-admin/messaging/reports</code> page.</li>
+        </ol>
+
+        <span class="anchor" id="operations"></span>
+        <h2>14 · Operations &amp; smoke checks</h2>
+
+        <h3>Post-deploy verification</h3>
+        <ol>
+          <li><code>./scripts/messaging-smoke.sh</code> — runs every route once against a live API with a real JWT. Set <code>TOKEN</code> + <code>RECIPIENT_ID</code> env vars for a non-localhost target.</li>
+          <li>Two-tab manual: open <code>/messages</code> as two real users, send → receive over SSE; mute → unmute; block → conversation disappears; report → success toast.</li>
+          <li>Force-quit the BE — within ~30s the inbox header shows "Reconnecting…". Restart the BE; chip clears within ~3s and live events resume.</li>
+          <li>Open <code>/profile?tab=safety</code>; verify the block list renders and an Unblock click removes the row.</li>
+        </ol>
+
+        <h3>Where to look when things break</h3>
+        <table>
+          <thead><tr><th>Symptom</th><th>First place to check</th></tr></thead>
+          <tbody>
+            <tr><td>Messages send but don't arrive live</td><td>SSE connection: dev-tools Network tab → <code>/messaging/stream</code>; check <code>EventSource.readyState</code> in console.</td></tr>
+            <tr><td>Duplicate conversations between same two users</td><td>Migration 039 not applied. Run <code>npm run migrate</code> and check <code>conversation.direct_key</code> + <code>uk_conversation_direct_key</code> exist.</td></tr>
+            <tr><td>429 storm in logs</td><td>Probably the auth-boot signal-tick bug (see <a href="#fe-store">§9</a>). Audit the transition-only effect.</td></tr>
+            <tr><td>"Couldn't send" with no obvious cause</td><td>Inspect the response: 429? 403? 0 (network)? Each maps to a different inline error. Check <code>messaging.store.ts</code> sendMessage catchError block.</td></tr>
+            <tr><td>Threat banner reads "Your last message contains ." (empty)</td><td>BE flagged <code>anyFlag</code> with only <code>urls</code> populated — the empty-reasons fallback wasn't applied. Verify <code>threat-banner.ts</code> has the "a link" / "links" branch.</td></tr>
+            <tr><td>User can't unblock</td><td><code>/profile?tab=safety</code>. If empty, <code>GET /messaging/blocks</code> failed — check Network tab for the response.</td></tr>
+            <tr><td>Admin can't delete</td><td>FK semantics fix: migration 044 must be applied. Without it, deleting an admin who has an audit-log entry fails with NOT NULL violation.</td></tr>
+          </tbody>
+        </table>
+
+        <span class="anchor" id="roadmap"></span>
+        <h2>15 · Known gaps &amp; v2 roadmap</h2>
+
+        <h3>Explicitly out of scope for v1</h3>
+        <ul>
+          <li>Group conversations (schema-ready, no UI).</li>
+          <li>Typing indicators.</li>
+          <li>Presence (online / offline / last-seen).</li>
+          <li>File / image / voice / video attachments.</li>
+          <li>Reactions, threaded replies, in-conversation search, read-receipts popover.</li>
+          <li>Per-message reporting UI (BE accepts <code>messageId</code>; FE only sends <code>conversationId</code>).</li>
+          <li>Admin-side moderation UI (separate "support tools" feature).</li>
+          <li>End-to-end encryption.</li>
+          <li>Push / SMS notifications.</li>
+        </ul>
+
+        <h3>v2 priorities (rough order)</h3>
+        <ol>
+          <li>Mute → silence email notifications (one-line fix in the notification builder, but it's load-bearing for UX).</li>
+          <li>Admin moderation UI consuming the existing BE routes.</li>
+          <li>Group conversations (the biggest single feature) — needs create-group page, member rail, role gating.</li>
+          <li>Redis Pub/Sub adapter for <code>MessagingEventsService</code> and the rate-limit buckets (unlocks multi-instance deploys).</li>
+          <li>FE test infra (Jest), then the spec list from §11.</li>
+          <li>Per-message reporting on the FE.</li>
+          <li>Push notifications via the existing Bull queue (pending Jobs module).</li>
+          <li>Soft-deleted message purge job (90-day retention).</li>
+        </ol>
+
+        <span class="anchor" id="glossary"></span>
+        <h2>16 · Glossary &amp; file map</h2>
+
+        <h3>Glossary</h3>
+        <dl class="kv">
+          <dt>Conversation</dt><dd>A thread. v1 only creates DIRECT; GROUP is schema-ready.</dd>
+          <dt>Participant</dt><dd>A row in <code>conversation_participant</code> tying a user to a conversation. Owns per-user metadata: <code>last_read_at</code>, <code>muted_until</code>, <code>left_at</code>.</dd>
+          <dt>Direct key</dt><dd>SHA-256 of the sorted UUID pair. Deterministic, unique per (a, b). Prevents first-send races.</dd>
+          <dt>Silent drop</dt><dd>The BE returns 201 with <code>delivered: false</code> and a synthetic conversation shell when the recipient is blocking the sender (or doesn't exist). Prevents block-status leakage.</dd>
+          <dt>Tombstone</dt><dd>The literal string <code>"[deleted]"</code> that replaces a message body on soft-delete.</dd>
+          <dt>Threat flags</dt><dd>BE-computed signals on the content of a sent message. Sent only to the sender; never broadcast.</dd>
+          <dt>SSE replay buffer</dt><dd>In-process per-user ring of recent events (100 entries, 10 min TTL). Used to fill the gap on a reconnect.</dd>
+          <dt>Optimistic insert</dt><dd>FE adds a temporary message bubble with an <code>"optim-…"</code> id before the BE responds; replaces with the canonical row on 201 or strips on error.</dd>
+          <dt>notify-after-commit</dt><dd>Pattern: always call <code>NotificationService.notify(...)</code> AFTER the surrounding tx commits, never inside.</dd>
+          <dt>messaging-sse strategy</dt><dd>The Passport strategy that accepts a JWT from <code>?token=</code>. The verbose name is intentional — it must be obvious in code review.</dd>
+          <dt>Velocity alarm</dt><dd>An informational row written when a user sends &gt;100 messages in 60 min. Does NOT auto-block.</dd>
+        </dl>
+
+        <h3>File map</h3>
+        <table>
+          <thead><tr><th>Layer</th><th>Path</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pill pill--db">DB</span></td><td><code>migrations/042_messaging_foundation.sql</code></td><td>Core 9 tables + indexes.</td></tr>
+            <tr><td><span class="pill pill--db">DB</span></td><td><code>migrations/043_messaging_direct_key.sql</code></td><td>Adds <code>direct_key</code> + UNIQUE index.</td></tr>
+            <tr><td><span class="pill pill--db">DB</span></td><td><code>migrations/044_messaging_audit_fk_restrict.sql</code></td><td>Fixes audit-log FK semantics (RESTRICT).</td></tr>
+            <tr><td><span class="pill pill--db">DB</span></td><td><code>migrations/045_messaging_timestamptz.sql</code></td><td>Converts every messaging timestamp column to <code>TIMESTAMPTZ</code>.</td></tr>
+            <tr><td><span class="pill pill--be">BE</span></td><td><code>src/modules/messaging/messaging.service.ts</code></td><td>Core CRUD + safety/notify orchestration.</td></tr>
+            <tr><td><span class="pill pill--be">BE</span></td><td><code>src/modules/messaging/messaging-safety.service.ts</code></td><td><code>canMessage</code> decision tree.</td></tr>
+            <tr><td><span class="pill pill--be">BE</span></td><td><code>src/modules/messaging/messaging-content.service.ts</code></td><td>Threat scanner.</td></tr>
+            <tr><td><span class="pill pill--be">BE</span></td><td><code>src/modules/messaging/messaging-events.service.ts</code></td><td>SSE fan-out + replay buffer.</td></tr>
+            <tr><td><span class="pill pill--be">BE</span></td><td><code>src/modules/messaging/messaging-rate-limit.service.ts</code></td><td>Sliding-window rate limiter.</td></tr>
+            <tr><td><span class="pill pill--be">BE</span></td><td><code>src/modules/messaging/messaging-velocity.service.ts</code></td><td>Velocity alarm writer.</td></tr>
+            <tr><td><span class="pill pill--be">BE</span></td><td><code>src/modules/messaging/messaging-moderation.service.ts</code></td><td>Reports, suspensions, admin reads.</td></tr>
+            <tr><td><span class="pill pill--be">BE</span></td><td><code>src/modules/messaging/auth/sse-jwt.strategy.ts</code></td><td>Passport strategy <code>'messaging-sse'</code>.</td></tr>
+            <tr><td><span class="pill pill--be">BE</span></td><td><code>src/modules/messaging/notifications.ts</code></td><td>MESSAGE_RECEIVED builder.</td></tr>
+            <tr><td><span class="pill pill--fe">FE</span></td><td><code>projects/core/src/lib/stores/messaging.store.ts</code></td><td>The signal store.</td></tr>
+            <tr><td><span class="pill pill--fe">FE</span></td><td><code>projects/core/src/lib/services/messaging/messaging.service.ts</code></td><td>HTTP wrapper.</td></tr>
+            <tr><td><span class="pill pill--fe">FE</span></td><td><code>projects/core/src/lib/services/messaging/messaging-realtime.service.ts</code></td><td><code>EventSource</code> wrapper, reconnect logic.</td></tr>
+            <tr><td><span class="pill pill--fe">FE</span></td><td><code>projects/web/src/app/main/messages/</code></td><td>All messaging UI.</td></tr>
+            <tr><td><span class="pill pill--fe">FE</span></td><td><code>projects/web/src/app/main/profile/tabs/safety/</code></td><td>Blocked-users UI.</td></tr>
+            <tr><td><span class="pill pill--sec">Sec</span></td><td><code>scripts/messaging-smoke.sh</code></td><td>Post-deploy smoke harness.</td></tr>
+          </tbody>
+        </table>
+
+        <hr>
+        <p class="small">Generated 2026-05-13 alongside the post-audit fix sweep. If a code path described here doesn't match reality, trust the code and update this doc.</p>
+      </main>
+    </div>
+  </body>
+</html>

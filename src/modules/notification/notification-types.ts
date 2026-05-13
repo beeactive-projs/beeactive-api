@@ -54,4 +54,6 @@ export enum NotificationType {
   POST_PENDING_APPROVAL = 'POST_PENDING_APPROVAL',
   POST_APPROVED = 'POST_APPROVED',
   POST_REJECTED = 'POST_REJECTED',
+  // ── Messaging ────────────────────────────────────────────
+  MESSAGE_RECEIVED = 'MESSAGE_RECEIVED',
 }

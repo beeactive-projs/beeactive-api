@@ -24,7 +24,7 @@ describe('JobsService', () => {
         JobsService,
         {
           provide: ModuleRef,
-          useValue: { get: moduleRefGet } as unknown as ModuleRef,
+          useValue: { get: moduleRefGet },
         },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: makeSilentLogger() },
       ],

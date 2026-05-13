@@ -32,6 +32,7 @@ import { VenueModule } from './modules/venue/venue.module';
 import { SearchModule } from './modules/search/search.module';
 import { PostModule } from './modules/post/post.module';
 import { ReviewModule } from './modules/review/review.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
 import { CamelCaseInterceptor } from './common/interceptors/camel-case.interceptor';
 
 @Module({
@@ -105,6 +106,7 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     SearchModule,
     PostModule,
     ReviewModule,
+    MessagingModule,
   ],
 
   controllers: [],

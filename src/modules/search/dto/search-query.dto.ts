@@ -31,7 +31,7 @@ export class SearchQueryDto {
 
   @ApiPropertyOptional({ enum: SEARCH_ENTITY_FILTERS, default: 'all' })
   @IsOptional()
-  @IsIn(SEARCH_ENTITY_FILTERS as unknown as string[])
+  @IsIn(SEARCH_ENTITY_FILTERS)
   type?: SearchEntityFilter = 'all';
 
   @ApiPropertyOptional({ minimum: 1, maximum: 20, default: 5 })

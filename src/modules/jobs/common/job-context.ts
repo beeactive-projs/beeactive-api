@@ -41,7 +41,7 @@ export function buildJobContext(
   const log: LoggerService = {
     log: (msg: unknown): void => void parentLogger.log?.(String(msg), tag),
     error: (msg: unknown, trace?: unknown): void =>
-      void parentLogger.error?.(String(msg), trace as string | undefined, tag),
+      void parentLogger.error?.(String(msg), trace, tag),
     warn: (msg: unknown): void => void parentLogger.warn?.(String(msg), tag),
     debug: (msg: unknown): void => void parentLogger.debug?.(String(msg), tag),
     verbose: (msg: unknown): void =>

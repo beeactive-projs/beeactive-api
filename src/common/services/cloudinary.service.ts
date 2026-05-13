@@ -143,7 +143,7 @@ export class CloudinaryService {
         typeof error === 'object' &&
         error !== null &&
         'message' in error &&
-        typeof (error as { message: unknown }).message === 'string'
+        typeof error.message === 'string'
       ) {
         message = (error as { message: string }).message;
       }

@@ -212,7 +212,7 @@ export class SubscriptionService {
       }
 
       const stripeSub = await this.stripeService.stripe.subscriptions.create(
-        subParams as Stripe.SubscriptionCreateParams,
+        subParams,
         {
           idempotencyKey: this.stripeService.buildIdempotencyKey(
             'subscription',

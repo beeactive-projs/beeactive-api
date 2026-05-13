@@ -42,6 +42,17 @@ export interface NotifyParams {
   fingerprint?: string;
   /** Optional CTA label for the email channel. */
   ctaLabel?: string;
+  /**
+   * Per-call channel override applied AFTER the user's resolved
+   * preferences. Use this to suppress a single channel for a specific
+   * delivery — e.g. messaging suppresses email after the first message
+   * in a conversation per hour ("Slack-style" throttle), while keeping
+   * the in-app notification on every message.
+   *
+   * Partial: only the channels you set are overridden. `{ email: false }`
+   * leaves in-app / push / sms alone.
+   */
+  channelOverride?: Partial<ChannelPreferences>;
 }
 
 export interface NotifyResult {
@@ -94,6 +105,7 @@ export class NotificationService {
       severity: params.severity,
       fingerprint: params.fingerprint,
       ctaLabel: params.ctaLabel,
+      channelOverride: params.channelOverride,
     });
     return result.results[0];
   }
@@ -174,10 +186,15 @@ export class NotificationService {
 
     const results: NotifyResult[] = [];
     for (const userId of uniqueUserIds) {
-      const channels = resolveChannels(
+      const resolved = resolveChannels(
         params.type,
         prefByUser.get(userId) ?? null,
       );
+      // Per-call override applies AFTER user preferences. Used by
+      // messaging to throttle email while keeping in-app on every send.
+      const channels: Required<ChannelPreferences> = params.channelOverride
+        ? { ...resolved, ...params.channelOverride }
+        : resolved;
       const user = userById.get(userId);
 
       const { receipt, delivered } = await this.deliverToUser({
@@ -233,9 +250,7 @@ export class NotificationService {
     // ── in-app ──────────────────────────────────────────────
     // The receipt row IS the in-app delivery. Mark it sent unless
     // the user has explicitly disabled the channel (rare).
-    delivered.in_app = channels.in_app
-      ? 'sent'
-      : ('skipped:preference_off' as DeliveredChannelStatus);
+    delivered.in_app = channels.in_app ? 'sent' : 'skipped:preference_off';
 
     // ── email ──
     // Enqueued as a BullMQ job; the worker writes the final
@@ -273,7 +288,7 @@ export class NotificationService {
         });
         delivered.email = status.ok
           ? 'sent'
-          : (`failed:${status.reason.slice(0, 200)}` as DeliveredChannelStatus);
+          : `failed:${status.reason.slice(0, 200)}`;
       } else {
         delivered.email = 'queued';
       }

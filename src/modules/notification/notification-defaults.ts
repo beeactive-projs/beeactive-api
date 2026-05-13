@@ -113,6 +113,11 @@ export const NOTIFICATION_DEFAULTS: Record<
   [NotificationType.POST_PENDING_APPROVAL]: IN_APP_AND_EMAIL,
   [NotificationType.POST_APPROVED]: IN_APP_ONLY,
   [NotificationType.POST_REJECTED]: IN_APP_AND_EMAIL,
+
+  // ── Messaging ────────────────────────────────────────────
+  // In-app on every message; email is throttled at the call site
+  // (one per recipient/conversation/hour). Push reserved for v2.
+  [NotificationType.MESSAGE_RECEIVED]: IN_APP_AND_EMAIL,
 };
 
 /**

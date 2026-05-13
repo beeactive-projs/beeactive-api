@@ -169,7 +169,7 @@ function buildFieldCondition(
           { [fieldKey]: { [Op.lt]: start } },
           { [fieldKey]: { [Op.gt]: end } },
         ],
-      } as WhereOptions;
+      };
     }
 
     default:
@@ -236,7 +236,7 @@ export function buildFilterOptions(
         conditions.push(fieldConditions[0]);
       } else {
         const combineOp = active[0].operator === 'or' ? Op.or : Op.and;
-        conditions.push({ [combineOp]: fieldConditions } as WhereOptions);
+        conditions.push({ [combineOp]: fieldConditions });
       }
     }
   }

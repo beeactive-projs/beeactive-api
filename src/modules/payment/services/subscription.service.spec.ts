@@ -208,7 +208,7 @@ describe('SubscriptionService — push-model setup flow', () => {
       await service.create('user-1', {
         clientUserId: 'client-1',
         productId: 'prod-1',
-      } as never);
+      });
 
       const subParams = stripeMock.stripe.subscriptions.create.mock.calls[0][0];
       expect(subParams.payment_behavior).toBe('default_incomplete');
@@ -221,7 +221,7 @@ describe('SubscriptionService — push-model setup flow', () => {
       const result = await service.create('user-1', {
         clientUserId: 'client-1',
         productId: 'prod-1',
-      } as never);
+      });
 
       expect(emailServiceMock.sendSubscriptionSetupEmail).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -245,7 +245,7 @@ describe('SubscriptionService — push-model setup flow', () => {
         service.create('user-1', {
           clientUserId: 'client-1',
           productId: 'prod-1',
-        } as never),
+        }),
       ).resolves.toBeDefined();
     });
 
@@ -261,7 +261,7 @@ describe('SubscriptionService — push-model setup flow', () => {
       await service.create('user-1', {
         clientUserId: 'client-1',
         productId: 'prod-1',
-      } as never);
+      });
 
       const subParams = stripeMock.stripe.subscriptions.create.mock.calls[0][0];
       expect(subParams.payment_behavior).toBe('default_incomplete');
@@ -289,7 +289,7 @@ describe('SubscriptionService — push-model setup flow', () => {
         clientUserId: 'client-1',
         productId: 'prod-1',
         trialDays: 14,
-      } as never);
+      });
 
       const subParams = stripeMock.stripe.subscriptions.create.mock.calls[0][0];
       expect(subParams.payment_behavior).toBeUndefined();

@@ -192,7 +192,7 @@ describe('AuthService (smoke)', () => {
     const result = await service.login({
       email: 'jane@example.com',
       password: 'StrongPass1!',
-    } as never);
+    });
 
     expect(userService.validatePassword).toHaveBeenCalledWith(
       userRow,
@@ -213,11 +213,11 @@ describe('AuthService (smoke)', () => {
       failedLoginAttempts: 1,
       lockedUntil: null,
     };
-    userService.findByEmail.mockResolvedValue(userRow as never);
+    userService.findByEmail.mockResolvedValue(userRow);
     userService.validatePassword.mockResolvedValue(false);
 
     await expect(
-      service.login({ email: 'jane@example.com', password: 'wrong' } as never),
+      service.login({ email: 'jane@example.com', password: 'wrong' }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(userService.incrementFailedAttempts).toHaveBeenCalledWith(userRow);

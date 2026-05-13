@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Op } from 'sequelize';
+import { literal, Op } from 'sequelize';
 import {
   buildPaginatedResponse,
   PaginatedResponse,
@@ -68,12 +68,20 @@ export class NotificationReceiptService {
   /**
    * Bell list query. Filters out expired alerts and (when set) alerts
    * scheduled for the future. Newest first.
+   *
+   * Also hides receipts whose in-app channel was suppressed at notify
+   * time — e.g. MESSAGE_RECEIVED, which writes a receipt for the
+   * email-worker dedup key but never wants to appear in the bell
+   * (the Messages sidebar badge is the persistent in-app signal).
    */
   async listForUser(
     userId: string,
     opts: ListReceiptsOptions,
   ): Promise<PaginatedResponse<BellNotification>> {
-    const receiptWhere: Record<string, unknown> = { userId };
+    const receiptWhere: Record<string, unknown> = {
+      userId,
+      ...this.bellVisibleClause(),
+    };
     if (opts.unreadOnly) {
       receiptWhere.readAt = { [Op.is]: null };
       receiptWhere.dismissedAt = { [Op.is]: null };
@@ -93,8 +101,8 @@ export class NotificationReceiptService {
 
   /**
    * Bell badge: unread count for the user. Filters mirror listForUser
-   * (visibility window via the joined notification) so the badge
-   * stays accurate.
+   * (visibility window via the joined notification + in-app channel
+   * delivered) so the badge stays accurate.
    */
   async unreadCount(userId: string): Promise<number> {
     return this.receiptModel.count({
@@ -102,9 +110,26 @@ export class NotificationReceiptService {
         userId,
         readAt: { [Op.is]: null },
         dismissedAt: { [Op.is]: null },
+        ...this.bellVisibleClause(),
       },
       include: [this.activeNotificationInclude()],
     });
+  }
+
+  /**
+   * Shared `WHERE` fragment for bell queries: only show receipts that
+   * actually delivered an in-app channel. Receipts created with
+   * `channelOverride.in_app = false` (currently: MESSAGE_RECEIVED)
+   * have `delivered_channels.in_app === 'skipped:preference_off'`
+   * and must NOT appear in the bell or the unread count.
+   *
+   * The JSON predicate uses Postgres' `->>` operator. If we ever move
+   * the receipt store off Postgres this fragment needs revisiting.
+   */
+  private bellVisibleClause(): Record<string, unknown> {
+    return {
+      [Op.and]: literal(`delivered_channels->>'in_app' = 'sent'`),
+    };
   }
 
   /**

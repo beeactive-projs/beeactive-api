@@ -20,9 +20,7 @@ export function makeModelMock(): ModelMock {
   };
 }
 
-export const fakeTx = { LOCK: { UPDATE: 'UPDATE' } } as unknown as {
-  LOCK: { UPDATE: string };
-};
+export const fakeTx = { LOCK: { UPDATE: 'UPDATE' } };
 
 export function makeSequelizeMock() {
   return {

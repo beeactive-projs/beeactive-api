@@ -40,10 +40,11 @@ describe('NotificationPreferenceService', () => {
     it('returns one row per category in display order', async () => {
       prefModel.findAll.mockResolvedValue([]);
       const view = await service.getForUser('user-1');
-      // 6 categories defined.
-      expect(view.length).toBe(6);
-      // Sessions is rendered first per CATEGORY_DISPLAY_ORDER.
-      expect(view[0].category).toBe(NotificationCategory.Sessions);
+      // 7 categories defined (Messaging was added in Stage 6 — DMs).
+      expect(view.length).toBe(7);
+      // Messaging is rendered first per CATEGORY_DISPLAY_ORDER —
+      // direct messages are the highest-volume / most-urgent category.
+      expect(view[0].category).toBe(NotificationCategory.Messaging);
       // Account is rarely-touched and rendered last.
       expect(view[view.length - 1].category).toBe(NotificationCategory.Account);
     });

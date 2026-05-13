@@ -84,16 +84,13 @@ export class RefundService {
       refundParams.payment_intent = payment.stripePaymentIntentId;
     }
 
-    await this.stripeService.stripe.refunds.create(
-      refundParams as Stripe.RefundCreateParams,
-      {
-        idempotencyKey: this.stripeService.buildIdempotencyKey(
-          'refund',
-          payment.id,
-          `${refundAmount}`,
-        ),
-      },
-    );
+    await this.stripeService.stripe.refunds.create(refundParams, {
+      idempotencyKey: this.stripeService.buildIdempotencyKey(
+        'refund',
+        payment.id,
+        `${refundAmount}`,
+      ),
+    });
 
     payment.amountRefundedCents = alreadyRefunded + refundAmount;
     payment.status =
