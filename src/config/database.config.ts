@@ -16,8 +16,15 @@ import { SequelizeModuleOptions } from '@nestjs/sequelize';
 export const getDatabaseConfig = (
   configService: ConfigService,
 ): SequelizeModuleOptions => {
-  const databaseUrl = configService.get<string>('DATABASE_URL');
-  const isProduction = configService.get<string>('NODE_ENV') === 'production';
+  const nodeEnv = configService.get<string>('NODE_ENV');
+  const isProduction = nodeEnv === 'production';
+  // Integration tests run against a separate test DB to protect dev data.
+  // TEST_DATABASE_URL (or TEST_DB_DATABASE) takes precedence when NODE_ENV=test.
+  const isTest = nodeEnv === 'test';
+  const databaseUrl = isTest
+    ? (configService.get<string>('TEST_DATABASE_URL') ??
+      configService.get<string>('DATABASE_URL'))
+    : configService.get<string>('DATABASE_URL');
 
   // Enable SSL for Neon (DATABASE_URL) or production; skip for local dev
   const needsSsl = !!databaseUrl || isProduction;
@@ -85,8 +92,11 @@ export const getDatabaseConfig = (
     password:
       configService.get<string>('PGPASSWORD') ||
       configService.get<string>('DB_PASSWORD'),
-    database:
-      configService.get<string>('PGDATABASE') ||
-      configService.get<string>('DB_DATABASE'),
+    database: isTest
+      ? configService.get<string>('TEST_DB_DATABASE') ||
+        configService.get<string>('PGDATABASE') ||
+        configService.get<string>('DB_DATABASE')
+      : configService.get<string>('PGDATABASE') ||
+        configService.get<string>('DB_DATABASE'),
   };
 };

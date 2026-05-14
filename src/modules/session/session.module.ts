@@ -1,27 +1,26 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
-import { Session } from './entities/session.entity';
+import { SessionTemplate } from './entities/session-template.entity';
+import { SessionInstance } from './entities/session-instance.entity';
 import { SessionParticipant } from './entities/session-participant.entity';
-import { SessionController } from './session.controller';
-import { SessionService } from './session.service';
+import { SessionReminderSchedule } from './entities/session-reminder-schedule.entity';
+import { RecurrenceService } from './services/recurrence.service';
+import { SessionTemplateService } from './services/session-template.service';
+import { SessionTemplateController } from './session-template.controller';
 import { RoleModule } from '../role/role.module';
-import { GroupMember } from '../group/entities/group-member.entity';
-import { InstructorClient } from '../client/entities/instructor-client.entity';
-import { SearchModule } from '../search/search.module';
 
 @Module({
   imports: [
     SequelizeModule.forFeature([
-      Session,
+      SessionTemplate,
+      SessionInstance,
       SessionParticipant,
-      GroupMember,
-      InstructorClient,
+      SessionReminderSchedule,
     ]),
     RoleModule,
-    SearchModule,
   ],
-  controllers: [SessionController],
-  providers: [SessionService],
-  exports: [SessionService],
+  controllers: [SessionTemplateController],
+  providers: [RecurrenceService, SessionTemplateService],
+  exports: [RecurrenceService, SessionTemplateService],
 })
 export class SessionModule {}

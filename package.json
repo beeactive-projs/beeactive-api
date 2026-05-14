@@ -57,6 +57,7 @@
     "google-auth-library": "^10.5.0",
     "helmet": "^8.1.0",
     "joi": "^18.0.2",
+    "luxon": "^3.7.2",
     "nest-winston": "^1.10.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -81,6 +82,7 @@
     "@types/bull": "^3.15.9",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
+    "@types/luxon": "^3.7.1",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.10.7",
     "@types/passport-jwt": "^4.0.1",
@@ -126,7 +128,10 @@
       "src/**/*.(t|j)s"
     ],
     "coverageDirectory": "coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/test/env.setup.ts"
+    ]
   },
   "lint-staged": {
     "*.ts": [

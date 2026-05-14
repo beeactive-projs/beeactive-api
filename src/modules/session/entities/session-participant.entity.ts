@@ -6,23 +6,16 @@ import {
   ForeignKey,
   BelongsTo,
   CreatedAt,
+  UpdatedAt,
 } from 'sequelize-typescript';
-import { Session } from './session.entity';
 import { User } from '../../user/entities/user.entity';
+import { SessionInstance } from './session-instance.entity';
+import { SessionParticipantStatus } from './session.enums';
 
-/**
- * Session Participant Entity
- *
- * Tracks who registered for a session and their status.
- *
- * Status flow:
- * REGISTERED → CONFIRMED → ATTENDED (showed up)
- *                         → NO_SHOW (didn't show)
- *            → CANCELLED (user cancelled)
- */
 @Table({
   tableName: 'session_participant',
-  timestamps: false,
+  paranoid: false,
+  timestamps: true,
   underscored: true,
 })
 export class SessionParticipant extends Model {
@@ -33,45 +26,83 @@ export class SessionParticipant extends Model {
   })
   declare id: string;
 
-  @ForeignKey(() => Session)
-  @Column({
-    type: DataType.CHAR(36),
-    allowNull: false,
-  })
-  declare sessionId: string;
+  @ForeignKey(() => SessionInstance)
+  @Column({ type: DataType.CHAR(36), allowNull: false })
+  declare instanceId: string;
 
   @ForeignKey(() => User)
-  @Column({
-    type: DataType.CHAR(36),
-    allowNull: false,
-  })
+  @Column({ type: DataType.CHAR(36), allowNull: false })
   declare userId: string;
 
   @Column({
-    type: DataType.ENUM(
-      'REGISTERED',
-      'CONFIRMED',
-      'ATTENDED',
-      'NO_SHOW',
-      'CANCELLED',
-    ),
-    defaultValue: 'REGISTERED',
+    type: DataType.ENUM(...Object.values(SessionParticipantStatus)),
+    allowNull: false,
   })
-  declare status: string;
+  declare status: SessionParticipantStatus;
+
+  @Column({ type: DataType.BOOLEAN, allowNull: true })
+  declare attended: boolean | null;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare checkedInAt: Date | null;
+
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare bookingNote: string | null;
+
+  // Instructor-only note; never returned to client in response DTOs
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare privateNote: string | null;
+
+  // Snapshot at booking time — immutable after creation.
+  // These reflect the terms agreed to when the client booked.
+  // Never update these after the initial insert; use a service guard.
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare snapshotPriceCents: number;
+
+  @Column({ type: DataType.STRING(3), allowNull: false })
+  declare snapshotCurrency: string;
+
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare snapshotCancelCutoffH: number;
+
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare snapshotLocationText: string | null;
+
+  @Column({ type: DataType.STRING(500), allowNull: true })
+  declare snapshotMeetingUrl: string | null;
 
   @Column({
     type: DataType.DATE,
-    allowNull: true,
+    allowNull: false,
+    defaultValue: DataType.NOW,
   })
-  declare checkedInAt: Date;
+  declare bookedAt: Date;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare approvedAt: Date | null;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare declinedAt: Date | null;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare cancelledAt: Date | null;
+
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare cancelReason: string | null;
+
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare waitlistPosition: number | null;
 
   @CreatedAt
   declare createdAt: Date;
 
-  // Relationships
-  @BelongsTo(() => Session)
-  declare session: Session;
+  @UpdatedAt
+  declare updatedAt: Date;
 
-  @BelongsTo(() => User)
+  // Associations
+  @BelongsTo(() => SessionInstance, 'instanceId')
+  declare instance: SessionInstance;
+
+  @BelongsTo(() => User, 'userId')
   declare user: User;
 }

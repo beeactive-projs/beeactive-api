@@ -250,20 +250,13 @@ Notable routes:
 **Entities:** `Group`, `GroupMember`, `GroupJoinRequest`.
 
 ### 5.6 `session` — Training sessions
-Full CRUD, recurring (custom JSON rule), participants, calendar, conflict warnings, reschedule.
+**Phase 1 complete (schema only) — 26 endpoints arrive in phases 2–6.**
 
-See **`docs/research/sessions/SESSIONS_CONTEXT.md`** for the full deep-dive — this module has its own context doc.
+Hard-rewrite of the old single-table design. Old `session` and `session_participant` tables were dropped by migration 046; replaced by 4 new tables.
 
-Endpoints (all JWT):
-- `POST/GET /sessions` + `GET /sessions/discover` + `GET /sessions/:id` + `PATCH/DELETE /sessions/:id`
-- `GET /sessions/calendar?start=&end=`
-- `GET /sessions/:id/recurrence-preview?weeks=N` + `POST /sessions/:id/generate-instances?weeks=N`
-- `POST /sessions/:id/clone` + `PATCH /sessions/:id/reschedule`
-- `POST /sessions/:id/join` (throttled 10/60s) + `POST /sessions/:id/leave` (2h cutoff)
-- `POST /sessions/:id/confirm` + `POST /sessions/:id/checkin` (−15min to +30min window)
-- `PATCH /sessions/:id/participants/:userId`
+**Entities:** `SessionTemplate` (series definition, recurrence rule, pricing, access), `SessionInstance` (one row per occurrence with per-instance overrides + denormalised counters), `SessionParticipant` (booking snapshot — price/cutoff/location immutable post-insert; `attended: boolean|null` replaces old `NO_SHOW` status), `SessionReminderSchedule` (BullMQ job tracking).
 
-**Entities:** `Session` (paranoid, `venue_id` exists in DB but not in entity yet), `SessionParticipant`.
+See **`docs/research/sessions/SESSIONS_BUILD_SPEC.md`** for the full spec (26 endpoints, 7 services, 7 phases).
 
 ### 5.7 `client` — Instructor–client relationships
 Two-direction request flow + PrimeNG server-side filtering tables.

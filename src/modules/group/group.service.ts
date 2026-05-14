@@ -30,7 +30,12 @@ import {
   type SocialLinks,
 } from '../profile/entities/instructor-profile.entity';
 import { SearchIndexService } from '../search/search-index.service';
-import { Session } from '../session/entities/session.entity';
+import { SessionInstance } from '../session/entities/session-instance.entity';
+import { SessionTemplate } from '../session/entities/session-template.entity';
+import {
+  SessionAccess,
+  SessionInstanceStatus,
+} from '../session/entities/session.enums';
 import { User } from '../user/entities/user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { DiscoverGroupsDto } from './dto/discover-groups.dto';
@@ -876,31 +881,47 @@ export class GroupService {
     }
 
     // Get upcoming public/group sessions linked to this group's instructor
-    const upcomingSessions = await Session.findAll({
-      where: {
-        instructorId:
-          group.getDataValue('instructorId') || ownerMembership?.userId,
-        visibility: { [Op.in]: ['PUBLIC', 'GROUP'] },
-        status: { [Op.in]: ['SCHEDULED', 'IN_PROGRESS'] },
-        scheduledAt: { [Op.gte]: new Date() },
-      },
-      attributes: [
-        'id',
-        'title',
-        'description',
-        'sessionType',
-        'visibility',
-        'scheduledAt',
-        'durationMinutes',
-        'location',
-        'maxParticipants',
-        'price',
-        'currency',
-        'status',
-      ],
-      order: [['scheduledAt', 'ASC']],
-      limit: 10,
-    });
+    const instructorId =
+      group.getDataValue('instructorId') || ownerMembership?.userId;
+    const upcomingSessions = instructorId
+      ? await SessionInstance.findAll({
+          where: {
+            instructorId,
+            status: {
+              [Op.in]: [
+                SessionInstanceStatus.Scheduled,
+                SessionInstanceStatus.InProgress,
+              ],
+            },
+            startAt: { [Op.gte]: new Date() },
+          },
+          include: [
+            {
+              model: SessionTemplate,
+              as: 'template',
+              where: {
+                access: {
+                  [Op.in]: [SessionAccess.Open, SessionAccess.GroupOnly],
+                },
+              },
+              attributes: [
+                'title',
+                'description',
+                'type',
+                'access',
+                'locationKind',
+                'durationMinutes',
+                'capacity',
+                'priceAmountCents',
+                'priceCurrency',
+              ],
+              required: true,
+            },
+          ],
+          order: [['startAt', 'ASC']],
+          limit: 10,
+        })
+      : [];
 
     return {
       group,
@@ -1678,15 +1699,44 @@ export class GroupService {
       completedSessionCount,
     ] = await Promise.all([
       this.memberModel.count({ where: { groupId, leftAt: null } }),
-      Session.count({ where: { groupId } }),
-      Session.count({
-        where: {
-          groupId,
-          status: 'SCHEDULED',
-          scheduledAt: { [Op.gte]: new Date() },
-        },
+      SessionInstance.count({
+        include: [
+          {
+            model: SessionTemplate,
+            as: 'template',
+            where: { groupId },
+            required: true,
+            attributes: [],
+          },
+        ],
       }),
-      Session.count({ where: { groupId, status: 'COMPLETED' } }),
+      SessionInstance.count({
+        where: {
+          status: SessionInstanceStatus.Scheduled,
+          startAt: { [Op.gte]: new Date() },
+        },
+        include: [
+          {
+            model: SessionTemplate,
+            as: 'template',
+            where: { groupId },
+            required: true,
+            attributes: [],
+          },
+        ],
+      }),
+      SessionInstance.count({
+        where: { status: SessionInstanceStatus.Completed },
+        include: [
+          {
+            model: SessionTemplate,
+            as: 'template',
+            where: { groupId },
+            required: true,
+            attributes: [],
+          },
+        ],
+      }),
     ]);
 
     return {
