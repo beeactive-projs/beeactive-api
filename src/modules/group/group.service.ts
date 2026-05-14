@@ -668,6 +668,7 @@ export class GroupService {
     const where: WhereOptions<Group> = {
       isPublic: true,
       isActive: true,
+      joinPolicy: { [Op.ne]: JoinPolicy.INVITE_ONLY },
       ...(dto.city && { city: { [Op.iLike]: `%${dto.city}%` } }),
       ...(dto.country && { country: dto.country }),
       ...(andClauses.length > 0 && { [Op.and]: andClauses }),
@@ -739,9 +740,10 @@ export class GroupService {
    * Public groups owned by a single instructor.
    *
    * Feeds the Groups tab on the Public Profile page (`/@<handle>`). We
-   * only surface groups the instructor has marked public and active —
-   * INVITE_ONLY private groups stay invisible. Sorted by member count
-   * so the most active group appears first.
+   * only surface groups the instructor has marked public and active, and
+   * we exclude INVITE_ONLY groups — a visitor who can't self-join has
+   * nothing to do with the card. Sorted by member count so the most
+   * active group appears first.
    */
   async listPublicGroupsForInstructor(instructorUserId: string) {
     const memberCountLiteral = literal(
@@ -753,6 +755,7 @@ export class GroupService {
         instructorId: instructorUserId,
         isPublic: true,
         isActive: true,
+        joinPolicy: { [Op.ne]: JoinPolicy.INVITE_ONLY },
       },
       attributes: {
         include: [

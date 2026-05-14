@@ -427,9 +427,14 @@ export class ProfileService {
             'lastName',
             'avatarId',
             'avatarUrl',
+            'email',
+            'phone',
             'city',
             'countryCode',
+            'language',
+            'timezone',
             'createdAt',
+            'privacySettings',
           ],
         },
       ],
@@ -475,10 +480,15 @@ export class ProfileService {
             'lastName',
             'avatarId',
             'avatarUrl',
+            'email',
+            'phone',
             'city',
             'countryCode',
+            'language',
+            'timezone',
             'createdAt',
             'handle',
+            'privacySettings',
           ],
         },
       ],
@@ -509,6 +519,10 @@ export class ProfileService {
   private async toPublicProfileDto(profile: InstructorProfile) {
     const rating = await this.reviewService.getSummaryForProfile(profile.id);
 
+    const settings = profile.user?.privacySettings ?? {};
+    const maskField = <T>(field: PrivacyControlledField, value: T): T | null =>
+      isFieldVisible(resolveLevel(settings, field), 'PUBLIC') ? value : null;
+
     return {
       id: profile.id,
       userId: profile.userId,
@@ -524,8 +538,12 @@ export class ProfileService {
       yearsOfExperience: profile.yearsOfExperience,
       isAcceptingClients: profile.isAcceptingClients,
       isPublic: profile.isPublic,
-      city: profile.user?.city ?? null,
-      countryCode: profile.user?.countryCode ?? null,
+      email: maskField('email', profile.user?.email ?? null),
+      phone: maskField('phone', profile.user?.phone ?? null),
+      city: maskField('city', profile.user?.city ?? null),
+      countryCode: maskField('city', profile.user?.countryCode ?? null),
+      language: maskField('language', profile.user?.language ?? null),
+      timezone: maskField('timezone', profile.user?.timezone ?? null),
       socialLinks: profile.showSocialLinks ? profile.socialLinks : null,
       showEmail: profile.showEmail,
       showPhone: profile.showPhone,
@@ -598,6 +616,7 @@ export class ProfileService {
             yearsOfExperience: instructorProfile.yearsOfExperience,
             isAcceptingClients: instructorProfile.isAcceptingClients,
             socialLinks: instructorProfile.socialLinks,
+            showSocialLinks: instructorProfile.showSocialLinks,
           }
         : null,
     };
@@ -736,8 +755,16 @@ export class ProfileService {
     ]);
 
     const settings = user.privacySettings ?? {};
+    // This endpoint serves the *public* profile page. Owners viewing their
+    // own profile should see it as the public would — not with all private
+    // fields exposed. The owner identity is preserved in `audience` for the
+    // frontend to show edit affordances; field values always use PUBLIC rules.
+    const maskAudience: PublicProfileAudience =
+      audience === 'OWNER' ? 'PUBLIC' : audience;
     const mask = <T>(field: PrivacyControlledField, value: T): T | null =>
-      isFieldVisible(resolveLevel(settings, field), audience) ? value : null;
+      isFieldVisible(resolveLevel(settings, field), maskAudience)
+        ? value
+        : null;
 
     return {
       userId: user.id,
