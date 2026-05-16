@@ -15,7 +15,7 @@ import {
   buildPaginatedResponse,
   PaginatedResponse,
 } from '../../common/dto/pagination.dto';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { Conversation, ConversationType } from './entities/conversation.entity';
 import {
   ConversationParticipant,
@@ -928,7 +928,7 @@ export class MessagingService {
         include: [
           {
             model: User,
-            attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+            attributes: USER_SAFE_ATTRIBUTES,
           },
         ],
       });

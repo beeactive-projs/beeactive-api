@@ -20,6 +20,7 @@ import { RoleService } from '../role/role.service';
 import { UserService } from '../user/user.service';
 import {
   User,
+  USER_SAFE_ATTRIBUTES,
   type PrivacyControlledField,
   type ProfilePrivacyLevel,
   type UserPrivacySettings,
@@ -364,15 +365,7 @@ export class ProfileService {
       include: [
         {
           model: User,
-          attributes: [
-            'id',
-            'firstName',
-            'lastName',
-            'avatarUrl',
-            'city',
-            'countryCode',
-            'handle',
-          ],
+          attributes: USER_SAFE_ATTRIBUTES,
           where: Object.keys(userWhere).length ? userWhere : undefined,
           required: Object.keys(userWhere).length > 0,
         },
@@ -421,21 +414,7 @@ export class ProfileService {
       include: [
         {
           model: User,
-          attributes: [
-            'id',
-            'firstName',
-            'lastName',
-            'avatarId',
-            'avatarUrl',
-            'email',
-            'phone',
-            'city',
-            'countryCode',
-            'language',
-            'timezone',
-            'createdAt',
-            'privacySettings',
-          ],
+          attributes: [...USER_SAFE_ATTRIBUTES, 'privacySettings'],
         },
       ],
     });
@@ -474,22 +453,7 @@ export class ProfileService {
             this.sequelize.fn('LOWER', this.sequelize.col('user.handle')),
             normalized,
           ),
-          attributes: [
-            'id',
-            'firstName',
-            'lastName',
-            'avatarId',
-            'avatarUrl',
-            'email',
-            'phone',
-            'city',
-            'countryCode',
-            'language',
-            'timezone',
-            'createdAt',
-            'handle',
-            'privacySettings',
-          ],
+          attributes: [...USER_SAFE_ATTRIBUTES, 'privacySettings'],
         },
       ],
     });

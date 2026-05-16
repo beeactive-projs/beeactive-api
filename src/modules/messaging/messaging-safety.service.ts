@@ -13,7 +13,7 @@ import {
   InstructorClient,
   InstructorClientStatus,
 } from '../client/entities/instructor-client.entity';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { ConversationParticipant } from './entities/conversation-participant.entity';
 import { MessagingSuspension } from './entities/messaging-suspension.entity';
 import { UserBlock, UserBlockReason } from './entities/user-block.entity';
@@ -201,7 +201,7 @@ export class MessagingSafetyService {
         {
           model: User,
           as: 'blocked',
-          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [['createdAt', 'DESC']],

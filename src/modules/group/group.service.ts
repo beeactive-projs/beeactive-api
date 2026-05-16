@@ -36,7 +36,7 @@ import {
   SessionAccess,
   SessionInstanceStatus,
 } from '../session/entities/session.enums';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { DiscoverGroupsDto } from './dto/discover-groups.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
@@ -483,14 +483,7 @@ export class GroupService {
         include: [
           {
             model: User,
-            attributes: [
-              'id',
-              'email',
-              'firstName',
-              'lastName',
-              'phone',
-              'avatarUrl',
-            ],
+            attributes: USER_SAFE_ATTRIBUTES,
           },
         ],
         limit,
@@ -522,6 +515,7 @@ export class GroupService {
         id: member.user.id,
         firstName: member.user.firstName,
         lastName: member.user.lastName,
+        handle: member.user.handle ?? null,
         email: member.user.email,
         avatarId: member.user.avatarId,
         avatarUrl: member.user.avatarUrl,
@@ -832,7 +826,7 @@ export class GroupService {
       include: [
         {
           model: User,
-          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
     });
@@ -1097,7 +1091,7 @@ export class GroupService {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [['createdAt', 'DESC']],

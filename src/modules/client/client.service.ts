@@ -24,7 +24,7 @@ import { GroupMember } from '../group/entities/group-member.entity';
 import { Group } from '../group/entities/group.entity';
 import { InstructorProfile } from '../profile/entities/instructor-profile.entity';
 import { RoleService } from '../role/role.service';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { NotificationService } from '../notification/notification.service';
 import {
   clientRequestReceived,
@@ -52,6 +52,7 @@ export interface ClientUserSnapshot {
   id: string;
   firstName: string;
   lastName: string;
+  handle: string | null;
   email: string;
   avatarId: number | null;
   avatarUrl: string | null;
@@ -215,7 +216,7 @@ export class ClientService {
       {
         model: User,
         as: 'client',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+        attributes: USER_SAFE_ATTRIBUTES,
       },
     ];
 
@@ -301,12 +302,12 @@ export class ClientService {
       {
         model: User,
         as: 'fromUser',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+        attributes: USER_SAFE_ATTRIBUTES,
       },
       {
         model: User,
         as: 'toUser',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+        attributes: USER_SAFE_ATTRIBUTES,
       },
     ];
 
@@ -358,7 +359,7 @@ export class ClientService {
     return {
       model: User,
       as: 'client',
-      attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+      attributes: USER_SAFE_ATTRIBUTES,
     };
   }
 
@@ -394,6 +395,7 @@ export class ClientService {
             id: clientUser.id,
             firstName: clientUser.firstName,
             lastName: clientUser.lastName,
+            handle: clientUser.handle ?? null,
             email: clientUser.email,
             avatarId: clientUser.avatarId ?? null,
             avatarUrl: clientUser.avatarUrl ?? null,
@@ -419,6 +421,7 @@ export class ClientService {
             id: row.client.id,
             firstName: row.client.firstName,
             lastName: row.client.lastName,
+            handle: row.client.handle ?? null,
             email: row.client.email,
             avatarId: row.client.avatarId ?? null,
             avatarUrl: row.client.avatarUrl ?? null,
@@ -464,12 +467,12 @@ export class ClientService {
           {
             model: User,
             as: 'fromUser',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+            attributes: USER_SAFE_ATTRIBUTES,
           },
           {
             model: User,
             as: 'toUser',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+            attributes: USER_SAFE_ATTRIBUTES,
           },
         ],
         order: [['createdAt', 'DESC']],
@@ -506,12 +509,12 @@ export class ClientService {
         {
           model: User,
           as: 'fromUser',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
         {
           model: User,
           as: 'toUser',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [['createdAt', 'DESC']],
@@ -591,7 +594,7 @@ export class ClientService {
         {
           model: User,
           as: 'instructor',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [['startedAt', 'DESC']],
@@ -1627,7 +1630,7 @@ export class ClientService {
         {
           model: User,
           as: 'fromUser',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [['createdAt', 'DESC']],

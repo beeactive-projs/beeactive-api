@@ -16,7 +16,7 @@ import { GroupService } from '../group/group.service';
 import { RoleService } from '../role/role.service';
 import { CryptoService, EmailService } from '../../common/services';
 import { buildPaginatedResponse } from '../../common/dto/pagination.dto';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { Group } from '../group/entities/group.entity';
 import { Role } from '../role/entities/role.entity';
 import { GroupMember } from '../group/entities/group-member.entity';
@@ -554,7 +554,7 @@ export class InvitationService {
           {
             model: User,
             as: 'inviter',
-            attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+            attributes: USER_SAFE_ATTRIBUTES,
           },
           {
             model: Group,

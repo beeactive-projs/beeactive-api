@@ -47,6 +47,7 @@ export interface AuthUserResponse {
   email: string;
   firstName: string;
   lastName: string;
+  handle: string | null;
   isEmailVerified: boolean;
   roles: string[];
 }
@@ -297,6 +298,7 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        handle: user.handle ?? null,
         isEmailVerified: user.isEmailVerified,
         roles: roleNames,
       },

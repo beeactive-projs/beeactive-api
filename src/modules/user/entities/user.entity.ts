@@ -248,3 +248,27 @@ export class User extends Model {
   @HasMany(() => SocialAccount)
   declare socialAccounts: SocialAccount[];
 }
+
+/**
+ * Safe primitive User fields for use in Sequelize `attributes` arrays.
+ * Excludes secrets (passwordHash, tokens, lockout fields) and JSONB columns.
+ * Import this instead of hand-rolling field lists in includes/queries.
+ */
+export const USER_SAFE_ATTRIBUTES: Array<keyof User> = [
+  'id',
+  'email',
+  'firstName',
+  'lastName',
+  'handle',
+  'phone',
+  'avatarId',
+  'avatarUrl',
+  'language',
+  'timezone',
+  'countryCode',
+  'city',
+  'isActive',
+  'isEmailVerified',
+  'createdAt',
+  'updatedAt',
+];

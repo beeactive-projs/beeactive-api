@@ -11,7 +11,7 @@ import { BlogPost } from './entities/blog-post.entity';
 import { CreateBlogPostDto } from './dto/create-blog-post.dto';
 import { UpdateBlogPostDto } from './dto/update-blog-post.dto';
 import { BlogQueryDto } from './dto/blog-query.dto';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { CloudinaryService } from '../../common/services/cloudinary.service';
 import {
   buildPaginatedResponse,
@@ -155,7 +155,7 @@ export class BlogService {
   private readonly authorInclude = {
     model: User,
     as: 'author',
-    attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+    attributes: USER_SAFE_ATTRIBUTES,
     required: false,
   };
 

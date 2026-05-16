@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, WhereOptions, fn, col } from 'sequelize';
 import { Review } from './entities/review.entity';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import {
   PaginatedReviewsDto,
   ReviewBreakdownDto,
@@ -131,7 +131,7 @@ export class ReviewService {
           model: User,
           as: 'author',
           required: false,
-          attributes: ['id', 'firstName', 'lastName', 'avatarId', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [

@@ -19,7 +19,7 @@ import {
   SubscriptionStatus,
 } from '../entities/subscription.entity';
 import { Product, ProductType } from '../entities/product.entity';
-import { User } from '../../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../../user/entities/user.entity';
 import { StripeAccount } from '../entities/stripe-account.entity';
 import { ConfigService } from '@nestjs/config';
 import { StripeService } from './stripe.service';
@@ -499,7 +499,7 @@ export class SubscriptionService {
         {
           model: User,
           as: 'client',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
         {
           model: Product,
@@ -531,7 +531,7 @@ export class SubscriptionService {
         {
           model: User,
           as: 'client',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
         {
           model: Product,
@@ -671,7 +671,7 @@ export class SubscriptionService {
         {
           model: User,
           as: 'client',
-          attributes: ['id', 'firstName', 'lastName'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
     });

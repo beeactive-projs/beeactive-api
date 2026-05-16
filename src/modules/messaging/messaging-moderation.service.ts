@@ -14,7 +14,7 @@ import {
   buildPaginatedResponse,
   PaginatedResponse,
 } from '../../common/dto/pagination.dto';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { AdminMessageAccessLog } from './entities/admin-message-access-log.entity';
 import { Conversation, ConversationType } from './entities/conversation.entity';
 import { ConversationParticipant } from './entities/conversation-participant.entity';
@@ -174,12 +174,12 @@ export class MessagingModerationService {
         {
           model: User,
           as: 'reporter',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
         {
           model: User,
           as: 'reportedUser',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [
@@ -385,7 +385,7 @@ export class MessagingModerationService {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [['createdAt', 'DESC']],
