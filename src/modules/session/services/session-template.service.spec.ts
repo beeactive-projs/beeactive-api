@@ -10,6 +10,8 @@ import {
   SessionInstanceStatus,
   SessionTemplateStatus,
 } from '../entities/session.enums';
+import { VenueService } from '../../venue/venue.service';
+import { GroupService } from '../../group/group.service';
 import { makeSilentLogger } from '../../../../test/helpers/sequelize-mocks';
 
 const makeTx = () => ({
@@ -35,7 +37,20 @@ function makeInstanceMock() {
   };
 }
 
-const VALID_DTO = {
+function makeVenueServiceMock() {
+  return { get: jest.fn() };
+}
+
+function makeGroupServiceMock() {
+  return { getById: jest.fn() };
+}
+
+// Far enough in the future that the future-date guard always passes.
+// Computed at test time so it stays valid as the clock advances.
+const futureIso = (daysAhead = 30) =>
+  new Date(Date.now() + daysAhead * 86_400_000).toISOString();
+
+const makeValidDto = () => ({
   title: 'Morning Yoga',
   type: 'GROUP' as const,
   access: 'OPEN' as const,
@@ -43,17 +58,21 @@ const VALID_DTO = {
   durationMinutes: 60,
   timezone: 'Europe/Bucharest',
   isRecurring: false,
-  firstStartAt: '2026-07-01T08:00:00.000Z',
-};
+  firstStartAt: futureIso(30),
+});
 
 describe('SessionTemplateService', () => {
   let service: SessionTemplateService;
   let templateMock: ReturnType<typeof makeTemplateMock>;
   let instanceMock: ReturnType<typeof makeInstanceMock>;
+  let venueServiceMock: ReturnType<typeof makeVenueServiceMock>;
+  let groupServiceMock: ReturnType<typeof makeGroupServiceMock>;
 
   beforeEach(async () => {
     templateMock = makeTemplateMock();
     instanceMock = makeInstanceMock();
+    venueServiceMock = makeVenueServiceMock();
+    groupServiceMock = makeGroupServiceMock();
 
     const module = await Test.createTestingModule({
       providers: [
@@ -61,6 +80,8 @@ describe('SessionTemplateService', () => {
         RecurrenceService,
         { provide: getModelToken(SessionTemplate), useValue: templateMock },
         { provide: getModelToken(SessionInstance), useValue: instanceMock },
+        { provide: VenueService, useValue: venueServiceMock },
+        { provide: GroupService, useValue: groupServiceMock },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: makeSilentLogger() },
       ],
     }).compile();
@@ -70,6 +91,7 @@ describe('SessionTemplateService', () => {
 
   describe('create', () => {
     it('creates a one-off template + 1 instance', async () => {
+      const dto = makeValidDto();
       const tx = makeTx();
       templateMock.sequelize.transaction.mockResolvedValue(tx);
       templateMock.findOne.mockResolvedValue(null); // no slug collision
@@ -78,7 +100,7 @@ describe('SessionTemplateService', () => {
         id: 'tmpl-1',
         instructorId: 'usr-1',
         durationMinutes: 60,
-        firstStartAt: new Date(VALID_DTO.firstStartAt),
+        firstStartAt: new Date(dto.firstStartAt),
         isRecurring: false,
         recurrenceRule: null,
         timezone: 'Europe/Bucharest',
@@ -89,7 +111,7 @@ describe('SessionTemplateService', () => {
       const fakeInstance = { id: 'inst-1', occurrenceIndex: 0 };
       instanceMock.create.mockResolvedValue(fakeInstance);
 
-      const result = await service.create('usr-1', VALID_DTO);
+      const result = await service.create('usr-1', dto);
 
       expect(templateMock.create).toHaveBeenCalledTimes(1);
       expect(instanceMock.create).toHaveBeenCalledTimes(1);
@@ -100,20 +122,155 @@ describe('SessionTemplateService', () => {
 
     it('throws BadRequestException for invalid timezone', async () => {
       await expect(
-        service.create('usr-1', { ...VALID_DTO, timezone: 'Not/A/Timezone' }),
+        service.create('usr-1', {
+          ...makeValidDto(),
+          timezone: 'Not/A/Timezone',
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('rolls back tx when create throws', async () => {
+      const dto = makeValidDto();
       const tx = makeTx();
       templateMock.sequelize.transaction.mockResolvedValue(tx);
       templateMock.findOne.mockResolvedValue(null);
       templateMock.create.mockRejectedValue(new Error('DB error'));
 
-      await expect(service.create('usr-1', VALID_DTO)).rejects.toThrow(
-        'DB error',
-      );
+      await expect(service.create('usr-1', dto)).rejects.toThrow('DB error');
       expect(tx.rollback).toHaveBeenCalled();
+    });
+
+    // --- Phase A: regression + new security tests ---
+
+    it('A1: rejects foreign venueId (IDOR) — VenueService throws NotFound', async () => {
+      const dto = {
+        ...makeValidDto(),
+        venueId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      };
+      venueServiceMock.get.mockRejectedValue(
+        new NotFoundException('Venue not found.'),
+      );
+      await expect(service.create('usr-1', dto)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(templateMock.create).not.toHaveBeenCalled();
+    });
+
+    it('A2: rejects foreign groupId (IDOR) — GroupService throws NotFound', async () => {
+      const dto = {
+        ...makeValidDto(),
+        access: 'GROUP_ONLY' as const,
+        groupId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      };
+      groupServiceMock.getById.mockRejectedValue(
+        new NotFoundException('Group not found.'),
+      );
+      await expect(service.create('usr-1', dto)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(templateMock.create).not.toHaveBeenCalled();
+    });
+
+    it('A3: accepts own venueId (regression)', async () => {
+      const dto = { ...makeValidDto(), venueId: 'venue-1' };
+      const tx = makeTx();
+      templateMock.sequelize.transaction.mockResolvedValue(tx);
+      templateMock.findOne.mockResolvedValue(null);
+      venueServiceMock.get.mockResolvedValue({ id: 'venue-1' });
+      templateMock.create.mockResolvedValue({
+        id: 'tmpl-1',
+        instructorId: 'usr-1',
+        durationMinutes: 60,
+        firstStartAt: new Date(dto.firstStartAt),
+        isRecurring: false,
+        recurrenceRule: null,
+        timezone: 'Europe/Bucharest',
+        update: jest.fn(),
+      });
+      instanceMock.create.mockResolvedValue({
+        id: 'inst-1',
+        occurrenceIndex: 0,
+      });
+
+      const result = await service.create('usr-1', dto);
+      expect(venueServiceMock.get).toHaveBeenCalledWith('usr-1', 'venue-1');
+      expect(result.template).toBeDefined();
+    });
+
+    it('A4 (service-level): rejects firstStartAt in the past beyond 5min skew', async () => {
+      const dto = {
+        ...makeValidDto(),
+        firstStartAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+      };
+      await expect(service.create('usr-1', dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('A5 (service-level): accepts firstStartAt within 5min skew window', async () => {
+      const dto = {
+        ...makeValidDto(),
+        firstStartAt: new Date(Date.now() - 60_000).toISOString(),
+      };
+      const tx = makeTx();
+      templateMock.sequelize.transaction.mockResolvedValue(tx);
+      templateMock.findOne.mockResolvedValue(null);
+      templateMock.create.mockResolvedValue({
+        id: 'tmpl-1',
+        instructorId: 'usr-1',
+        durationMinutes: 60,
+        firstStartAt: new Date(dto.firstStartAt),
+        isRecurring: false,
+        recurrenceRule: null,
+        timezone: 'Europe/Bucharest',
+      });
+      instanceMock.create.mockResolvedValue({
+        id: 'inst-1',
+        occurrenceIndex: 0,
+      });
+      await expect(service.create('usr-1', dto)).resolves.toBeDefined();
+    });
+
+    it('A6: strips HTML from title before persist', async () => {
+      const dto = {
+        ...makeValidDto(),
+        title: "<script>alert('xss')</script>Hello",
+      };
+      const tx = makeTx();
+      templateMock.sequelize.transaction.mockResolvedValue(tx);
+      templateMock.findOne.mockResolvedValue(null);
+      templateMock.create.mockResolvedValue({
+        id: 'tmpl-1',
+        instructorId: 'usr-1',
+        durationMinutes: 60,
+        firstStartAt: new Date(dto.firstStartAt),
+        isRecurring: false,
+        recurrenceRule: null,
+        timezone: 'Europe/Bucharest',
+      });
+      instanceMock.create.mockResolvedValue({
+        id: 'inst-1',
+        occurrenceIndex: 0,
+      });
+
+      await service.create('usr-1', dto);
+
+      const created = templateMock.create.mock.calls[0][0] as { title: string };
+      expect(created.title).not.toContain('<script>');
+      expect(created.title).toContain('Hello');
+    });
+
+    it('A6b: rejects when title becomes empty after sanitization', async () => {
+      // <script>…</script> is dropped INCLUDING its content (sanitize-html
+      // discards by default) → empty title.
+      const stripped = { ...makeValidDto(), title: '<script>x</script>' };
+      const onlyTags = { ...makeValidDto(), title: '<img/><br/>' };
+      await expect(service.create('usr-1', stripped)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.create('usr-1', onlyTags)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

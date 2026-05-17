@@ -16,6 +16,7 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { IsFutureOrCloseToNow } from '../../../common/validators/future-date.validator';
 import { RecurrenceRuleDto } from './recurrence-rule.dto';
 
 export class CreateTemplateDto {
@@ -25,9 +26,10 @@ export class CreateTemplateDto {
   @MaxLength(255)
   title: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 4000 })
   @IsOptional()
   @IsString()
+  @MaxLength(4000)
   description?: string;
 
   @ApiProperty({ enum: ['GROUP', 'PRIVATE', 'OPEN'] })
@@ -52,9 +54,11 @@ export class CreateTemplateDto {
   @IsIn(['IN_PERSON', 'ONLINE'])
   locationKind: 'IN_PERSON' | 'ONLINE';
 
-  @ApiPropertyOptional({ description: 'Required when locationKind = ONLINE' })
+  @ApiPropertyOptional({
+    description: 'Required when locationKind = ONLINE. HTTPS only.',
+  })
   @ValidateIf((o: CreateTemplateDto) => o.locationKind === 'ONLINE')
-  @IsUrl({ require_tld: true })
+  @IsUrl({ require_tld: true, protocols: ['https'] })
   @MaxLength(500)
   meetingUrl?: string;
 
@@ -132,8 +136,12 @@ export class CreateTemplateDto {
   @Type(() => RecurrenceRuleDto)
   recurrenceRule?: RecurrenceRuleDto;
 
-  @ApiProperty({ description: 'ISO 8601 datetime of the first occurrence' })
+  @ApiProperty({
+    description:
+      'ISO 8601 datetime of the first occurrence. Must be in the future (5-minute past tolerance for client clock skew).',
+  })
   @IsISO8601()
+  @IsFutureOrCloseToNow({ skewMinutes: 5 })
   firstStartAt: string;
 
   @ApiPropertyOptional({

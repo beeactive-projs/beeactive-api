@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  forwardRef,
   Inject,
   Injectable,
   NotFoundException,
@@ -14,6 +15,9 @@ import {
   PaginatedResponse,
 } from '../../../common/dto/pagination.dto';
 import { detectMeetingProvider } from '../../../common/utils/meeting-provider.util';
+import { stripHtml } from '../../../common/utils/text.utils';
+import { VenueService } from '../../venue/venue.service';
+import { GroupService } from '../../group/group.service';
 import { SessionTemplate } from '../entities/session-template.entity';
 import { SessionInstance } from '../entities/session-instance.entity';
 import {
@@ -45,11 +49,29 @@ export interface RegenerateResult {
 
 const TIMEZONE_VALUES = new Set(Intl.supportedValuesOf('timeZone'));
 
+// Server-side past-date guard. Matches the @IsFutureOrCloseToNow DTO
+// decorator but enforced defense-in-depth in case a future caller
+// bypasses the DTO (e.g. service-to-service).
+const SKEW_TOLERANCE_MS = 5 * 60_000;
+
 function validateTimezone(tz: string): void {
   if (!TIMEZONE_VALUES.has(tz)) {
     throw new BadRequestException(`Invalid timezone: ${tz}`);
   }
 }
+
+function assertNotPast(value: Date): void {
+  if (value.getTime() < Date.now() - SKEW_TOLERANCE_MS) {
+    throw new BadRequestException(
+      'firstStartAt must be a future date (5-minute past tolerance).',
+    );
+  }
+}
+
+// Strip HTML on every text field the user controls and clamp length.
+// title is short; description is long but capped at 4000 by the DTO.
+const TITLE_MAX = 255;
+const DESCRIPTION_MAX = 4000;
 
 function slugifyBase(title: string): string {
   const normalized = title.normalize('NFKD').replace(/[̀-ͯ]/g, '');
@@ -70,6 +92,9 @@ export class SessionTemplateService {
     @InjectModel(SessionInstance)
     private readonly instanceModel: typeof SessionInstance,
     private readonly recurrenceService: RecurrenceService,
+    private readonly venueService: VenueService,
+    @Inject(forwardRef(() => GroupService))
+    private readonly groupService: GroupService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -80,11 +105,36 @@ export class SessionTemplateService {
   ): Promise<CreateTemplateResult> {
     validateTimezone(dto.timezone);
 
+    const firstStart = new Date(dto.firstStartAt);
+    assertNotPast(firstStart);
+
+    // Sanitize free-text fields before persisting. Strip HTML/script,
+    // clamp lengths. The DTO already enforces TITLE_MAX/DESCRIPTION_MAX
+    // but sanitization can change byte length, so re-clamp here.
+    const safeTitle = stripHtml(dto.title, TITLE_MAX);
+    if (!safeTitle) {
+      throw new BadRequestException('title cannot be empty after sanitization');
+    }
+    const safeDescription = dto.description
+      ? stripHtml(dto.description, DESCRIPTION_MAX) || null
+      : null;
+
+    // Validate cross-resource ownership BEFORE inserting. Without this,
+    // an instructor can attach their session to a venue/group owned by
+    // another instructor — IDOR. assertOwned (used inside VenueService/
+    // GroupService) returns 404 on mismatch so we don't leak existence.
+    if (dto.venueId) {
+      await this.venueService.get(instructorId, dto.venueId);
+    }
+    if (dto.groupId) {
+      await this.groupService.getById(dto.groupId, instructorId);
+    }
+
     const sequelize = this.templateModel.sequelize!;
     const tx = await sequelize.transaction();
 
     try {
-      const slug = await this.generateUniqueSlug(instructorId, dto.title, tx);
+      const slug = await this.generateUniqueSlug(instructorId, safeTitle, tx);
 
       const meetingProvider = dto.meetingUrl
         ? (detectMeetingProvider(dto.meetingUrl) ?? null)
@@ -96,8 +146,8 @@ export class SessionTemplateService {
           groupId: dto.groupId ?? null,
           venueId: dto.venueId ?? null,
           slug,
-          title: dto.title,
-          description: dto.description ?? null,
+          title: safeTitle,
+          description: safeDescription,
           type: dto.type,
           access: dto.access,
           approvalRequired: dto.approvalRequired ?? false,
@@ -238,10 +288,31 @@ export class SessionTemplateService {
 
     if (dto.timezone) validateTimezone(dto.timezone);
 
+    // Re-validate cross-resource ownership when these fields change.
+    // (Same IDOR vector as create.)
+    if (dto.venueId) {
+      await this.venueService.get(instructorId, dto.venueId);
+    }
+    if (dto.groupId) {
+      await this.groupService.getById(dto.groupId, instructorId);
+    }
+
     const updates: Partial<SessionTemplate> = {};
 
-    if (dto.title !== undefined) updates.title = dto.title;
-    if (dto.description !== undefined) updates.description = dto.description;
+    if (dto.title !== undefined) {
+      const safe = stripHtml(dto.title, TITLE_MAX);
+      if (!safe) {
+        throw new BadRequestException(
+          'title cannot be empty after sanitization',
+        );
+      }
+      updates.title = safe;
+    }
+    if (dto.description !== undefined) {
+      updates.description = dto.description
+        ? stripHtml(dto.description, DESCRIPTION_MAX) || null
+        : null;
+    }
     if (dto.type !== undefined) updates.type = dto.type;
     if (dto.access !== undefined) updates.access = dto.access;
     if (dto.approvalRequired !== undefined)

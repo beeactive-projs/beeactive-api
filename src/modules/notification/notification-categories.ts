@@ -82,6 +82,7 @@ export const TYPE_TO_CATEGORY: Record<NotificationType, NotificationCategory> =
     [NotificationType.SESSION_CANCELLED]: NotificationCategory.Sessions,
     [NotificationType.SESSION_RESCHEDULED]: NotificationCategory.Sessions,
     [NotificationType.SESSION_STATUS_CHANGED]: NotificationCategory.Sessions,
+    [NotificationType.SESSION_FOLLOW_UP]: NotificationCategory.Sessions,
     [NotificationType.PARTICIPANT_JOINED]: NotificationCategory.Sessions,
     [NotificationType.PARTICIPANT_LEFT]: NotificationCategory.Sessions,
 

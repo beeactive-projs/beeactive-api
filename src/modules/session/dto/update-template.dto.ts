@@ -22,9 +22,10 @@ export class UpdateTemplateDto {
   @MaxLength(255)
   title?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ maxLength: 4000 })
   @IsOptional()
   @IsString()
+  @MaxLength(4000)
   description?: string;
 
   @ApiPropertyOptional({ enum: ['GROUP', 'PRIVATE', 'OPEN'] })
@@ -52,9 +53,9 @@ export class UpdateTemplateDto {
   @IsIn(['IN_PERSON', 'ONLINE'])
   locationKind?: 'IN_PERSON' | 'ONLINE';
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'HTTPS only.' })
   @IsOptional()
-  @IsUrl({ require_tld: true })
+  @IsUrl({ require_tld: true, protocols: ['https'] })
   @MaxLength(500)
   meetingUrl?: string;
 

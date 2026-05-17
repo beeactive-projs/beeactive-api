@@ -33,8 +33,10 @@ import { RegenerateInstancesDto } from './dto/regenerate-instances.dto';
 export class SessionTemplateController {
   constructor(private readonly templateService: SessionTemplateService) {}
 
-  // Static path MUST come before parameterized — registered first wins in NestJS
+  // Static path MUST come before parameterized — registered first wins in NestJS.
+  // Read-only dry-run: returns computed dates without persisting → 200, not 201.
   @Post('templates/preview-recurrence')
+  @HttpCode(200)
   @Roles('INSTRUCTOR', 'SUPER_ADMIN')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiEndpoint(SessionDocs.previewRecurrence)
