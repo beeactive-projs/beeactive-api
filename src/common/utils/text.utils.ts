@@ -29,7 +29,7 @@ export function stripHtml(
     allowedAttributes: {},
     // Defeat hidden-char tricks (leading ZWSP, etc.) that bypass simple
     // length checks while looking empty in the UI.
-    textFilter: (text) => text.replace(ZERO_WIDTH_RX, ''),
+    textFilter: (text: string) => text.replace(ZERO_WIDTH_RX, ''),
   })
     // Run of horizontal whitespace (space, tab, form-feed, vertical-tab)
     // collapses to a single space. Newlines preserved.
