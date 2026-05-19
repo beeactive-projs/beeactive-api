@@ -17,6 +17,7 @@ import {
 import { detectMeetingProvider } from '../../../common/utils/meeting-provider.util';
 import { stripHtml } from '../../../common/utils/text.utils';
 import { VenueService } from '../../venue/venue.service';
+import { Venue } from '../../venue/entities/venue.entity';
 import { GroupService } from '../../group/group.service';
 import { SessionTemplate } from '../entities/session-template.entity';
 import { SessionInstance } from '../entities/session-instance.entity';
@@ -274,6 +275,14 @@ export class SessionTemplateService {
   ): Promise<SessionTemplate> {
     const template = await this.templateModel.findOne({
       where: { id: templateId, instructorId },
+      include: [
+        {
+          model: Venue,
+          as: 'venue',
+          attributes: ['id', 'name', 'city', 'kind'],
+          required: false,
+        },
+      ],
     });
     if (!template) throw new NotFoundException('Session template not found');
     return template;

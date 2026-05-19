@@ -119,6 +119,14 @@ export class SessionInstanceService {
         model: SessionTemplate,
         attributes: [...TEMPLATE_FIELDS],
         required: true,
+        include: [
+          {
+            model: Venue,
+            as: 'venue',
+            attributes: [...VENUE_FIELDS],
+            required: false,
+          },
+        ],
       },
       {
         model: User,
@@ -182,6 +190,16 @@ export class SessionInstanceService {
           model: SessionTemplate,
           attributes: [...TEMPLATE_FIELDS],
           required: true,
+          // Eager-load the template's base venue so the FE can show
+          // "Where & how" even when there's no per-instance override.
+          include: [
+            {
+              model: Venue,
+              as: 'venue',
+              attributes: [...VENUE_FIELDS],
+              required: false,
+            },
+          ],
         },
         {
           model: User,
