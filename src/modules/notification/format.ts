@@ -39,3 +39,32 @@ export function formatDueDate(
     year: 'numeric',
   });
 }
+
+/**
+ * Render a session start time for notification bodies. Includes the
+ * weekday and time so the recipient can recognise it at a glance.
+ *
+ *   formatSessionTime(new Date('2026-06-15T18:00Z'), 'Europe/Bucharest')
+ *     → 'Mon 15 Jun, 21:00'
+ *
+ * `timezone` is the session's IANA zone — the recipient's actual local
+ * zone is not knowable here, but using the session's zone (the one the
+ * instructor scheduled in) is the convention the design canvas follows.
+ */
+export function formatSessionTime(
+  date: Date | string | null | undefined,
+  timezone: string,
+): string | null {
+  if (!date) return null;
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString('en-GB', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: timezone,
+  });
+}

@@ -17,6 +17,27 @@ interface GroupRef {
   name: string | null;
 }
 
+/**
+ * Group owner — a member voluntarily left the group. Distinct from
+ * `groupMemberRemoved` (which targets the removed user). Informational
+ * only; the owner doesn't need to act.
+ */
+export function groupMemberLeft(
+  ownerId: string,
+  group: GroupRef,
+  memberName: string | null,
+): NotifyParams {
+  const who = memberName ?? 'A member';
+  const what = group.name ? ` "${group.name}"` : ' your group';
+  return {
+    userId: ownerId,
+    type: NotificationType.GROUP_MEMBER_LEFT,
+    title: 'A member left your group',
+    body: `${who} left${what}.`,
+    data: { screen: 'groups', entityId: group.id },
+  };
+}
+
 /** Member was removed from the group — they no longer have access. */
 export function groupMemberRemoved(
   removedUserId: string,

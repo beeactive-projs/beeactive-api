@@ -119,6 +119,7 @@ export class UserService {
       email: string;
       firstName: string | null;
       lastName: string | null;
+      handle: string | null;
       phone: string | null;
       avatarId: number | null;
       avatarUrl: string | null;
@@ -136,6 +137,7 @@ export class UserService {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      handle: user.handle ?? null,
       phone: user.phone,
       avatarId: user.avatarId,
       avatarUrl: user.avatarUrl,
@@ -307,7 +309,12 @@ export class UserService {
     const bcryptRounds = this.configService.get<number>('BCRYPT_ROUNDS') || 12;
     const hashedPassword = await bcrypt.hash(userData.password, bcryptRounds);
 
-    // Create user
+    const handle = await this.generateHandle(
+      userData.firstName,
+      userData.lastName,
+      transaction,
+    );
+
     const user = await this.userModel.create(
       {
         email: userData.email,
@@ -315,6 +322,7 @@ export class UserService {
         firstName: userData.firstName,
         lastName: userData.lastName,
         phone: userData.phone,
+        handle,
       },
       { transaction },
     );
@@ -393,6 +401,44 @@ export class UserService {
   }
 
   /**
+   * Generate a unique URL handle for a user in the form `firstname-lastname`.
+   * If that slug is taken, appends a random 4-digit number and retries up to
+   * 10 times. Falls back to a timestamp suffix on the extreme off-chance every
+   * attempt collides.
+   */
+  private async generateHandle(
+    firstName: string,
+    lastName: string,
+    transaction?: Transaction,
+  ): Promise<string> {
+    const base = `${firstName}-${lastName}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 35);
+
+    const slug = base || `user-${Math.random().toString(36).slice(2, 10)}`;
+
+    const isTaken = async (candidate: string): Promise<boolean> => {
+      const count = await this.userModel.count({
+        where: { handle: candidate },
+        transaction,
+      });
+      return count > 0;
+    };
+
+    if (!(await isTaken(slug))) return slug;
+
+    for (let i = 0; i < 10; i++) {
+      const rand = 1000 + Math.floor(Math.random() * 9000);
+      const candidate = `${slug}-${rand}`.slice(0, 40);
+      if (!(await isTaken(candidate))) return candidate;
+    }
+
+    return `${slug}-${Date.now()}`.slice(0, 40);
+  }
+
+  /**
    * Insert a social_account row, but treat a concurrent UNIQUE-
    * constraint failure as success. Two concurrent OAuth callbacks for
    * the same (provider, sub) can both pass step 1 of the find-or-
@@ -447,6 +493,11 @@ export class UserService {
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
+    const handle = await this.generateHandle(
+      profile.firstName,
+      profile.lastName,
+      transaction,
+    );
     const user = await this.userModel.create(
       {
         email: profile.email,
@@ -454,6 +505,7 @@ export class UserService {
         firstName: profile.firstName,
         lastName: profile.lastName,
         isEmailVerified: true,
+        handle,
       },
       { transaction },
     );

@@ -1,0 +1,48 @@
+import { IsIn, IsISO8601, IsOptional, IsUUID } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
+
+/**
+ * Query DTO for `GET /sessions/instances`.
+ *
+ * Visibility rule (enforced in the service, not here):
+ *   - omitting `instructorId` (or passing the caller's own) → returns
+ *     the caller's own instances (instructor view of own calendar).
+ *   - passing another instructorId → returns only instances that
+ *     caller is a participant of (CONFIRMED / PENDING / WAITLISTED).
+ *
+ * The date window defaults to "next 7 days" in the service when neither
+ * `dateFrom` nor `dateTo` is set. Hard cap of 180 days enforced server-side
+ * to prevent calendar scrapers.
+ */
+export class ListInstancesQueryDto extends PaginationDto {
+  @ApiPropertyOptional({ description: 'ISO8601 lower bound (inclusive).' })
+  @IsOptional()
+  @IsISO8601()
+  dateFrom?: string;
+
+  @ApiPropertyOptional({ description: 'ISO8601 upper bound (exclusive).' })
+  @IsOptional()
+  @IsISO8601()
+  dateTo?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Filter to a specific instructor. Defaults to the caller (own calendar).',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  instructorId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter to a specific template.' })
+  @IsOptional()
+  @IsUUID('4')
+  templateId?: string;
+
+  @ApiPropertyOptional({
+    enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
+  })
+  @IsOptional()
+  @IsIn(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'])
+  status?: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+}

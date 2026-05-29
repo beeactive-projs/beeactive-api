@@ -1,45 +1,31 @@
-/**
- * API Documentation for Session endpoints
- */
-
 import { ApiEndpointOptions } from '../decorators/api-response.decorator';
 import { ApiStandardResponses } from './standard-responses';
 
 export const SessionDocs = {
-  create: {
-    summary: 'Create a new session',
+  // -----------------------------------------------------------------------
+  // Template endpoints (instructor, §4.1)
+  // -----------------------------------------------------------------------
+
+  createTemplate: {
+    summary: 'Create a session template',
     description:
-      'Create a training session. Requires INSTRUCTOR role. If groupId is provided, you must be a member of that group. ' +
-      'For recurring sessions: set isRecurring to true and provide recurringRule (frequency, interval, daysOfWeek for WEEKLY, optional endDate or endAfterOccurrences). ' +
-      'The created session is the first occurrence; use GET /sessions/:id/recurrence-preview to show dates and POST /sessions/:id/generate-instances to create future rows. ' +
-      'If a scheduling conflict is detected (same time slot), the session is still created but the response includes warning and conflictingSessionIds.',
+      'Creates a new session template. For non-recurring sessions (isRecurring=false), also atomically creates the single instance. ' +
+      'For recurring sessions, instances are generated separately via POST /sessions/templates/:id/regenerate, ' +
+      'or immediately if initialInstancesCount is provided.',
     auth: true,
     responses: [
       {
         status: 201,
-        description: 'Session created successfully',
+        description: 'Template (and initial instances) created',
         example: {
-          id: '550e8400-e29b-41d4-a716-446655440000',
-          groupId: 'group-uuid-or-null',
-          instructorId: 'user-uuid',
-          title: 'Morning Yoga Flow',
-          description: 'A relaxing yoga flow for all levels',
-          sessionType: 'GROUP',
-          visibility: 'GROUP',
-          scheduledAt: '2026-02-15T09:00:00.000Z',
-          durationMinutes: 60,
-          location: 'Bucharest, Parcul Herăstrău',
-          maxParticipants: 12,
-          price: 50,
-          currency: 'RON',
-          status: 'SCHEDULED',
-          isRecurring: false,
-          recurringRule: null,
-          createdAt: '2026-03-18T10:00:00.000Z',
-          updatedAt: '2026-03-18T10:00:00.000Z',
-          // Only present when a scheduling conflict was detected:
-          warning: 'Schedule conflict with 1 existing session(s)',
-          conflictingSessionIds: ['other-session-uuid'],
+          template: {
+            id: '...',
+            slug: 'morning-yoga',
+            title: 'Morning Yoga',
+            status: 'ACTIVE',
+          },
+          generatedInstances: [],
+          warnings: [],
         },
       },
       ApiStandardResponses.BadRequest,
@@ -48,106 +34,96 @@ export const SessionDocs = {
     ],
   } as ApiEndpointOptions,
 
-  getMySessions: {
-    summary: 'List my visible sessions (paginated)',
+  listTemplates: {
+    summary: 'List my session templates',
     description:
-      'Returns paginated sessions visible to you. Includes: your own sessions, group sessions you belong to, PUBLIC sessions, and sessions you joined as participant. ' +
-      'Query params: ?page=1&limit=20.',
+      'Returns paginated list of session templates owned by the authenticated instructor. ' +
+      'Filter by tab (active/recurring/ended/cancelled), type, access, locationKind, groupId, or free-text search.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Sessions listed',
-        example: {
-          items: [
-            {
-              id: 'session-uuid',
-              groupId: 'group-uuid-or-null',
-              instructorId: 'user-uuid',
-              title: 'Morning Yoga Flow',
-              sessionType: 'GROUP',
-              visibility: 'GROUP',
-              scheduledAt: '2026-02-15T09:00:00.000Z',
-              durationMinutes: 60,
-              location: 'Bucharest',
-              maxParticipants: 12,
-              price: 50,
-              currency: 'RON',
-              status: 'SCHEDULED',
-              isRecurring: false,
-            },
-          ],
-          total: 1,
-          page: 1,
-          pageSize: 20,
-        },
+        description: 'Paginated template list',
+        example: { items: [], total: 0, page: 1, pageSize: 20 },
       },
       ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
     ],
   } as ApiEndpointOptions,
 
-  discoverSessions: {
-    summary: 'Discover public sessions',
+  getTemplate: {
+    summary: 'Get a session template by ID',
     description:
-      'Browse upcoming PUBLIC sessions. Supports search by title, description, or location. ' +
-      'Query params: ?search=yoga&page=1&limit=20&sessionType=GROUP&dateFrom=2026-01-01&dateTo=2026-12-31.',
+      'Returns a single session template. Returns 404 if not found or not owned by the caller.',
     auth: true,
     responses: [
-      {
-        status: 200,
-        description: 'Public sessions listed',
-        example: {
-          items: [
-            {
-              id: 'session-uuid',
-              groupId: 'group-uuid-or-null',
-              instructorId: 'user-uuid',
-              title: 'Morning Yoga Flow',
-              sessionType: 'GROUP',
-              visibility: 'PUBLIC',
-              scheduledAt: '2026-02-15T09:00:00.000Z',
-              durationMinutes: 60,
-              location: 'Bucharest',
-              maxParticipants: 12,
-              price: 50,
-              currency: 'RON',
-              status: 'SCHEDULED',
-            },
-          ],
-          total: 1,
-          page: 1,
-          pageSize: 20,
-        },
-      },
-      ApiStandardResponses.Unauthorized,
-    ],
-  } as ApiEndpointOptions,
-
-  getById: {
-    summary: 'Get session details',
-    description:
-      'Returns full session details including participants. Access controlled by visibility rules.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Session details retrieved',
-      },
+      { status: 200, description: 'Template found' },
       ApiStandardResponses.Unauthorized,
       ApiStandardResponses.Forbidden,
       ApiStandardResponses.NotFound,
     ],
   } as ApiEndpointOptions,
 
-  update: {
-    summary: 'Update session',
+  updateTemplate: {
+    summary: 'Update a session template',
     description:
-      'Update session details. Instructor only. If status is changed to CANCELLED, all participants are notified.',
+      'Partially updates a session template. Only provided fields are changed. ' +
+      'If meetingUrl is updated, meetingProvider is re-derived automatically. ' +
+      'Does not modify existing instances.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Template updated' },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  deleteTemplate: {
+    summary: 'End (delete) a session template',
+    description:
+      'Sets template status to ENDED and cancels all future SCHEDULED instances. Soft-deletes the template row.',
+    auth: true,
+    responses: [
+      { status: 204, description: 'Template ended and instances cancelled' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  previewRecurrence: {
+    summary: 'Preview recurrence occurrences (no DB write)',
+    description:
+      'Pure computation endpoint. Returns ISO 8601 UTC datetimes for a recurrence rule up to the specified horizon. ' +
+      'truncated=true if the horizon cap was hit before the rule naturally ended.',
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Session updated',
+        description: 'Occurrence datetimes computed',
+        example: {
+          occurrences: ['2026-07-01T06:00:00.000Z', '2026-07-08T06:00:00.000Z'],
+          truncated: false,
+        },
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+    ],
+  } as ApiEndpointOptions,
+
+  regenerateInstances: {
+    summary: 'Generate more instances for a recurring template',
+    description:
+      'Generates the next N instances after the latest existing occurrence for this template. Idempotent within the rule bounds.',
+    auth: true,
+    responses: [
+      {
+        status: 201,
+        description: 'New instances generated',
+        example: { generatedInstances: [], warnings: [] },
       },
       ApiStandardResponses.BadRequest,
       ApiStandardResponses.Unauthorized,
@@ -156,176 +132,320 @@ export const SessionDocs = {
     ],
   } as ApiEndpointOptions,
 
-  delete: {
-    summary: 'Delete session',
+  // ─── Instance read surface (Phase B) ───────────────────────────────
+
+  listInstances: {
+    summary: 'List session instances visible to the caller',
     description:
-      'Soft-delete a session. Instructor only. All registered participants are notified via email.',
+      "Returns instances within a date window. Defaults to the caller's own calendar; passing `instructorId` for another user returns only instances the caller is actively participating in. Hard 180-day max window.",
     auth: true,
     responses: [
       {
         status: 200,
-        description: 'Session deleted',
-        example: { message: 'Session deleted successfully' },
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  } as ApiEndpointOptions,
-
-  cloneSession: {
-    summary: 'Clone/duplicate a session',
-    description:
-      'Create a copy of an existing session with a new scheduled date. Instructor only.',
-    auth: true,
-    responses: [
-      {
-        status: 201,
-        description: 'Session cloned',
-        example: {
-          id: '...',
-          title: '...',
-          scheduledAt: '2026-02-27T09:00:00.000Z',
-        },
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  } as ApiEndpointOptions,
-
-  recurrencePreview: {
-    summary: 'Preview recurrence dates',
-    description:
-      'For a recurring session (isRecurring true + recurringRule), returns { dates: string[] } with ISO date-times for the next N weeks (?weeks=12, default 12). ' +
-      'Does not create any sessions; use this to display occurrences on a calendar. Instructor only.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description:
-          'List of ISO date strings (includes the template session date)',
-        example: {
-          dates: [
-            '2026-02-17T09:00:00.000Z',
-            '2026-02-19T09:00:00.000Z',
-            '2026-02-21T09:00:00.000Z',
-          ],
-        },
-      },
-      { status: 400, description: 'Session is not recurring or has no rule' },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  } as ApiEndpointOptions,
-
-  generateInstances: {
-    summary: 'Generate upcoming instances',
-    description:
-      'For a recurring session, creates new Session rows for each occurrence in the next N weeks (body: { weeks?: 12 }). ' +
-      'Respects recurringRule endDate and endAfterOccurrences. Skips dates that already have a session (same instructor + title + time). ' +
-      'Returns { created: number, sessions: Session[] }. Instructor only.',
-    auth: true,
-    responses: [
-      {
-        status: 201,
-        description: 'Instances created',
-        example: { created: 24, sessions: [] },
-      },
-      { status: 400, description: 'Session is not recurring or has no rule' },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  } as ApiEndpointOptions,
-
-  joinSession: {
-    summary: 'Join a session',
-    description:
-      'Register as a participant. Checks visibility rules and capacity.',
-    auth: true,
-    responses: [
-      {
-        status: 201,
-        description: 'Successfully joined session',
-      },
-      {
-        status: 400,
-        description: 'Already registered, session full, or own session',
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.Forbidden,
-      ApiStandardResponses.NotFound,
-    ],
-  } as ApiEndpointOptions,
-
-  leaveSession: {
-    summary: 'Leave a session',
-    description:
-      'Cancel your registration. Cannot leave within 2 hours of session start (cancellation policy).',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Successfully left session',
-        example: { message: 'You have left the session' },
-      },
-      {
-        status: 400,
-        description: 'Cannot cancel within 2 hours of session start',
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.NotFound,
-    ],
-  } as ApiEndpointOptions,
-
-  confirmRegistration: {
-    summary: 'Confirm registration',
-    description:
-      'Confirm your attendance for a session. Changes status from REGISTERED to CONFIRMED.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Registration confirmed',
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.NotFound,
-    ],
-  } as ApiEndpointOptions,
-
-  selfCheckIn: {
-    summary: 'Self check-in',
-    description:
-      'Check yourself in to a session. Available from 15 min before to 30 min after session start.',
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Checked in successfully',
-      },
-      {
-        status: 400,
-        description: 'Check-in window not active',
-      },
-      ApiStandardResponses.Unauthorized,
-      ApiStandardResponses.NotFound,
-    ],
-  } as ApiEndpointOptions,
-
-  updateParticipantStatus: {
-    summary: 'Update participant status',
-    description:
-      "Change a participant's status (ATTENDED, NO_SHOW, etc.). Instructor only. Participant is notified.",
-    auth: true,
-    responses: [
-      {
-        status: 200,
-        description: 'Participant status updated',
+        description: 'Paginated instance list',
+        example: { items: [], total: 0, page: 1, pageSize: 20 },
       },
       ApiStandardResponses.BadRequest,
       ApiStandardResponses.Unauthorized,
+    ],
+  } as ApiEndpointOptions,
+
+  getInstance: {
+    summary: 'Get one session instance by id',
+    description:
+      "Returns the instance with its template (eagerly loaded). Owner sees the first 10 participants. Other authenticated users see only fields that don't leak booking data. 404 if not visible (no existence leak).",
+    auth: true,
+    responses: [
+      { status: 200, description: 'Instance found' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  listParticipants: {
+    summary: 'List participants for one instance (owner only)',
+    description:
+      'Returns paginated participants of an instance. Returns 404 for any caller other than the instance owner — same shape as if it did not exist.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Paginated participants list',
+        example: { items: [], total: 0, page: 1, pageSize: 20 },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  // ─── Booking flow (Phase C) ────────────────────────────────────────
+
+  bookInstance: {
+    summary: 'Book a session',
+    description:
+      'Books the caller into the session instance. Returns CONFIRMED, PENDING_APPROVAL (if the template requires it), or WAITLISTED (if at capacity and waitlist is enabled). 409 ALREADY_BOOKED if non-terminal row exists. 409 CAPACITY_HIT_NO_WAITLIST if full + waitlist disabled. 403 if caller is not eligible by access kind. 400 if caller is the instructor (cannot book own session).',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Booking accepted',
+        example: { status: 'CONFIRMED', participantId: '...' },
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      ApiStandardResponses.NotFound,
+      ApiStandardResponses.Conflict,
+    ],
+  } as ApiEndpointOptions,
+
+  cancelBooking: {
+    summary: 'Cancel my booking',
+    description:
+      "Cancels the caller's own booking. `cancellation` reports whether the cancellation fell within the as-booked window (snapshot, not the live template). When a confirmed seat is freed and waitlist is enabled, the oldest waitlister is auto-promoted (only if at least 2 hours remain before start).",
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Booking cancelled',
+        example: {
+          status: 'CANCELLED',
+          cancellation: 'WITHIN_WINDOW',
+          promotedUserId: null,
+        },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+      ApiStandardResponses.Conflict,
+    ],
+  } as ApiEndpointOptions,
+
+  approveParticipant: {
+    summary: 'Approve a pending booking (instructor)',
+    description:
+      'Moves a PENDING_APPROVAL participant to CONFIRMED. If capacity has been hit in the meantime, lands as WAITLISTED (if waitlist enabled) or DECLINED otherwise.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Approved (or routed to waitlist/declined)',
+        example: { status: 'CONFIRMED' },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  declineParticipant: {
+    summary: 'Decline a pending booking (instructor)',
+    description:
+      'Moves a PENDING_APPROVAL participant to DECLINED with an optional reason shown to the client.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Declined',
+        example: { status: 'DECLINED' },
+      },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  patchParticipant: {
+    summary: 'Update attendance / private note (instructor)',
+    description:
+      'Sets `attended` (true/false/null) and/or `privateNote` on a participant row. Attendance can only be marked after `startAt`.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Participant updated' },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  // ─── Lifecycle (Phase D) ───────────────────────────────────────────
+
+  cancelInstance: {
+    summary: 'Cancel this / this+future / series (instructor)',
+    description:
+      'Cancels one occurrence or a future window. scope=series also flips the template to CANCELLED. Participants are notified ONCE per unique user, regardless of how many of their bookings were affected.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Cancellation applied',
+        example: {
+          scope: 'thisAndFuture',
+          cancelledInstanceIds: [],
+          notifiedUserIds: [],
+        },
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  rescheduleInstance: {
+    summary: 'Reschedule a single instance (instructor)',
+    description:
+      'Moves `startAt` (and `endAt`, preserving duration). Recomputes conflicts. Fires SESSION_RESCHEDULED to every non-terminal participant exactly once.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Rescheduled',
+        example: {
+          instanceId: '...',
+          oldStartAt: '...',
+          newStartAt: '...',
+          notifiedUserIds: [],
+          warnings: [],
+        },
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  patchInstance: {
+    summary: 'Set per-occurrence overrides (instructor)',
+    description:
+      'Override title/description/venue/meetingUrl/capacity for a single occurrence. Cross-resource ownership re-validated (foreign venueId → 404). Capacity cannot drop below current confirmedCount.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Instance updated' },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  // ─── Public surface (Phase E) ──────────────────────────────────────
+
+  discover: {
+    summary: 'Browse upcoming sessions (public, optional auth)',
+    description:
+      'Anonymous callers see OPEN/FREE upcoming sessions only. Authenticated callers also see CLIENTS_ONLY sessions for instructors they have an active client relationship with, and GROUP_ONLY sessions for groups they currently belong to. Hard 90-day date window. Cached for 60s by HTTP layer; vary by Authorization.',
+    auth: false,
+    responses: [
+      {
+        status: 200,
+        description: 'Paginated public instance list',
+        example: { items: [], total: 0, page: 1, pageSize: 20 },
+      },
+      ApiStandardResponses.BadRequest,
+    ],
+  } as ApiEndpointOptions,
+
+  publicBySlug: {
+    summary: 'Public session detail by handle + slug',
+    description:
+      'Resolves `motionhive.app/s/<instructorHandle>/<templateSlug>` to the next upcoming SCHEDULED instance. Only OPEN/FREE sessions are surfaced via this slug route — gated sessions return 404 here (use `/instances/:id/public` for the authenticated/blocked variants).',
+    auth: false,
+    responses: [
+      { status: 200, description: 'Public instance shape' },
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  publicInstance: {
+    summary: 'Public session detail by instance UUID',
+    description:
+      "Returns the public shape if caller is eligible (OPEN/FREE always; CLIENTS_ONLY active client; GROUP_ONLY current member). For GROUP_ONLY non-members returns a REDACTED 'blocked' shape (title + instructor + start time only) so the FE can render a 'join the group' CTA. For CLIENTS_ONLY non-clients returns 404.",
+    auth: false,
+    responses: [
+      { status: 200, description: 'Public or blocked shape' },
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  // ─── Client utilities (Phase F) ────────────────────────────────────
+
+  listMy: {
+    summary: "List the caller's bookings",
+    description:
+      'Paginated list of bookings under one of five tabs: upcoming (confirmed + future), pendingApproval, waitlisted, past (confirmed + past), cancelled (cancelled or declined). Order ASC for active tabs, DESC for past/cancelled.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Paginated bookings',
+        example: { items: [], total: 0, page: 1, pageSize: 20 },
+      },
+      ApiStandardResponses.Unauthorized,
+    ],
+  } as ApiEndpointOptions,
+
+  myCounts: {
+    summary: 'Profile badge counts for My Sessions tabs',
+    description:
+      'Four small COUNT(*) queries in parallel. Returns { upcoming, pendingApproval, waitlisted, past, cancelled }. No list payload — never use list endpoints for counts.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Counts',
+        example: {
+          upcoming: 0,
+          pendingApproval: 0,
+          waitlisted: 0,
+          past: 0,
+          cancelled: 0,
+        },
+      },
+      ApiStandardResponses.Unauthorized,
+    ],
+  } as ApiEndpointOptions,
+
+  icsDownload: {
+    summary: 'Download a session as .ics (single VEVENT)',
+    description:
+      'Returns a `text/calendar` payload conforming to RFC 5545 with one VEVENT. Status reflects the session state (CONFIRMED or CANCELLED). Auth required: even OPEN/FREE sessions need a logged-in caller to download .ics (the file includes the meeting URL when applicable).',
+    auth: true,
+    responses: [
+      { status: 200, description: 'iCalendar payload' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  followUp: {
+    summary: 'Send a follow-up message to participants (instructor)',
+    description:
+      "Audience: 'all' (every non-terminal participant), 'attended', 'noshow', or an explicit 'userIds' list. Allowed only after `startAt`. The message is HTML-stripped server-side. Notifications are deduplicated per user; each recipient sees ONE message regardless of how their booking is shaped.",
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Follow-up dispatched',
+        example: { notifiedUserIds: [] },
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
+  joinInfo: {
+    summary: 'Day-of meeting info for confirmed participants',
+    description:
+      'Returns the meeting URL plus a `joinActiveFrom` (startAt − 5 min) / `joinActiveUntil` (startAt + 15 min) window. The FE polls this every ~30s when the user is on the day-of screen. 403 if the caller is not a confirmed participant.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Join info',
+        example: {
+          meetingUrl: 'https://meet.google.com/abc',
+          joinActiveFrom: '...',
+          joinActiveUntil: '...',
+          instructorJoined: false,
+        },
+      },
       ApiStandardResponses.Forbidden,
       ApiStandardResponses.NotFound,
     ],

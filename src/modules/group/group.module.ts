@@ -4,6 +4,8 @@ import { Group } from './entities/group.entity';
 import { GroupMember } from './entities/group-member.entity';
 import { GroupJoinRequest } from './entities/group-join-request.entity';
 import { User } from '../user/entities/user.entity';
+import { SessionInstance } from '../session/entities/session-instance.entity';
+import { SessionTemplate } from '../session/entities/session-template.entity';
 import { GroupController } from './group.controller';
 import { GroupService } from './group.service';
 import { RoleModule } from '../role/role.module';
@@ -32,6 +34,8 @@ import { SearchModule } from '../search/search.module';
       GroupJoinRequest,
       InstructorClient,
       User,
+      SessionInstance,
+      SessionTemplate,
     ]),
     RoleModule,
     SearchModule,

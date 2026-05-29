@@ -5,8 +5,12 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { literal, Op } from 'sequelize';
-import { Session } from '../session/entities/session.entity';
+import { SessionInstance } from '../session/entities/session-instance.entity';
 import { SessionParticipant } from '../session/entities/session-participant.entity';
+import {
+  SessionInstanceStatus,
+  SessionParticipantStatus,
+} from '../session/entities/session.enums';
 import { Group } from '../group/entities/group.entity';
 import { GroupMember } from '../group/entities/group-member.entity';
 import { InstructorClient } from '../client/entities/instructor-client.entity';
@@ -16,8 +20,8 @@ import { InstructorProfile } from '../profile/entities/instructor-profile.entity
 @Injectable()
 export class AnalyticsService {
   constructor(
-    @InjectModel(Session)
-    private readonly sessionModel: typeof Session,
+    @InjectModel(SessionInstance)
+    private readonly sessionModel: typeof SessionInstance,
     @InjectModel(SessionParticipant)
     private readonly participantModel: typeof SessionParticipant,
     @InjectModel(Group)
@@ -62,14 +66,14 @@ export class AnalyticsService {
       this.sessionModel.count({
         where: {
           instructorId,
-          status: 'COMPLETED',
+          status: SessionInstanceStatus.Completed,
           createdAt: { [Op.gte]: thirtyDaysAgo },
         },
       }),
       this.sessionModel.count({
         where: {
           instructorId,
-          status: 'CANCELLED',
+          status: SessionInstanceStatus.Cancelled,
           createdAt: { [Op.gte]: thirtyDaysAgo },
         },
       }),
@@ -103,27 +107,25 @@ export class AnalyticsService {
         await this.sessionModel.findAll({
           where: {
             instructorId,
-            status: 'COMPLETED',
+            status: SessionInstanceStatus.Completed,
             createdAt: { [Op.gte]: thirtyDaysAgo },
           },
           attributes: ['id'],
         })
-      ).map((s) => s.id);
+      ).map((s: SessionInstance) => s.id);
 
       if (completedSessionIds.length > 0) {
         const totalParticipants = await this.participantModel.count({
           where: {
-            sessionId: { [Op.in]: completedSessionIds },
-            status: {
-              [Op.in]: ['ATTENDED', 'NO_SHOW', 'CONFIRMED', 'REGISTERED'],
-            },
+            instanceId: { [Op.in]: completedSessionIds },
+            status: SessionParticipantStatus.Confirmed,
           },
         });
 
         const attended = await this.participantModel.count({
           where: {
-            sessionId: { [Op.in]: completedSessionIds },
-            status: 'ATTENDED',
+            instanceId: { [Op.in]: completedSessionIds },
+            attended: true,
           },
         });
 
@@ -181,21 +183,26 @@ export class AnalyticsService {
         this.participantModel.count({
           where: {
             userId,
-            status: 'ATTENDED',
+            attended: true,
             createdAt: { [Op.gte]: thirtyDaysAgo },
           },
         }),
         this.participantModel.count({
           where: {
             userId,
-            status: { [Op.in]: ['REGISTERED', 'CONFIRMED'] },
+            status: {
+              [Op.in]: [
+                SessionParticipantStatus.Confirmed,
+                SessionParticipantStatus.PendingApproval,
+              ],
+            },
             createdAt: { [Op.gte]: thirtyDaysAgo },
           },
         }),
         this.participantModel.count({
           where: {
             userId,
-            status: 'NO_SHOW',
+            attended: false,
             createdAt: { [Op.gte]: thirtyDaysAgo },
           },
         }),
@@ -242,7 +249,9 @@ export class AnalyticsService {
       InstructorProfile.count(),
       this.groupModel.count(),
       this.sessionModel.count(),
-      this.sessionModel.count({ where: { status: 'COMPLETED' } }),
+      this.sessionModel.count({
+        where: { status: SessionInstanceStatus.Completed },
+      }),
     ]);
 
     return {

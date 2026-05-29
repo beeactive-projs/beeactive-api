@@ -16,6 +16,7 @@ export enum NotificationType {
   SESSION_CANCELLED = 'SESSION_CANCELLED',
   SESSION_RESCHEDULED = 'SESSION_RESCHEDULED',
   SESSION_STATUS_CHANGED = 'SESSION_STATUS_CHANGED',
+  SESSION_FOLLOW_UP = 'SESSION_FOLLOW_UP',
   PARTICIPANT_JOINED = 'PARTICIPANT_JOINED',
   PARTICIPANT_LEFT = 'PARTICIPANT_LEFT',
   // ── Client / coaching ────────────────────────────────────
@@ -54,4 +55,6 @@ export enum NotificationType {
   POST_PENDING_APPROVAL = 'POST_PENDING_APPROVAL',
   POST_APPROVED = 'POST_APPROVED',
   POST_REJECTED = 'POST_REJECTED',
+  // ── Messaging ────────────────────────────────────────────
+  MESSAGE_RECEIVED = 'MESSAGE_RECEIVED',
 }

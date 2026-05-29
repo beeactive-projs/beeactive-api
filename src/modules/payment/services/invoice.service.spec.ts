@@ -226,9 +226,7 @@ describe('InvoiceService.updateDraft', () => {
       'in_test',
       expect.objectContaining({ description: 'new memo' }),
       expect.objectContaining({
-        idempotencyKey: expect.stringMatching(
-          /^invoice:inv-1:update_/,
-        ) as unknown as string,
+        idempotencyKey: expect.stringMatching(/^invoice:inv-1:update_/),
       }),
     );
     expect(inv.description).toBe('new memo');
@@ -258,7 +256,7 @@ describe('InvoiceService.updateDraft', () => {
       expect.objectContaining({
         idempotencyKey: expect.stringMatching(
           /^invoice_item:inv-1:edit_.*_del_ii_old1$/,
-        ) as unknown as string,
+        ),
       }),
     );
     expect(stripeMock.stripe.invoiceItems.del).toHaveBeenCalledWith(
@@ -266,7 +264,7 @@ describe('InvoiceService.updateDraft', () => {
       expect.objectContaining({
         idempotencyKey: expect.stringMatching(
           /^invoice_item:inv-1:edit_.*_del_ii_old2$/,
-        ) as unknown as string,
+        ),
       }),
     );
     expect(stripeMock.stripe.invoiceItems.create).toHaveBeenCalledTimes(2);

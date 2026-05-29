@@ -62,6 +62,10 @@ export const NOTIFICATION_DEFAULTS: Record<
   [NotificationType.SESSION_RESCHEDULED]: ON_EVERYTHING_BUT_SMS,
   // Status changes (started/completed) are informational only.
   [NotificationType.SESSION_STATUS_CHANGED]: IN_APP_ONLY,
+  // Instructor-sent follow-up — content the user expects to read,
+  // not just see in the bell. Email + in-app, push muted to avoid
+  // late-night dings.
+  [NotificationType.SESSION_FOLLOW_UP]: IN_APP_AND_EMAIL,
   // Roster churn is in-app only — too noisy to email about.
   [NotificationType.PARTICIPANT_JOINED]: IN_APP_ONLY,
   [NotificationType.PARTICIPANT_LEFT]: IN_APP_ONLY,
@@ -113,6 +117,11 @@ export const NOTIFICATION_DEFAULTS: Record<
   [NotificationType.POST_PENDING_APPROVAL]: IN_APP_AND_EMAIL,
   [NotificationType.POST_APPROVED]: IN_APP_ONLY,
   [NotificationType.POST_REJECTED]: IN_APP_AND_EMAIL,
+
+  // ── Messaging ────────────────────────────────────────────
+  // In-app on every message; email is throttled at the call site
+  // (one per recipient/conversation/hour). Push reserved for v2.
+  [NotificationType.MESSAGE_RECEIVED]: IN_APP_AND_EMAIL,
 };
 
 /**

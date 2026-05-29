@@ -13,6 +13,34 @@ import { Role } from '../../role/entities/role.entity';
 import { UserRole } from '../../role/entities/user-role.entity';
 import { SocialAccount } from './social-account.entity';
 
+/**
+ * Visibility level a user can pick for an individual profile field.
+ * - PUBLIC       — anyone (including anonymous viewers) can see it.
+ * - COACHES_ONLY — only active coaches of this user can see it.
+ * - ONLY_ME      — only the owner sees it.
+ */
+export type ProfilePrivacyLevel = 'PUBLIC' | 'COACHES_ONLY' | 'ONLY_ME';
+
+/**
+ * Fields whose visibility the user can control. Keys are optional —
+ * missing keys fall back to per-field defaults applied at the service
+ * layer (`resolveFieldPrivacy`), so a freshly-created account with
+ * `privacy_settings = '{}'` still behaves correctly.
+ */
+export type PrivacyControlledField =
+  | 'firstName'
+  | 'lastName'
+  | 'avatarUrl'
+  | 'email'
+  | 'phone'
+  | 'city'
+  | 'language'
+  | 'timezone';
+
+export type UserPrivacySettings = Partial<
+  Record<PrivacyControlledField, ProfilePrivacyLevel>
+>;
+
 @Table({
   tableName: 'user',
   paranoid: true,
@@ -179,6 +207,31 @@ export class User extends Model {
   })
   declare city: string | null;
 
+  /**
+   * Short, case-insensitive URL slug used by `/@<handle>` profiles.
+   * Nullable so signup doesn't have to pick one up-front; the migration
+   * backfills existing rows and a small app-side script
+   * (`scripts/backfill-user-handles.js`) covers anything the SQL
+   * backfill couldn't resolve.
+   */
+  @Column({
+    type: DataType.STRING(40),
+    allowNull: true,
+  })
+  declare handle: string | null;
+
+  /**
+   * Per-field visibility map. See `UserPrivacySettings`. Defaults to
+   * `{}` and is patched in place via `PATCH /profile/privacy`; missing
+   * keys resolve to per-field defaults at read time.
+   */
+  @Column({
+    type: DataType.JSONB,
+    allowNull: false,
+    defaultValue: {},
+  })
+  declare privacySettings: UserPrivacySettings;
+
   @CreatedAt
   declare createdAt: Date;
 
@@ -195,3 +248,27 @@ export class User extends Model {
   @HasMany(() => SocialAccount)
   declare socialAccounts: SocialAccount[];
 }
+
+/**
+ * Safe primitive User fields for use in Sequelize `attributes` arrays.
+ * Excludes secrets (passwordHash, tokens, lockout fields) and JSONB columns.
+ * Import this instead of hand-rolling field lists in includes/queries.
+ */
+export const USER_SAFE_ATTRIBUTES: Array<keyof User> = [
+  'id',
+  'email',
+  'firstName',
+  'lastName',
+  'handle',
+  'phone',
+  'avatarId',
+  'avatarUrl',
+  'language',
+  'timezone',
+  'countryCode',
+  'city',
+  'isActive',
+  'isEmailVerified',
+  'createdAt',
+  'updatedAt',
+];

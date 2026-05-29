@@ -155,7 +155,7 @@ export class InvoiceService {
                 : null),
           }
         : null;
-      return json as unknown as InvoiceResponse;
+      return json;
     });
   }
 

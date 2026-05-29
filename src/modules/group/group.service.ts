@@ -16,6 +16,7 @@ import { buildSearchTerm } from '../../common/utils/search.utils';
 import { InstructorClient } from '../client/entities/instructor-client.entity';
 import { NotificationService } from '../notification/notification.service';
 import {
+  groupMemberLeft,
   groupMemberRemoved,
   groupJoinRequestReceived,
   groupJoinRequestApproved,
@@ -29,8 +30,13 @@ import {
   type SocialLinks,
 } from '../profile/entities/instructor-profile.entity';
 import { SearchIndexService } from '../search/search-index.service';
-import { Session } from '../session/entities/session.entity';
-import { User } from '../user/entities/user.entity';
+import { SessionInstance } from '../session/entities/session-instance.entity';
+import { SessionTemplate } from '../session/entities/session-template.entity';
+import {
+  SessionAccess,
+  SessionInstanceStatus,
+} from '../session/entities/session.enums';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { DiscoverGroupsDto } from './dto/discover-groups.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
@@ -392,6 +398,56 @@ export class GroupService {
     await member.update({ leftAt: new Date() });
 
     this.logger.log(`User ${userId} left group ${groupId}`, 'GroupService');
+
+    // Notify the owner (in-app + email). Best-effort — failures here log
+    // but don't bubble; the leave action already succeeded.
+    const group = await this.groupModel.findByPk(groupId, {
+      attributes: ['id', 'name', 'instructorId'],
+    });
+    if (!group) return;
+    const [leaver, owner] = await Promise.all([
+      this.userModel.findByPk(userId, {
+        attributes: ['firstName', 'lastName'],
+      }),
+      this.userModel.findByPk(group.instructorId, {
+        attributes: ['email', 'firstName'],
+      }),
+    ]);
+    const memberName =
+      [leaver?.firstName, leaver?.lastName].filter(Boolean).join(' ').trim() ||
+      null;
+
+    await this.notificationService
+      .notify(
+        groupMemberLeft(
+          group.instructorId,
+          { id: group.id, name: group.name },
+          memberName,
+        ),
+      )
+      .catch((err: Error) =>
+        this.logger.error(
+          `[groups] notify GROUP_MEMBER_LEFT failed for owner ${group.instructorId}, group ${groupId}: ${err.message}`,
+          'GroupService',
+        ),
+      );
+
+    if (owner?.email) {
+      this.emailService
+        .sendGroupMemberLeftEmail({
+          to: owner.email,
+          ownerFirstName: owner.firstName,
+          memberName: memberName ?? 'A member',
+          groupName: group.name,
+          groupId: group.id,
+        })
+        .catch((err: Error) =>
+          this.logger.error(
+            `[groups] sendGroupMemberLeftEmail failed for owner ${group.instructorId}, group ${groupId}: ${err.message}`,
+            'GroupService',
+          ),
+        );
+    }
   }
 
   // =====================================================
@@ -427,14 +483,7 @@ export class GroupService {
         include: [
           {
             model: User,
-            attributes: [
-              'id',
-              'email',
-              'firstName',
-              'lastName',
-              'phone',
-              'avatarUrl',
-            ],
+            attributes: USER_SAFE_ATTRIBUTES,
           },
         ],
         limit,
@@ -466,6 +515,7 @@ export class GroupService {
         id: member.user.id,
         firstName: member.user.firstName,
         lastName: member.user.lastName,
+        handle: member.user.handle ?? null,
         email: member.user.email,
         avatarId: member.user.avatarId,
         avatarUrl: member.user.avatarUrl,
@@ -533,9 +583,34 @@ export class GroupService {
       'GroupService',
     );
 
-    await this.notificationService.notify(
-      groupMemberRemoved(memberId, { id: group.id, name: group.name }),
-    );
+    await this.notificationService
+      .notify(groupMemberRemoved(memberId, { id: group.id, name: group.name }))
+      .catch((err: Error) =>
+        this.logger.error(
+          `[groups] notify GROUP_MEMBER_REMOVED failed for user ${memberId}, group ${groupId}: ${err.message}`,
+          'GroupService',
+        ),
+      );
+
+    // Email the removed member so they know they lost access. Best-
+    // effort; transport failures must not turn the 200 into a 500.
+    const removedUser = await this.userModel.findByPk(memberId, {
+      attributes: ['email', 'firstName'],
+    });
+    if (removedUser?.email) {
+      this.emailService
+        .sendGroupMemberRemovedEmail({
+          to: removedUser.email,
+          memberFirstName: removedUser.firstName,
+          groupName: group.name,
+        })
+        .catch((err: Error) =>
+          this.logger.error(
+            `[groups] sendGroupMemberRemovedEmail failed for user ${memberId}, group ${groupId}: ${err.message}`,
+            'GroupService',
+          ),
+        );
+    }
   }
 
   // =====================================================
@@ -592,6 +667,7 @@ export class GroupService {
     const where: WhereOptions<Group> = {
       isPublic: true,
       isActive: true,
+      joinPolicy: { [Op.ne]: JoinPolicy.INVITE_ONLY },
       ...(dto.city && { city: { [Op.iLike]: `%${dto.city}%` } }),
       ...(dto.country && { country: dto.country }),
       ...(andClauses.length > 0 && { [Op.and]: andClauses }),
@@ -660,6 +736,49 @@ export class GroupService {
   }
 
   /**
+   * Public groups owned by a single instructor.
+   *
+   * Feeds the Groups tab on the Public Profile page (`/@<handle>`). We
+   * only surface groups the instructor has marked public and active, and
+   * we exclude INVITE_ONLY groups — a visitor who can't self-join has
+   * nothing to do with the card. Sorted by member count so the most
+   * active group appears first.
+   */
+  async listPublicGroupsForInstructor(instructorUserId: string) {
+    const memberCountLiteral = literal(
+      '(SELECT COUNT(*)::int FROM group_member WHERE group_member.group_id = "Group"."id" AND group_member.left_at IS NULL)',
+    );
+
+    const groups = await this.groupModel.findAll({
+      where: {
+        instructorId: instructorUserId,
+        isPublic: true,
+        isActive: true,
+        joinPolicy: { [Op.ne]: JoinPolicy.INVITE_ONLY },
+      },
+      attributes: {
+        include: [
+          'id',
+          'name',
+          'slug',
+          'description',
+          'logoUrl',
+          'joinPolicy',
+          'tags',
+          'city',
+          'country',
+          'createdAt',
+          [memberCountLiteral, 'memberCount'],
+        ],
+      },
+      order: [[memberCountLiteral, 'DESC']],
+      limit: 20,
+    });
+
+    return groups.map((g) => g.toJSON());
+  }
+
+  /**
    * Get public profile of a group
    *
    * Returns group details, instructor info, and upcoming public sessions.
@@ -707,7 +826,7 @@ export class GroupService {
       include: [
         {
           model: User,
-          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
     });
@@ -756,31 +875,47 @@ export class GroupService {
     }
 
     // Get upcoming public/group sessions linked to this group's instructor
-    const upcomingSessions = await Session.findAll({
-      where: {
-        instructorId:
-          group.getDataValue('instructorId') || ownerMembership?.userId,
-        visibility: { [Op.in]: ['PUBLIC', 'GROUP'] },
-        status: { [Op.in]: ['SCHEDULED', 'IN_PROGRESS'] },
-        scheduledAt: { [Op.gte]: new Date() },
-      },
-      attributes: [
-        'id',
-        'title',
-        'description',
-        'sessionType',
-        'visibility',
-        'scheduledAt',
-        'durationMinutes',
-        'location',
-        'maxParticipants',
-        'price',
-        'currency',
-        'status',
-      ],
-      order: [['scheduledAt', 'ASC']],
-      limit: 10,
-    });
+    const instructorId =
+      group.getDataValue('instructorId') || ownerMembership?.userId;
+    const upcomingSessions = instructorId
+      ? await SessionInstance.findAll({
+          where: {
+            instructorId,
+            status: {
+              [Op.in]: [
+                SessionInstanceStatus.Scheduled,
+                SessionInstanceStatus.InProgress,
+              ],
+            },
+            startAt: { [Op.gte]: new Date() },
+          },
+          include: [
+            {
+              model: SessionTemplate,
+              as: 'template',
+              where: {
+                access: {
+                  [Op.in]: [SessionAccess.Open, SessionAccess.GroupOnly],
+                },
+              },
+              attributes: [
+                'title',
+                'description',
+                'type',
+                'access',
+                'locationKind',
+                'durationMinutes',
+                'capacity',
+                'priceAmountCents',
+                'priceCurrency',
+              ],
+              required: true,
+            },
+          ],
+          order: [['startAt', 'ASC']],
+          limit: 10,
+        })
+      : [];
 
     return {
       group,
@@ -906,6 +1041,29 @@ export class GroupService {
         );
       });
 
+    // Email the owner so they actually see the request (in-app bells
+    // are easy to miss). Best-effort.
+    const owner = await this.userModel.findByPk(group.instructorId, {
+      attributes: ['email', 'firstName'],
+    });
+    if (owner?.email) {
+      this.emailService
+        .sendGroupJoinRequestReceivedEmail({
+          to: owner.email,
+          ownerFirstName: owner.firstName,
+          requesterName: requesterName ?? 'Someone',
+          groupName: group.name,
+          groupId: group.id,
+          requestId: request.id,
+        })
+        .catch((err: Error) =>
+          this.logger.error(
+            `[groups] sendGroupJoinRequestReceivedEmail failed for owner ${group.instructorId}, group ${groupId}: ${err.message}`,
+            'GroupService',
+          ),
+        );
+    }
+
     return { status: 'PENDING', request };
   }
 
@@ -933,7 +1091,7 @@ export class GroupService {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [['createdAt', 'DESC']],
@@ -1044,6 +1202,28 @@ export class GroupService {
         'GroupService',
       );
     });
+
+    // Email the requester so they don't have to keep checking the
+    // bell. Best-effort.
+    const requester = await this.userModel.findByPk(request.userId, {
+      attributes: ['email', 'firstName'],
+    });
+    if (requester?.email) {
+      this.emailService
+        .sendGroupJoinRequestDecidedEmail({
+          to: requester.email,
+          decision: approved ? 'approved' : 'rejected',
+          requesterFirstName: requester.firstName,
+          groupName: group.name,
+          groupId: group.id,
+        })
+        .catch((err: Error) =>
+          this.logger.error(
+            `[groups] sendGroupJoinRequestDecidedEmail failed for user ${request.userId}, group ${groupId}: ${err.message}`,
+            'GroupService',
+          ),
+        );
+    }
 
     return request;
   }
@@ -1417,6 +1597,25 @@ export class GroupService {
     // turn a 200 into a 500. Each notify is independently caught so
     // one failing recipient doesn't block the other.
     const groupRef = { id: group.id, name: group.name };
+    const [newOwnerUser, oldOwnerUser] = await Promise.all([
+      this.userModel.findByPk(newOwnerId, {
+        attributes: ['email', 'firstName', 'lastName'],
+      }),
+      this.userModel.findByPk(currentOwnerId, {
+        attributes: ['email', 'firstName', 'lastName'],
+      }),
+    ]);
+    const newOwnerName =
+      [newOwnerUser?.firstName, newOwnerUser?.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || 'The new owner';
+    const oldOwnerName =
+      [oldOwnerUser?.firstName, oldOwnerUser?.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || 'The previous owner';
+
     await Promise.all([
       this.notificationService
         .notify(groupOwnershipTransferredToNewOwner(newOwnerId, groupRef))
@@ -1434,6 +1633,40 @@ export class GroupService {
             'GroupService',
           ),
         ),
+      newOwnerUser?.email
+        ? this.emailService
+            .sendGroupOwnershipTransferredEmail({
+              to: newOwnerUser.email,
+              direction: 'received',
+              recipientFirstName: newOwnerUser.firstName,
+              otherPartyName: oldOwnerName,
+              groupName: group.name,
+              groupId: group.id,
+            })
+            .catch((err: Error) =>
+              this.logger.error(
+                `[groups] sendGroupOwnershipTransferredEmail (received) failed for ${newOwnerId}, group ${groupId}: ${err.message}`,
+                'GroupService',
+              ),
+            )
+        : Promise.resolve(),
+      oldOwnerUser?.email
+        ? this.emailService
+            .sendGroupOwnershipTransferredEmail({
+              to: oldOwnerUser.email,
+              direction: 'transferred',
+              recipientFirstName: oldOwnerUser.firstName,
+              otherPartyName: newOwnerName,
+              groupName: group.name,
+              groupId: group.id,
+            })
+            .catch((err: Error) =>
+              this.logger.error(
+                `[groups] sendGroupOwnershipTransferredEmail (transferred) failed for ${currentOwnerId}, group ${groupId}: ${err.message}`,
+                'GroupService',
+              ),
+            )
+        : Promise.resolve(),
     ]);
 
     return { message: 'Ownership transferred successfully' };
@@ -1460,15 +1693,44 @@ export class GroupService {
       completedSessionCount,
     ] = await Promise.all([
       this.memberModel.count({ where: { groupId, leftAt: null } }),
-      Session.count({ where: { groupId } }),
-      Session.count({
-        where: {
-          groupId,
-          status: 'SCHEDULED',
-          scheduledAt: { [Op.gte]: new Date() },
-        },
+      SessionInstance.count({
+        include: [
+          {
+            model: SessionTemplate,
+            as: 'template',
+            where: { groupId },
+            required: true,
+            attributes: [],
+          },
+        ],
       }),
-      Session.count({ where: { groupId, status: 'COMPLETED' } }),
+      SessionInstance.count({
+        where: {
+          status: SessionInstanceStatus.Scheduled,
+          startAt: { [Op.gte]: new Date() },
+        },
+        include: [
+          {
+            model: SessionTemplate,
+            as: 'template',
+            where: { groupId },
+            required: true,
+            attributes: [],
+          },
+        ],
+      }),
+      SessionInstance.count({
+        where: { status: SessionInstanceStatus.Completed },
+        include: [
+          {
+            model: SessionTemplate,
+            as: 'template',
+            where: { groupId },
+            required: true,
+            attributes: [],
+          },
+        ],
+      }),
     ]);
 
     return {
@@ -1560,6 +1822,7 @@ export class GroupService {
       return target;
     }
 
+    const oldRole = target.role;
     await target.update({ role: newRole });
 
     // Tell the affected member their role changed. Best-effort.
@@ -1578,6 +1841,48 @@ export class GroupService {
         ),
       );
 
+    // Email the member too. The notify call covers the bell; this
+    // covers the inbox. Keep label strings human, not enum values.
+    const member = await this.userModel.findByPk(targetUserId, {
+      attributes: ['email', 'firstName'],
+    });
+    if (member?.email) {
+      this.emailService
+        .sendGroupRoleChangedEmail({
+          to: member.email,
+          memberFirstName: member.firstName,
+          groupName: group.name,
+          groupId: group.id,
+          oldRoleLabel: humanizeGroupRole(oldRole),
+          newRoleLabel: humanizeGroupRole(newRole),
+        })
+        .catch((err: Error) =>
+          this.logger.error(
+            `[groups] sendGroupRoleChangedEmail failed for user ${targetUserId}, group ${groupId}: ${err.message}`,
+            'GroupService',
+          ),
+        );
+    }
+
     return target;
+  }
+}
+
+/**
+ * Map the internal GroupMemberRole enum to a copy-safe label. Kept as
+ * a free function so the role->copy table sits next to the only place
+ * it's used; the in-app notification builder has its own ROLE_LABELS
+ * map for the same reason.
+ */
+function humanizeGroupRole(role: GroupMemberRole): string {
+  switch (role) {
+    case GroupMemberRole.OWNER:
+      return 'Owner';
+    case GroupMemberRole.MODERATOR:
+      return 'Moderator';
+    case GroupMemberRole.MEMBER:
+      return 'Member';
+    default:
+      return 'Member';
   }
 }

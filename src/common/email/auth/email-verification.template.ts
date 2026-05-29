@@ -1,8 +1,10 @@
 import {
   baseLayout,
+  eyebrow,
   expiryNote,
   heading,
   paragraph,
+  plainTextLayout,
   primaryButton,
   securityNote,
   subheading,
@@ -15,6 +17,7 @@ import {
  */
 export function emailVerificationTemplate(verifyLink: string): string {
   const content = `
+    ${eyebrow('ACTION REQUIRED', 'action')}
     ${heading('Verify your email')}
     ${subheading('One quick step to get started')}
     ${paragraph('Thanks for signing up for MotionHive! Please verify your email address to unlock all features and start your fitness journey.')}
@@ -23,8 +26,29 @@ export function emailVerificationTemplate(verifyLink: string): string {
     ${securityNote("If you didn't create a MotionHive account, you can safely ignore this email.")}
   `;
 
-  return baseLayout(
-    content,
-    'Verify your email to get started with MotionHive',
-  );
+  return baseLayout(content, {
+    preheader: 'Verify your email to get started with MotionHive',
+    category: 'action',
+  });
+}
+
+export function emailVerificationTemplateText(verifyLink: string): string {
+  return plainTextLayout({
+    preheader: 'Verify your email to get started with MotionHive',
+    sections: [
+      {
+        heading: 'Verify your email',
+        body: [
+          'Thanks for signing up for MotionHive! Please verify your email address to unlock all features and start your fitness journey.',
+        ],
+        ctas: [{ label: 'Verify email address', url: verifyLink }],
+      },
+      {
+        body: [
+          'This verification link expires in 24 hours.',
+          "If you didn't create a MotionHive account, you can safely ignore this email.",
+        ],
+      },
+    ],
+  });
 }

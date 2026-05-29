@@ -59,7 +59,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof exceptionResponse === 'object' &&
         'message' in exceptionResponse
       ) {
-        const raw = (exceptionResponse as { message: unknown }).message;
+        const raw = exceptionResponse.message;
         message =
           typeof raw === 'string' || Array.isArray(raw)
             ? (raw as string | string[])

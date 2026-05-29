@@ -267,7 +267,7 @@ describe('InvitationService', () => {
       );
 
       expect(result).toEqual({
-        message: expect.stringContaining('accepted') as unknown as string,
+        message: expect.stringContaining('accepted'),
         groupId: 'g-1',
       });
       expect(groupService.addMember).toHaveBeenCalledWith('g-1', 'user-1', tx);

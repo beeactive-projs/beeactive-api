@@ -18,6 +18,7 @@ export enum NotificationCategory {
   Payments = 'PAYMENTS',
   Account = 'ACCOUNT',
   Posts = 'POSTS',
+  Messaging = 'MESSAGING',
 }
 
 /**
@@ -56,6 +57,11 @@ export const CATEGORY_META: Record<
     label: 'Posts & comments',
     description: 'Comments on your posts, approvals, and moderation outcomes.',
   },
+  [NotificationCategory.Messaging]: {
+    label: 'Direct messages',
+    description:
+      'New messages from your clients and instructors. We coalesce email alerts so you only get one per conversation per hour.',
+  },
 };
 
 /**
@@ -76,6 +82,7 @@ export const TYPE_TO_CATEGORY: Record<NotificationType, NotificationCategory> =
     [NotificationType.SESSION_CANCELLED]: NotificationCategory.Sessions,
     [NotificationType.SESSION_RESCHEDULED]: NotificationCategory.Sessions,
     [NotificationType.SESSION_STATUS_CHANGED]: NotificationCategory.Sessions,
+    [NotificationType.SESSION_FOLLOW_UP]: NotificationCategory.Sessions,
     [NotificationType.PARTICIPANT_JOINED]: NotificationCategory.Sessions,
     [NotificationType.PARTICIPANT_LEFT]: NotificationCategory.Sessions,
 
@@ -124,6 +131,9 @@ export const TYPE_TO_CATEGORY: Record<NotificationType, NotificationCategory> =
     [NotificationType.POST_PENDING_APPROVAL]: NotificationCategory.Posts,
     [NotificationType.POST_APPROVED]: NotificationCategory.Posts,
     [NotificationType.POST_REJECTED]: NotificationCategory.Posts,
+
+    // Messaging
+    [NotificationType.MESSAGE_RECEIVED]: NotificationCategory.Messaging,
   };
 
 /**
@@ -146,6 +156,7 @@ export const CATEGORY_TO_TYPES: Record<
     [NotificationCategory.Payments]: [],
     [NotificationCategory.Account]: [],
     [NotificationCategory.Posts]: [],
+    [NotificationCategory.Messaging]: [],
   } as Record<NotificationCategory, NotificationType[]>,
 );
 
@@ -157,6 +168,7 @@ export const CATEGORY_TO_TYPES: Record<
  * it's rarely-touched.
  */
 export const CATEGORY_DISPLAY_ORDER: NotificationCategory[] = [
+  NotificationCategory.Messaging,
   NotificationCategory.Sessions,
   NotificationCategory.Coaching,
   NotificationCategory.Groups,

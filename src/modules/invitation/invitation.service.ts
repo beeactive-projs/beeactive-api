@@ -16,7 +16,7 @@ import { GroupService } from '../group/group.service';
 import { RoleService } from '../role/role.service';
 import { CryptoService, EmailService } from '../../common/services';
 import { buildPaginatedResponse } from '../../common/dto/pagination.dto';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { Group } from '../group/entities/group.entity';
 import { Role } from '../role/entities/role.entity';
 import { GroupMember } from '../group/entities/group-member.entity';
@@ -388,6 +388,34 @@ export class InvitationService {
         ),
       );
 
+    // Email the inviter too. Resolve their email + a display name to
+    // mirror the accept path; same address-harvesting concern applies,
+    // so if we can't resolve the invitee's name we pass a generic
+    // "A user" fallback rather than echoing the invitee's email.
+    const inviterUser = await User.findByPk(invitation.inviterId, {
+      attributes: ['email', 'firstName', 'lastName'],
+    });
+    if (inviterUser?.email && invitation.group?.name) {
+      const inviterDisplayName =
+        [inviterUser.firstName, inviterUser.lastName]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || 'there';
+      this.emailService
+        .sendGroupInvitationDeclinedEmail(
+          inviterUser.email,
+          inviterDisplayName,
+          inviteeName ?? 'A user',
+          invitation.group.name,
+        )
+        .catch((err: Error) =>
+          this.logger.error(
+            `Failed to send invitation-declined email to ${inviterUser.email}: ${err.message}`,
+            'InvitationService',
+          ),
+        );
+    }
+
     return { message: 'Invitation declined' };
   }
 
@@ -526,7 +554,7 @@ export class InvitationService {
           {
             model: User,
             as: 'inviter',
-            attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+            attributes: USER_SAFE_ATTRIBUTES,
           },
           {
             model: Group,

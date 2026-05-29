@@ -19,7 +19,7 @@ import {
   GroupMemberRole,
 } from '../group/entities/group-member.entity';
 import { GroupService } from '../group/group.service';
-import { User } from '../user/entities/user.entity';
+import { User, USER_SAFE_ATTRIBUTES } from '../user/entities/user.entity';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { ModerationDecision, ModeratePostDto } from './dto/moderate-post.dto';
@@ -389,7 +389,7 @@ export class PostService {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
         {
           model: Group,
@@ -423,7 +423,7 @@ export class PostService {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
         {
           model: Group,
@@ -472,7 +472,7 @@ export class PostService {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
         {
           model: PostComment,
@@ -482,7 +482,7 @@ export class PostService {
             {
               model: User,
               as: 'author',
-              attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+              attributes: USER_SAFE_ATTRIBUTES,
             },
           ],
         },
@@ -701,7 +701,7 @@ export class PostService {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
     }) as Promise<PostComment>;
@@ -914,7 +914,7 @@ export class PostService {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
       order: [['postedAt', 'DESC']],
@@ -986,7 +986,7 @@ export class PostService {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'avatarUrl'],
+          attributes: USER_SAFE_ATTRIBUTES,
         },
       ],
     });

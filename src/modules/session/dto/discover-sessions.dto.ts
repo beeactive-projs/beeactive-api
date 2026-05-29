@@ -1,77 +1,62 @@
 import {
+  IsIn,
+  IsISO8601,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
-  IsEnum,
-  IsDateString,
-  IsNumber,
-  Min,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 
-export class DiscoverSessionsDto extends PaginationDto {
+/**
+ * Query DTO for the public discover endpoint.
+ *
+ * The endpoint is `@Public()` — unauthenticated callers see OPEN+FREE
+ * sessions only. Authenticated callers see those PLUS CLIENTS_ONLY
+ * sessions of instructors they have an active client relationship with,
+ * AND GROUP_ONLY sessions of groups they're a current member of.
+ *
+ * Hard window cap of 90 days is enforced server-side regardless of
+ * client input — keeps the index scan cheap and discourages scrapers.
+ */
+export class DiscoverSessionsQueryDto extends PaginationDto {
   @ApiPropertyOptional({
-    example: 'yoga',
-    description:
-      'Search term to filter sessions by title, description, or location',
+    description: 'Free-text search over title + description (max 200 chars).',
+    maxLength: 200,
   })
+  @IsOptional()
   @IsString()
-  @MaxLength(100)
-  @IsOptional()
-  search?: string;
+  @MaxLength(200)
+  q?: string;
 
-  @ApiPropertyOptional({
-    example: 'GROUP',
-    enum: ['ONE_ON_ONE', 'GROUP', 'ONLINE', 'WORKSHOP'],
-    description: 'Filter by session type',
-  })
+  @ApiPropertyOptional({ enum: ['GROUP', 'PRIVATE', 'OPEN'] })
   @IsOptional()
-  @IsEnum(['ONE_ON_ONE', 'GROUP', 'ONLINE', 'WORKSHOP'])
-  sessionType?: string;
+  @IsIn(['GROUP', 'PRIVATE', 'OPEN'])
+  type?: 'GROUP' | 'PRIVATE' | 'OPEN';
 
-  @ApiPropertyOptional({
-    example: '2026-03-01T00:00:00.000Z',
-    description: 'Filter sessions starting from this date',
-  })
+  @ApiPropertyOptional({ enum: ['IN_PERSON', 'ONLINE'] })
   @IsOptional()
-  @IsDateString()
+  @IsIn(['IN_PERSON', 'ONLINE'])
+  locationKind?: 'IN_PERSON' | 'ONLINE';
+
+  @ApiPropertyOptional({ description: 'Filter to a single instructor.' })
+  @IsOptional()
+  @IsUUID('4')
+  instructorId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter to a single group.' })
+  @IsOptional()
+  @IsUUID('4')
+  groupId?: string;
+
+  @ApiPropertyOptional({ description: 'ISO8601 lower bound (inclusive).' })
+  @IsOptional()
+  @IsISO8601()
   dateFrom?: string;
 
-  @ApiPropertyOptional({
-    example: '2026-03-31T23:59:59.000Z',
-    description: 'Filter sessions up to this date',
-  })
+  @ApiPropertyOptional({ description: 'ISO8601 upper bound (exclusive).' })
   @IsOptional()
-  @IsDateString()
+  @IsISO8601()
   dateTo?: string;
-
-  @ApiPropertyOptional({
-    example: 120,
-    description: 'Maximum duration in minutes',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  maxDurationMinutes?: number;
-
-  @ApiPropertyOptional({
-    example: 'scheduledAt',
-    enum: ['scheduledAt', 'price', 'title'],
-    description: 'Sort by field',
-  })
-  @IsOptional()
-  @IsEnum(['scheduledAt', 'price', 'title'])
-  sortBy?: string;
-
-  @ApiPropertyOptional({
-    example: 'ASC',
-    enum: ['ASC', 'DESC'],
-    description: 'Sort direction',
-  })
-  @IsOptional()
-  @IsEnum(['ASC', 'DESC'])
-  sortDir?: 'ASC' | 'DESC';
 }

@@ -16,5 +16,5 @@ export const getJwtConfig = (
       // Short-lived access token; refresh tokens cover UX.
       expiresIn: configService.get('JWT_EXPIRES_IN') || '2h',
     },
-  } as JwtModuleOptions;
+  };
 };

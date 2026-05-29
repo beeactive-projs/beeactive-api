@@ -1,9 +1,14 @@
 import { escapeHtml } from '../../utils/html.utils';
 import {
   baseLayout,
-  COLORS,
+  chip,
+  type ChipTone,
+  dataCard,
+  dataRow,
+  eyebrow,
   heading,
   paragraph,
+  plainTextLayout,
   subheading,
 } from '../_layouts/base-layout';
 
@@ -23,31 +28,71 @@ export function participantStatusTemplate(
   const safeTitle = escapeHtml(sessionTitle);
   const safeScheduled = escapeHtml(scheduledAt);
   const statusLabels: Record<string, string> = {
-    CONFIRMED: 'confirmed',
-    CANCELLED: 'cancelled',
-    ATTENDED: 'marked as attended',
-    NO_SHOW: 'marked as no-show',
+    CONFIRMED: 'Confirmed',
+    CANCELLED: 'Cancelled',
+    ATTENDED: 'Attended',
+    NO_SHOW: 'No-show',
   };
-  const statusLabel = escapeHtml(
-    statusLabels[newStatus] || newStatus.toLowerCase(),
-  );
+  const statusTones: Record<string, ChipTone> = {
+    CONFIRMED: 'teal',
+    CANCELLED: 'coral',
+    ATTENDED: 'teal',
+    NO_SHOW: 'neutral',
+  };
+  const statusLabel =
+    statusLabels[newStatus] ||
+    newStatus.charAt(0).toUpperCase() + newStatus.slice(1).toLowerCase();
+  const statusTone: ChipTone = statusTones[newStatus] || 'neutral';
+  const statusBodyLabel = escapeHtml(statusLabel.toLowerCase());
 
   const content = `
+    ${eyebrow('STATUS UPDATE', 'update')}
     ${heading('Session status update')}
-    ${subheading(`Your registration status has changed`)}
-
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
-      <tr>
-        <td style="background-color:#f8fafc;border-radius:8px;padding:20px;border-left:4px solid ${COLORS.accent};">
-          <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:${COLORS.textDark};">${safeTitle}</p>
-          <p style="margin:0 0 4px;font-size:14px;color:${COLORS.textBody};">Scheduled: ${safeScheduled}</p>
-          <p style="margin:0;font-size:14px;color:${COLORS.textBody};">Status: <strong>${statusLabel}</strong></p>
-        </td>
-      </tr>
-    </table>
-
-    ${paragraph(`Hi ${safeParticipant}, your registration for this session has been ${statusLabel} by the instructor.`)}
+    ${subheading('Your registration status has changed')}
+    ${dataCard(
+      dataRow('Session', safeTitle) +
+        dataRow('Scheduled', safeScheduled) +
+        dataRow('Status', chip(statusLabel, statusTone)),
+    )}
+    ${paragraph(`Hi ${safeParticipant}, your registration for this session has been ${statusBodyLabel} by the instructor.`)}
   `;
 
-  return baseLayout(content, `Your session status has been updated`);
+  return baseLayout(content, {
+    preheader: 'Your session status has been updated',
+    category: 'update',
+  });
+}
+
+export function participantStatusTemplateText(
+  participantName: string,
+  sessionTitle: string,
+  newStatus: string,
+  scheduledAt: string,
+): string {
+  const statusLabels: Record<string, string> = {
+    CONFIRMED: 'Confirmed',
+    CANCELLED: 'Cancelled',
+    ATTENDED: 'Attended',
+    NO_SHOW: 'No-show',
+  };
+  const statusLabel =
+    statusLabels[newStatus] ||
+    newStatus.charAt(0).toUpperCase() + newStatus.slice(1).toLowerCase();
+
+  return plainTextLayout({
+    preheader: 'Your session status has been updated',
+    sections: [
+      {
+        heading: 'Session status update',
+        body: [
+          `Hi ${participantName}, your registration for this session has been ${statusLabel.toLowerCase()} by the instructor.`,
+        ],
+        details: [
+          { label: 'Session', value: sessionTitle },
+          { label: 'Scheduled', value: scheduledAt },
+          { label: 'Status', value: statusLabel },
+        ],
+      },
+    ],
+  });
 }

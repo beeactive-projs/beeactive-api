@@ -128,7 +128,11 @@ export class NotificationPreferenceService {
     const existing = await this.preferenceModel.findAll({
       where: { userId, type: { [Op.in]: allTypes } },
     });
-    const existingByType = new Map(existing.map((e) => [e.type, e.channels]));
+    // Keep the model instances themselves (not just `channels`) so we
+    // can update by primary key — `upsert()` conflicts on the PK by
+    // default, and our PK is a random UUID, so it never fires and we
+    // explode on the (user_id, type) unique constraint instead.
+    const existingByType = new Map(existing.map((e) => [e.type, e]));
 
     let written = 0;
     await this.sequelize.transaction(async (tx) => {
@@ -137,16 +141,25 @@ export class NotificationPreferenceService {
           // Merge the new email value over the existing per-type
           // channels, falling back to the system default for the
           // channels we don't manage here (in_app/push/sms).
+          const existingRow = existingByType.get(type);
           const base =
-            existingByType.get(type) ?? NOTIFICATION_DEFAULTS[type] ?? {};
+            existingRow?.channels ?? NOTIFICATION_DEFAULTS[type] ?? {};
           const next: ChannelPreferences = {
             ...base,
             email: update.channels.email,
           };
-          await this.preferenceModel.upsert(
-            { userId, type, channels: next },
-            { transaction: tx },
-          );
+          if (existingRow) {
+            await existingRow.update({ channels: next }, { transaction: tx });
+          } else {
+            const created = await this.preferenceModel.create(
+              { userId, type, channels: next },
+              { transaction: tx },
+            );
+            // Cache the new row so a second update in the same call
+            // (same type appearing twice via overlapping categories,
+            // unlikely but possible) updates instead of re-creating.
+            existingByType.set(type, created);
+          }
           written++;
         }
       }

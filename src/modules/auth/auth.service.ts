@@ -47,6 +47,7 @@ export interface AuthUserResponse {
   email: string;
   firstName: string;
   lastName: string;
+  handle: string | null;
   isEmailVerified: boolean;
   roles: string[];
 }
@@ -269,6 +270,19 @@ export class AuthService {
 
     this.logger.log(`Password changed for user: ${user.email}`, 'AuthService');
 
+    // Security email — fire-and-forget so a transport hiccup doesn't
+    // fail the password change itself. The user already sees the
+    // success response; the email is reassurance + an out for victims
+    // of session hijack.
+    this.emailService
+      .sendPasswordChangedEmail(user.email, user.firstName, new Date())
+      .catch((err: Error) =>
+        this.logger.error(
+          `Failed to send password-changed email to ${user.email}: ${err.message}`,
+          'AuthService',
+        ),
+      );
+
     return { message: 'Password changed successfully. Please log in again.' };
   }
 
@@ -284,6 +298,7 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        handle: user.handle ?? null,
         isEmailVerified: user.isEmailVerified,
         roles: roleNames,
       },

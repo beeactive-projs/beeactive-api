@@ -59,7 +59,7 @@ src/
     ├── role/         # RBAC: Role, Permission, UserRole entities (service-only, no controller)
     ├── profile/      # InstructorProfile (location lives on user, not duplicated), discovery, unified update
     ├── group/        # CRUD, members, join links, discovery, ownership transfer, stats
-    ├── session/      # CRUD, participants, recurring, visibility, reschedule, calendar, conflicts (FK to venue)
+    ├── session/      # Two-table model (template + instance + participant + reminder) — see "Session Module Shape" below. Migration 046 rewrote the legacy single-table design.
     ├── invitation/   # Group invitations
     ├── client/       # Instructor-client relationships & requests
     ├── blog/         # Blog posts, Cloudinary image upload, sitemap
@@ -146,6 +146,19 @@ Two tables: `instructor_client` (active relationships) + `client_request` (invit
 - Bidirectional: instructor invites OR user requests
 - Lifecycle: PENDING → ACTIVE (accept) or DECLINED/CANCELLED
 - Requests expire after 30 days
+
+### Session Module Shape
+Rewritten by migration 046 from a legacy single-table design into a **template + instance** model. Build progress tracked in `docs/research/sessions/SESSIONS_MASTER_BUILD_PLAN.md`.
+- **4 entities**: `session_template`, `session_instance`, `session_participant`, `session_reminder_schedule`
+- **Two-table semantics**: one template per "class concept"; N instances per template (one for one-off, many for recurring). Each instance owns per-occurrence overrides + denormalised participant counters (`confirmed_count`, `pending_approval_count`, `waitlisted_count`, `attended_count`).
+- **Snapshot at booking**: every `session_participant` captures `snapshot_price_cents`, `snapshot_currency`, `snapshot_cancel_cutoff_h`, `snapshot_location_text`, `snapshot_meeting_url` at the moment of booking. Cancellation window math uses the snapshot, not the live template — terms-as-booked are immutable.
+- **Recurrence engine**: `RecurrenceService` (Luxon, zone-aware). `daysOfWeek` is **1=Mon..7=Sun (ISO 8601)** — never 0=Sun. Handles DST correctly (preserves local wall-clock).
+- **Ownership validation**: when creating/updating a template, **`venueId` and `groupId` are re-validated** against the caller via `VenueService.get` / `GroupService.getById` (which throw 404 on cross-instructor refs via `assertOwned({onMismatch:'hide'})`). Prevents the IDOR documented in `SESSIONS_AUDIT_2026-05-15.md` §2.1.
+- **Sanitization**: `title` and `description` go through `stripHtml` (common/utils/text.utils.ts) before persist — drops `<script>`, collapses whitespace. Title rejected if empty after sanitization.
+- **Future-date guard**: `firstStartAt` enforced by `@IsFutureOrCloseToNow({skewMinutes:5})` validator + service-level recheck.
+- **Notifications**: 7 types declared in `notification-types.ts` with conservative defaults (reminders→push+email, cancel→email+push, participant churn→in-app only). Builders live in `src/modules/session/notifications.ts` — see `SESSION-FLOWS.md` for usage.
+- **Reminder schedule rows** are written into `session_reminder_schedule` on booking; dispatch worker is pending the jobs module (`project_jobs_module_pending.md`).
+- See `src/modules/session/SESSION-FLOWS.md` for the per-flow walkthrough.
 
 ### Venue Module
 Where instructors deliver their service. One instructor has 0..N venues; sessions reference one via `session.venue_id` (nullable, ON DELETE SET NULL).
