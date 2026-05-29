@@ -16,6 +16,7 @@ import {
 } from '../../../common/dto/pagination.dto';
 import { detectMeetingProvider } from '../../../common/utils/meeting-provider.util';
 import { stripHtml } from '../../../common/utils/text.utils';
+import { SearchIndexService } from '../../search/search-index.service';
 import { VenueService } from '../../venue/venue.service';
 import { Venue } from '../../venue/entities/venue.entity';
 import { GroupService } from '../../group/group.service';
@@ -96,6 +97,7 @@ export class SessionTemplateService {
     private readonly venueService: VenueService,
     @Inject(forwardRef(() => GroupService))
     private readonly groupService: GroupService,
+    private readonly searchIndexService: SearchIndexService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -210,6 +212,15 @@ export class SessionTemplateService {
       this.logger.log?.(
         `Template created: ${template.id} by instructor ${instructorId}`,
       );
+      // Index after commit so a search-index write failure can't
+      // roll back the user-visible create. Mirrors GroupService.
+      try {
+        await this.searchIndexService.upsertSession(template.id);
+      } catch (e) {
+        this.logger.error?.(
+          `Search-index upsert failed for template ${template.id}: ${String(e)}`,
+        );
+      }
       return { template, generatedInstances, warnings: [] };
     } catch (err) {
       await tx.rollback();
@@ -352,6 +363,15 @@ export class SessionTemplateService {
     }
 
     await template.update(updates);
+    // Search index follows the source of truth — a title or location
+    // edit needs to surface in the next search.
+    try {
+      await this.searchIndexService.upsertSession(template.id);
+    } catch (e) {
+      this.logger.error?.(
+        `Search-index upsert failed for template ${template.id}: ${String(e)}`,
+      );
+    }
     return template;
   }
 
@@ -380,6 +400,16 @@ export class SessionTemplateService {
       await template.destroy({ transaction: tx });
 
       await tx.commit();
+
+      // Drop from the search index after commit. upsertSession sees
+      // status != ACTIVE and removes the row.
+      try {
+        await this.searchIndexService.upsertSession(templateId);
+      } catch (e) {
+        this.logger.error?.(
+          `Search-index remove failed for template ${templateId}: ${String(e)}`,
+        );
+      }
     } catch (err) {
       await tx.rollback();
       throw err;

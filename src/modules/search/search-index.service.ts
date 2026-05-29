@@ -220,51 +220,70 @@ export class SearchIndexService {
     );
   }
 
-  // ────── Session ──────
+  // ────── Session (template-driven post migration 046) ──────
 
-  async upsertSession(sessionId: string, tx?: Transaction): Promise<void> {
+  /**
+   * Index a `session_template` row. Migration 046 rewrote the legacy
+   * single-table session model into template + instance — the search
+   * index uses templates as the "session" entity because instances
+   * inherit everything searchable (title, description, location_kind)
+   * from their template. Indexing per-instance would multiply the
+   * index by the recurrence count for zero added query value.
+   *
+   * The `entity_id` we write is the template id; the search read
+   * path resolves it back to the template detail page or first
+   * upcoming instance.
+   */
+  async upsertSession(templateId: string, tx?: Transaction): Promise<void> {
     const rows = await this._sequelize.query<{
       id: string;
       instructor_id: string;
       group_id: string | null;
       title: string;
       description: string | null;
-      location: string | null;
-      visibility: string;
+      access: string;
+      location_kind: string;
+      venue_city: string | null;
       status: string;
-      scheduled_at: Date;
     }>(
-      `SELECT id, instructor_id, group_id, title, description, location,
-              visibility, status, scheduled_at
-         FROM session
-        WHERE id = :id AND deleted_at IS NULL`,
+      `SELECT t.id, t.instructor_id, t.group_id, t.title, t.description,
+              t.access, t.location_kind, t.status,
+              v.city AS venue_city
+         FROM session_template t
+         LEFT JOIN venue v ON v.id = t.venue_id AND v.deleted_at IS NULL
+        WHERE t.id = :id AND t.deleted_at IS NULL`,
       {
-        replacements: { id: sessionId },
+        replacements: { id: templateId },
         transaction: tx,
         type: QueryTypes.SELECT,
       },
     );
 
     const s = rows[0];
-    // Drafts and cancelled sessions never appear in search.
-    if (!s || s.status === 'DRAFT' || s.status === 'CANCELLED') {
-      await this.removeIfExists('session', sessionId, tx);
+    // Only ACTIVE templates surface in search; ENDED + CANCELLED drop out.
+    if (!s || s.status !== 'ACTIVE') {
+      await this.removeIfExists('session', templateId, tx);
       return;
     }
+
+    // Subtitle prefers a city when present (in-person) else the
+    // location-kind label so "ONLINE" still gives the searcher a hint.
+    const subtitle =
+      s.venue_city ?? (s.location_kind === 'ONLINE' ? 'Online' : null);
 
     await this._upsert(
       {
         entityType: 'session',
         entityId: s.id,
         title: s.title,
-        subtitle: s.location ?? null,
+        subtitle,
         body: s.description ?? null,
         tags: [],
-        city: null,
-        // Only PUBLIC sessions are open-search; group/clients/private
-        // visibility is enforced in the read-side WHERE clause via the
-        // viewer's relationships, not by leaving them out of the index.
-        isPublic: s.visibility === 'PUBLIC',
+        city: s.venue_city ?? null,
+        // OPEN/FREE access is publicly discoverable; CLIENTS_ONLY and
+        // GROUP_ONLY are gated server-side by the read query (not by
+        // dropping out of the index — same pattern as posts).
+        isPublic: s.access === 'OPEN' || s.access === 'FREE',
         ownerId: s.instructor_id,
         avatarUrl: null,
       },
@@ -398,12 +417,17 @@ export class SearchIndexService {
       result.groups += 1;
     }
 
-    const sessions = await this._sequelize.query<{ id: string }>(
-      `SELECT id FROM session WHERE deleted_at IS NULL AND status NOT IN ('DRAFT', 'CANCELLED')`,
+    // Migration 046 replaced the `session` table with template +
+    // instance. We index TEMPLATES (one searchable row per series
+    // or one-off) — instances are derivatives and don't add lookup
+    // value for the user typing "yoga".
+    const templates = await this._sequelize.query<{ id: string }>(
+      `SELECT id FROM session_template
+        WHERE deleted_at IS NULL AND status = 'ACTIVE'`,
       { type: QueryTypes.SELECT },
     );
-    for (const s of sessions) {
-      await this.upsertSession(s.id);
+    for (const t of templates) {
+      await this.upsertSession(t.id);
       result.sessions += 1;
     }
 

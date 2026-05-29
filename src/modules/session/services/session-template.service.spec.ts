@@ -12,6 +12,7 @@ import {
 } from '../entities/session.enums';
 import { VenueService } from '../../venue/venue.service';
 import { GroupService } from '../../group/group.service';
+import { SearchIndexService } from '../../search/search-index.service';
 import { makeSilentLogger } from '../../../../test/helpers/sequelize-mocks';
 
 const makeTx = () => ({
@@ -45,6 +46,10 @@ function makeGroupServiceMock() {
   return { getById: jest.fn() };
 }
 
+function makeSearchIndexServiceMock() {
+  return { upsertSession: jest.fn().mockResolvedValue(undefined) };
+}
+
 // Far enough in the future that the future-date guard always passes.
 // Computed at test time so it stays valid as the clock advances.
 const futureIso = (daysAhead = 30) =>
@@ -67,12 +72,14 @@ describe('SessionTemplateService', () => {
   let instanceMock: ReturnType<typeof makeInstanceMock>;
   let venueServiceMock: ReturnType<typeof makeVenueServiceMock>;
   let groupServiceMock: ReturnType<typeof makeGroupServiceMock>;
+  let searchIndexServiceMock: ReturnType<typeof makeSearchIndexServiceMock>;
 
   beforeEach(async () => {
     templateMock = makeTemplateMock();
     instanceMock = makeInstanceMock();
     venueServiceMock = makeVenueServiceMock();
     groupServiceMock = makeGroupServiceMock();
+    searchIndexServiceMock = makeSearchIndexServiceMock();
 
     const module = await Test.createTestingModule({
       providers: [
@@ -82,6 +89,7 @@ describe('SessionTemplateService', () => {
         { provide: getModelToken(SessionInstance), useValue: instanceMock },
         { provide: VenueService, useValue: venueServiceMock },
         { provide: GroupService, useValue: groupServiceMock },
+        { provide: SearchIndexService, useValue: searchIndexServiceMock },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: makeSilentLogger() },
       ],
     }).compile();

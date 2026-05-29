@@ -23,6 +23,7 @@ import { SessionTemplateController } from './session-template.controller';
 import { SessionInstanceController } from './session-instance.controller';
 import { SessionBookingController } from './session-booking.controller';
 import { RoleModule } from '../role/role.module';
+import { SearchModule } from '../search/search.module';
 import { VenueModule } from '../venue/venue.module';
 import { GroupModule } from '../group/group.module';
 
@@ -56,6 +57,7 @@ import { GroupModule } from '../group/group.module';
     ]),
     RoleModule,
     VenueModule,
+    SearchModule,
     forwardRef(() => GroupModule),
   ],
   controllers: [
