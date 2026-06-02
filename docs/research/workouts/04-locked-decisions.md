@@ -227,8 +227,69 @@ If reality forces a change to anything in this document:
 3. Audit `05-db-schema.md`, `06-module-layout.md` for cascading changes
 4. If the migration has already shipped, document the migration plan (new migration, not edit)
 
+## Decisions added after design validation (2026-06-02)
+
+The mid-fi design pass (`design/exercises-v1.html`) surfaced four decisions that weren't in the original lock. All four are now load-bearing and reflected in [05-db-schema.md](./05-db-schema.md).
+
+### 16. Soft-unpublish keeps existing program references working
+
+**Decision:** Visibility flip PUBLIC → PRIVATE **never breaks references**. Other instructors who already added a public exercise to their programs keep working. Picker/list queries hide the exercise for non-owners. Hard delete is blocked by `ON DELETE RESTRICT` on `prescribed_exercise.exercise_id` (and the assigned/logged equivalents) — in practice the system only soft-deletes.
+
+**Rationale:** A public exercise becomes infrastructure once other instructors use it. Pulling it from under them would silently break live client programs. Soft-unpublish + paranoid delete is the social-media "I unpublished, but quoted references remain" pattern.
+
+**Affected screens:** S1 picker visibility, S6 delete-confirm copy ("forks survive, your original goes"), every read query.
+
+### 17. `fork_count` is a denormalized counter on `exercise`
+
+**Decision:** `exercise.fork_count INTEGER NOT NULL DEFAULT 0`, maintained inside the fork transaction (+1 on create, −1 on soft-delete). Sortable index `idx_exercise_fork_count` for the "Most-forked" sort.
+
+**Rationale:** Appears on every list card, detail page, and the "most-forked" sort. Computing via `COUNT(*)` per row on every list query would be a real cost; counter is one INT and stays correct as long as the transaction owns both inserts.
+
+### 18. `is_unilateral` boolean on `exercise`
+
+**Decision:** Add `is_unilateral BOOLEAN NOT NULL DEFAULT FALSE` to `exercise`. Used for split squats, single-arm rows, single-leg work — future logging UX can track L vs R reps or alternate sides.
+
+**Rationale:** One column, zero ship cost, expensive to backfill once `logged_set` rows reference exercises. Designer flagged as nice-to-have-while-we're-in-the-schema; we agreed.
+
+### 19. Clients can browse the catalog, gated by opt-in + assignment
+
+**Decision:** Add `user.exercise_catalog_opt_in BOOLEAN NOT NULL DEFAULT FALSE`. Client-side catalog access (S1 browse) is computed at read time:
+
+```
+canBrowseExerciseCatalog(userId) :=
+  user.exercise_catalog_opt_in
+  OR EXISTS (program_assignment WHERE client_id = userId AND status NOT IN ('CANCELLED'))
+```
+
+The profile toggle reads the *computed* value and writes only `exercise_catalog_opt_in`. When an assignment exists, the toggle displays ON + disabled (caption: "automatically enabled because you're following a program").
+
+**Edge:** When all assignments end (status COMPLETED or CANCELLED), the catalog goes back to gated unless the user explicitly opted in. Accepted — clients who are no longer being coached lose the surface back to default-off.
+
+**Rationale:** The user wants clients to access the catalog when they have a coaching relationship, but not by default (avoids the platform looking like a generic exercise app for non-clients). Auto-enable on assignment is the natural trigger; opt-in covers the rare case of clients who want to explore before being assigned a program.
+
+### 20. Custom exercise — primary muscle hard-capped at 3
+
+**Decision:** `exercise_muscle` rows with `role='PRIMARY'`: at least 1, max 3. SECONDARY and STABILIZER unbounded.
+
+**Rationale:** Design assumption — at >3 primaries the muscle hierarchy stops conveying anything. Enforced in service layer, not DDL.
+
+### Skipped (designer-flagged, deferred)
+
+- **`aliases JSONB`** — search synonyms. Not added in V1. Name-only partial match is the V1 scope; if it proves insufficient, we add it later (additive, zero retrofit pain — the search_doc indexer just starts including the new field).
+- **YouTube oEmbed thumbnail caching** — server-proxied on URL submit, not client. Not a schema decision; lives in the YouTubeUrlField component spec + service.
+
+## How to re-open a locked decision
+
+If reality forces a change to anything in this document:
+
+1. Update this file with the new decision and date
+2. Note what changed in the "Revision history" section below
+3. Audit [05-db-schema.md](./05-db-schema.md), [06-module-layout.md](./06-module-layout.md) for cascading changes
+4. If the migration has already shipped, document the migration plan (new migration, not edit)
+
 ## Revision history
 
 | Date | Change | By |
 |---|---|---|
 | 2026-05-13 | Initial lock | ionut.butnaru |
+| 2026-06-02 | Added §16–20 after design validation (soft-unpublish, fork_count, is_unilateral, client browse gate, primary muscle cap) | ionut.butnaru |

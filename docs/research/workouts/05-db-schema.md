@@ -220,11 +220,17 @@ CREATE TABLE exercise (
 
   -- Media (V1 — primary media)
   media_kind        media_kind NOT NULL DEFAULT 'NONE',
-  thumbnail_url     VARCHAR(500),                  -- Cloudinary URL for catalog list view
+  thumbnail_url     VARCHAR(500),                  -- catalog list thumb; for SYSTEM = start-position image; multi-image overlay lives in exercise_media
   youtube_url       VARCHAR(500),                  -- V1: custom exercises only
 
   -- UI hints
   tracking_fields   JSONB,                         -- e.g. ["reps", "weight", "rpe"] subset of fields the UI surfaces
+
+  -- Programming hints
+  is_unilateral     BOOLEAN NOT NULL DEFAULT FALSE, -- split squats, single-arm rows, etc. — surfaced in logging UX
+
+  -- Denormalized counters (kept in sync inside the same tx as the action)
+  fork_count        INTEGER NOT NULL DEFAULT 0,    -- count of rows where forked_from_id = this.id (PUBLIC only); sortable
 
   -- Future export hooks (nullable, populated over time)
   fit_category      VARCHAR(50),                   -- Garmin FIT exercise category
@@ -238,7 +244,8 @@ CREATE TABLE exercise (
 
   CONSTRAINT exercise_youtube_url_format CHECK (
     youtube_url IS NULL OR youtube_url ~ '^https?://(www\.)?(youtube\.com|youtu\.be)/'
-  )
+  ),
+  CONSTRAINT exercise_fork_count_nonneg CHECK (fork_count >= 0)
 );
 
 -- Owner-scoped unique slug; system exercises have NULL owner_id and share a global namespace
@@ -251,10 +258,29 @@ CREATE INDEX idx_exercise_visibility ON exercise (visibility) WHERE deleted_at I
 CREATE INDEX idx_exercise_kind ON exercise (kind);
 CREATE INDEX idx_exercise_movement_pattern ON exercise (movement_pattern);
 CREATE INDEX idx_exercise_source_provider ON exercise (source_provider, source_external_id);
+CREATE INDEX idx_exercise_fork_count ON exercise (fork_count DESC) WHERE deleted_at IS NULL AND visibility = 'PUBLIC';
 
 -- For text search via search_doc (already indexed via the global search_doc table)
 CREATE INDEX idx_exercise_name_trgm ON exercise USING gin (name gin_trgm_ops);
 ```
+
+### `user` — workouts feature gate (additive column)
+
+The workouts feature gates the client-side catalog browse (S1) behind a per-user toggle that auto-enables when the client has any program assignment. The toggle stores **only** the explicit opt-in; assignment-based eligibility is computed at read time.
+
+```sql
+ALTER TABLE "user"
+  ADD COLUMN exercise_catalog_opt_in BOOLEAN NOT NULL DEFAULT FALSE;
+```
+
+Read-time eligibility (service layer, not DDL):
+```
+canBrowseExerciseCatalog(userId) :=
+  user.exercise_catalog_opt_in
+  OR EXISTS (program_assignment WHERE client_id = userId AND status NOT IN ('CANCELLED'))
+```
+
+The profile toggle reads the *computed* value (shows ON + disabled when an assignment exists) and writes only `exercise_catalog_opt_in`.
 
 ### `exercise_muscle` (M2M)
 
@@ -738,10 +764,26 @@ These are NOT enforced by DDL (would complicate inserts); they live in service-l
 
 - `exercise`: if `visibility = 'PUBLIC'` and `source = 'INSTRUCTOR'`, `owner_id` must not be NULL
 - `exercise`: only owner can mutate when `source = 'INSTRUCTOR'`; SUPER_ADMIN can mutate `source = 'SYSTEM'`
-- `forked_from_id`: must reference an exercise with `visibility = 'PUBLIC'`
+- `forked_from_id`: must reference an exercise with `visibility = 'PUBLIC'` **at fork time**. Re-flipping the source to PRIVATE later does NOT cascade.
+- `exercise.fork_count`: maintained inside the fork tx — `+1` on fork create, `-1` on fork soft-delete or owner change. Recompute via `SELECT COUNT(*) FROM exercise WHERE forked_from_id = $1 AND deleted_at IS NULL` if a drift audit ever runs.
+- `exercise` muscle roles: at least one `exercise_muscle` row with `role='PRIMARY'` is required; max 3 PRIMARY rows; SECONDARY/STABILIZER unbounded.
 - `program_assignment`: deep-copy of the entire program tree happens in a single transaction
 - `logged_set.is_completed = true` requires at least one actual field populated OR explicit mark-complete (no validation values)
 - `assigned_set.resolved_weight_kg`: computed at workout-start from `target_weight_percent_1rm` × latest `one_rep_max.weight_kg` for `(client_id, exercise_id)`
+- **Client catalog access** (S1 browse for `role = USER`): `canBrowseExerciseCatalog(userId)` (see "user" section above) — 403 from catalog list/search endpoints if false.
+
+### Soft-unpublish & delete semantics for `exercise`
+
+The visibility flip from PUBLIC → PRIVATE and the delete flows are designed so other instructors who already added a public exercise to their programs are never broken (Locked Decision §16):
+
+| Action | Rule | What happens to existing references |
+|---|---|---|
+| Visibility flip **PUBLIC → PRIVATE** | Allowed anytime by owner | `prescribed_exercise`, `assigned_exercise`, `logged_exercise` rows continue to resolve normally. Picker/list queries for non-owners hide it. |
+| Visibility flip **PRIVATE → PUBLIC** | Allowed anytime by owner | Becomes catalog-visible again. `fork_count` resumes accumulating. |
+| Soft-delete (`deleted_at = NOW()`) | Allowed anytime by owner; paranoid mode | All existing references continue to resolve via Sequelize paranoid relations. Exercise disappears from every picker/list query. |
+| Hard-delete (`DELETE` row) | Blocked by `ON DELETE RESTRICT` on `prescribed_exercise.exercise_id` / `assigned_exercise.exercise_id` / `logged_exercise.exercise_id` | Cannot happen until all referencing rows are removed. In practice we never hard-delete — we soft-delete. |
+
+When a public exercise is soft-deleted and someone forked it, the fork is a fully independent copy and is unaffected. The `forked_from_id` link on the fork remains, but reads of the source via that FK return `NULL` (paranoid relation).
 
 ## What this schema does NOT include (intentionally)
 

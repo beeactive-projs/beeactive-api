@@ -350,6 +350,85 @@ export class SearchIndexService {
     );
   }
 
+  // ────── Exercise ──────
+
+  /**
+   * An exercise is indexed iff the row is alive (deleted_at IS NULL).
+   * Visibility (PRIVATE / PUBLIC) is enforced by the read-side WHERE
+   * on the viewer's owner_id; SYSTEM exercises are always public.
+   *
+   * `isPublic` here is the search-doc surface flag:
+   *   - SYSTEM         → true (always discoverable)
+   *   - PUBLIC custom  → true (any instructor can find)
+   *   - PRIVATE custom → false (only the owner reads it from search)
+   *
+   * Subtitle = primary muscle slug list — gives the search row a
+   * scannable "what is this for" hint without joining tables on read.
+   */
+  async upsertExercise(exerciseId: string, tx?: Transaction): Promise<void> {
+    const rows = await this._sequelize.query<{
+      id: string;
+      name: string;
+      description: string | null;
+      instructions: string | null;
+      source: string;
+      visibility: string;
+      owner_id: string | null;
+      thumbnail_url: string | null;
+      primary_muscles: string | null;
+    }>(
+      `SELECT e.id,
+              e.name,
+              e.description,
+              e.instructions,
+              e.source,
+              e.visibility,
+              e.owner_id,
+              e.thumbnail_url,
+              (
+                SELECT string_agg(m.common_name, ', ' ORDER BY m.display_order)
+                  FROM exercise_muscle em
+                  JOIN muscle m ON m.id = em.muscle_id
+                 WHERE em.exercise_id = e.id AND em.role = 'PRIMARY'
+              ) AS primary_muscles
+         FROM exercise e
+        WHERE e.id = :id AND e.deleted_at IS NULL`,
+      {
+        replacements: { id: exerciseId },
+        transaction: tx,
+        type: QueryTypes.SELECT,
+      },
+    );
+
+    const e = rows[0];
+    if (!e) {
+      await this.removeIfExists('exercise', exerciseId, tx);
+      return;
+    }
+
+    const isPublic = e.source === 'SYSTEM' || e.visibility === 'PUBLIC';
+    // Body fuses description + instructions so a single trigram search
+    // hits either form text.
+    const body =
+      [e.description, e.instructions].filter(Boolean).join('\n\n') || null;
+
+    await this._upsert(
+      {
+        entityType: 'exercise',
+        entityId: e.id,
+        title: e.name,
+        subtitle: e.primary_muscles,
+        body,
+        tags: [],
+        city: null,
+        isPublic,
+        ownerId: e.owner_id,
+        avatarUrl: e.thumbnail_url,
+      },
+      tx,
+    );
+  }
+
   // ────── Generic remove ──────
 
   async removeIfExists(

@@ -57,4 +57,6 @@ export enum NotificationType {
   POST_REJECTED = 'POST_REJECTED',
   // ── Messaging ────────────────────────────────────────────
   MESSAGE_RECEIVED = 'MESSAGE_RECEIVED',
+  // ── Workouts (exercises + programs) ──────────────────────
+  EXERCISE_FORKED = 'EXERCISE_FORKED',
 }

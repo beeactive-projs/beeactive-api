@@ -13,7 +13,8 @@ export type SearchEntityType =
   | 'group'
   | 'session'
   | 'tag'
-  | 'post';
+  | 'post'
+  | 'exercise';
 
 /**
  * Denormalized row in the global search index. Owned and refreshed by

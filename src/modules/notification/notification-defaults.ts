@@ -122,6 +122,11 @@ export const NOTIFICATION_DEFAULTS: Record<
   // In-app on every message; email is throttled at the call site
   // (one per recipient/conversation/hour). Push reserved for v2.
   [NotificationType.MESSAGE_RECEIVED]: IN_APP_AND_EMAIL,
+
+  // ── Workouts ─────────────────────────────────────────────
+  // Fork notifications are high-volume on popular public exercises;
+  // keep them in-app to avoid an inbox flood.
+  [NotificationType.EXERCISE_FORKED]: IN_APP_ONLY,
 };
 
 /**

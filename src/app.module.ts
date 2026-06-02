@@ -29,6 +29,7 @@ import { FeedbackModule } from './modules/feedback/feedback.module';
 import { WaitlistModule } from './modules/waitlist/waitlist.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { VenueModule } from './modules/venue/venue.module';
+import { ExerciseModule } from './modules/exercise/exercise.module';
 import { SearchModule } from './modules/search/search.module';
 import { PostModule } from './modules/post/post.module';
 import { ReviewModule } from './modules/review/review.module';
@@ -103,6 +104,7 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     WaitlistModule,
     PaymentModule,
     VenueModule,
+    ExerciseModule,
     SearchModule,
     PostModule,
     ReviewModule,

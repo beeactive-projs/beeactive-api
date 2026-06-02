@@ -1,0 +1,1492 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MotionHive — Exercises module</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/primeicons@7.0.0/primeicons.css" />
+  <style>
+    :root {
+      --honey-50:#FFF8EC; --honey-100:#FEEFD2; --honey-200:#FCD9A1; --honey-300:#F9C06B;
+      --honey-500:#E48913; --honey-600:#C26F0A; --honey-700:#965509;
+      --navy-500:#1E3A5F; --navy-700:#162B48; --navy-900:#0E1B31;
+      --teal-100:#CCFBF1; --teal-500:#14B8A6; --teal-600:#0D9488; --teal-700:#0F766E;
+      --coral-100:#FFE4DC; --coral-500:#F97066;
+      --green-100:#DCFCE7; --green-700:#15803D;
+      --blue-100:#DBEAFE; --blue-700:#1D4ED8;
+      --purple-100:#EDE9FE; --purple-700:#6D28D9;
+      --rose-100:#FFE4E6; --rose-700:#BE123C;
+      --s-0:#fff; --s-50:#FAFAF7; --s-100:#F4F2EC; --s-200:#E7E3D9;
+      --s-300:#D6D0C2; --s-400:#B0A998; --s-500:#8A8475;
+      --s-600:#605B4F; --s-700:#3F3B33; --s-800:#2A2722; --s-900:#1A1814;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--s-50); color: var(--s-800);
+      font-size: 14px; line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3, h4 { font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--s-900); letter-spacing: -.005em; margin: 0; }
+    h1 { font-size: 30px; }
+    h2 { font-size: 22px; }
+    h3 { font-size: 16px; }
+    p { margin: 0; }
+    .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+
+    .page { max-width: 1340px; margin: 0 auto; padding: 36px 28px 90px; }
+
+    /* HERO */
+    .hero {
+      padding: 28px 32px; border-radius: 16px; margin-bottom: 36px;
+      background: linear-gradient(135deg, var(--honey-50), var(--honey-100));
+      display: flex; gap: 18px; position: relative; overflow: hidden;
+    }
+    .hero::after {
+      content:''; position:absolute; inset:0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 0 L56 16 L56 50 L28 66 L0 50 L0 16 Z M28 66 L56 82 L56 100 M0 100 L0 82 L28 66 M56 16 L56 50 M0 16 L0 50' fill='none' stroke='%23E48913' stroke-width='1' opacity='.22'/%3E%3C/svg%3E");
+      background-size: 56px 100px; pointer-events: none;
+    }
+    .hero > * { position: relative; z-index: 1; }
+    .mono-hex {
+      width: 56px; height: 56px; flex: 0 0 auto; background: var(--honey-500); color: #fff;
+      clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Poppins'; font-weight: 700; font-size: 22px;
+    }
+    .eyebrow { font-size: 11px; color: var(--honey-700); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+    .lede { color: var(--s-700); max-width: 880px; margin-top: 8px; }
+
+    /* table of contents */
+    .toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .toc a { font-size: 12px; font-weight: 600; color: var(--s-700); background: #fff; border: 1px solid var(--honey-200); padding: 5px 11px; border-radius: 999px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .toc a:hover { background: var(--honey-50); color: var(--honey-700); }
+    .toc a .k { font-family: 'Poppins'; color: var(--honey-600); font-weight: 700; }
+
+    section { margin-bottom: 60px; }
+    section > h2 { margin-bottom: 4px; }
+    section > .sec-lede { color: var(--s-600); font-size: 14px; max-width: 880px; margin-bottom: 22px; }
+    .anchor { scroll-margin-top: 20px; }
+
+    .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--s-500); }
+    .screen-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 4px 10px; border-radius: 999px; font-weight: 700; letter-spacing: .03em; background: var(--navy-700); color: #fff; white-space: nowrap; }
+    .screen-tag .sx { font-family: 'Poppins'; background: rgba(255,255,255,.18); border-radius: 5px; padding: 1px 6px; }
+    .screen-tag .sx { font-family: 'Poppins'; }
+
+    .ttl-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; padding: 3px 8px; border-radius: 999px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .tt-desktop { background: var(--blue-100); color: var(--blue-700); }
+    .tt-mobile { background: #FCE7F3; color: #BE185D; }
+    .tt-both { background: var(--purple-100); color: var(--purple-700); }
+
+    /* Desktop chrome */
+    .web { background: #fff; border: 1px solid var(--s-200); border-radius: 14px; overflow: hidden; box-shadow: 0 10px 28px rgba(0,0,0,.06); position: relative; }
+    .web-topbar { height: 52px; background: #fff; border-bottom: 1px solid var(--s-200); display: flex; align-items: center; padding: 0 16px; gap: 14px; }
+    .web-topbar .logo { width: 26px; height: 26px; background: var(--honey-500); color: #fff; clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); display: flex; align-items: center; justify-content: center; font-family: 'Poppins'; font-weight: 700; font-size: 11px; }
+    .web-topbar .brand { font-family: 'Poppins'; font-weight: 600; color: var(--navy-700); font-size: 13px; margin-right: 10px; }
+    .web-topbar .search { flex: 1; max-width: 460px; display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--s-100); border-radius: 8px; color: var(--s-500); font-size: 12px; cursor: text; }
+    .web-topbar .search kbd { margin-left: auto; background: #fff; border: 1px solid var(--s-300); border-radius: 4px; padding: 1px 5px; font-size: 10px; font-family: inherit; color: var(--s-600); }
+    .web-topbar .right { margin-left: auto; display: flex; align-items: center; gap: 14px; color: var(--s-600); }
+    .web-topbar .bell { position: relative; }
+    .web-topbar .bell::after { content: '17'; position: absolute; top: -4px; right: -8px; background: var(--coral-500); color: #fff; font-size: 8px; font-weight: 700; border-radius: 999px; padding: 1px 4px; }
+    .web-topbar .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--navy-500); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+
+    .web-body { display: grid; grid-template-columns: 216px 1fr; min-height: 600px; }
+    .web-sidebar { background: #fff; border-right: 1px solid var(--s-200); padding: 14px 0; }
+    .sb-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin: 0 8px 1px; border-radius: 6px; color: var(--s-700); font-size: 13px; cursor: default; }
+    .sb-item i { font-size: 13px; width: 16px; text-align: center; color: var(--s-500); }
+    .sb-item.is-active { background: var(--honey-100); color: var(--honey-700); font-weight: 600; }
+    .sb-item.is-active i { color: var(--honey-700); }
+    .sb-group { padding: 12px 18px 4px; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--s-500); font-weight: 700; }
+    .sb-badge { margin-left: auto; padding: 1px 6px; background: var(--coral-500); color: #fff; border-radius: 999px; font-size: 9px; font-weight: 700; }
+    .sb-badge.honey { background: var(--honey-500); }
+    .web-content { background: var(--s-50); overflow: hidden; }
+
+    /* Mobile frame — single source of truth */
+    .phones { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; }
+    .phone-wrap { display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; width: 320px; }
+    .phone-meta { display: flex; align-items: center; gap: 8px; }
+    .phone-meta .num { width: 22px; height: 22px; background: var(--honey-500); color: #fff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: 'Poppins'; font-weight: 700; font-size: 11px; }
+    .phone-meta .ti { font-size: 13px; font-weight: 600; color: var(--s-900); }
+    .phone-caption { font-size: 11px; color: var(--s-600); line-height: 1.55; padding: 8px 10px; background: var(--s-100); border-radius: 6px; }
+    .phone-caption strong { color: var(--s-900); }
+
+    .phone { width: 320px; height: 660px; background: #fff; border: 1px solid var(--s-300); border-radius: 28px; box-shadow: 0 12px 32px rgba(0,0,0,.10); overflow: hidden; display: flex; flex-direction: column; position: relative; }
+    .ph-status { height: 22px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; flex: 0 0 22px; }
+    .ph-appbar { background: #fff; padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--s-200); flex: 0 0 auto; }
+    .ph-appbar .t { font-family: 'Poppins'; font-weight: 600; font-size: 15px; flex: 1; min-width: 0; }
+    .ph-appbar .ic { color: var(--s-700); font-size: 14px; cursor: default; }
+    .ph-body { flex: 1; min-height: 0; overflow: auto; background: var(--s-50); position: relative; }
+    .ph-tabbar { height: 58px; background: #fff; border-top: 1px solid var(--s-200); display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; flex: 0 0 58px; }
+    .ph-tab { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 9px; color: var(--s-500); }
+    .ph-tab.on { color: var(--honey-600); font-weight: 600; }
+    .ph-tab i { font-size: 15px; }
+    .ph-home { height: 6px; background: #fff; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 3px; flex: 0 0 6px; }
+    .ph-home::after { content: ''; width: 100px; height: 3px; background: var(--s-900); border-radius: 999px; }
+    .fab { position: absolute; right: 14px; bottom: 16px; width: 48px; height: 48px; border-radius: 50%; background: var(--honey-500); color: #fff; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(228,137,19,.4); font-size: 18px; }
+
+    /* Bottom sheet */
+    .bs-shell { position: absolute; inset: 0; background: rgba(20,18,12,.34); backdrop-filter: blur(1px); display: flex; flex-direction: column; justify-content: flex-end; z-index: 5; }
+    .bs-sheet { background: #fff; border-top-left-radius: 16px; border-top-right-radius: 16px; max-height: 86%; display: flex; flex-direction: column; overflow: hidden; }
+    .bs-handle { width: 36px; height: 4px; background: var(--s-300); border-radius: 999px; margin: 8px auto 4px; flex: 0 0 auto; }
+    .bs-head { padding: 8px 16px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--s-100); flex: 0 0 auto; }
+    .bs-head .t { font-family: 'Poppins'; font-weight: 600; font-size: 15px; flex: 1; }
+    .bs-body { overflow: auto; padding: 12px 16px; }
+    .bs-foot { border-top: 1px solid var(--s-100); padding: 10px 16px; display: flex; gap: 10px; flex: 0 0 auto; }
+
+    /* chips / pills / badges */
+    .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+    .chip-honey { background: var(--honey-100); color: var(--honey-700); }
+    .chip-teal { background: var(--teal-100); color: var(--teal-600); }
+    .chip-blue { background: var(--blue-100); color: var(--blue-700); }
+    .chip-green { background: var(--green-100); color: var(--green-700); }
+    .chip-coral { background: var(--coral-100); color: #B91C1C; }
+    .chip-purple { background: var(--purple-100); color: var(--purple-700); }
+    .chip-rose { background: var(--rose-100); color: var(--rose-700); }
+    .chip-sec { background: var(--s-100); color: var(--s-700); }
+    .chip-outline { background: #fff; border: 1px solid var(--s-300); color: var(--s-600); }
+    .pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 999px; font-size: 11px; font-weight: 600; cursor: default; }
+    .pill-active { background: var(--s-900); color: #fff; }
+    .pill-idle { background: #fff; border: 1px solid var(--s-300); color: var(--s-700); }
+
+    /* level badge — color + ICON so color isn't sole indicator (a11y) */
+    .lvl { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px; letter-spacing: .02em; }
+    .lvl-beg { background: var(--green-100); color: var(--green-700); }
+    .lvl-int { background: var(--honey-100); color: var(--honey-700); }
+    .lvl-adv { background: var(--rose-100); color: var(--rose-700); }
+    /* source indicator — icon + text, never color alone */
+    .src { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; color: var(--s-500); }
+    .src i { font-size: 10px; }
+    .src-sys i { color: var(--navy-500); }
+    .src-mine { color: var(--teal-700); }
+    .src-other { color: var(--s-600); }
+
+    /* muscle role tags */
+    .mtag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .mtag::before { content: ''; width: 7px; height: 7px; border-radius: 2px; flex: 0 0 auto; }
+    .mtag-pri { background: var(--honey-100); color: var(--honey-700); }
+    .mtag-pri::before { background: var(--honey-500); }
+    .mtag-sec { background: var(--blue-100); color: var(--blue-700); }
+    .mtag-sec::before { background: var(--blue-700); }
+    .mtag-stab { background: var(--s-100); color: var(--s-600); }
+    .mtag-stab::before { background: var(--s-400); }
+
+    /* exercise grid card (desktop) */
+    .ex-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .ex-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .ex-card { background: #fff; border: 1px solid var(--s-200); border-radius: 10px; overflow: hidden; cursor: default; transition: box-shadow .15s; }
+    .ex-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.07); }
+    .ex-thumb { aspect-ratio: 16/10; background: var(--s-100); position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .ex-thumb .ph-img { position: absolute; inset: 0; background-image: repeating-linear-gradient(135deg, var(--s-100) 0 8px, var(--s-200) 8px 16px); }
+    .ex-thumb .ph-lbl { position: relative; font-family: ui-monospace, monospace; font-size: 9px; color: var(--s-500); background: rgba(255,255,255,.82); padding: 2px 6px; border-radius: 4px; }
+    .ex-thumb .topright { position: absolute; top: 8px; right: 8px; z-index: 2; }
+    .ex-thumb .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .ex-thumb .play i { width: 34px; height: 34px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+    .ex-card-body { padding: 10px 12px 12px; }
+    .ex-card-name { font-family: 'Poppins'; font-weight: 600; font-size: 13px; color: var(--s-900); line-height: 1.3; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .ex-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    .ex-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--s-100); }
+
+    /* exercise list row (mobile + desktop list mode) */
+    .ex-row { display: flex; gap: 11px; padding: 10px 12px; background: #fff; border-bottom: 1px solid var(--s-100); align-items: center; }
+    .ex-row .rthumb { width: 52px; height: 52px; border-radius: 8px; flex: 0 0 auto; background: var(--s-100); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .ex-row .rthumb .ph-img { position: absolute; inset: 0; background-image: repeating-linear-gradient(135deg, var(--s-100) 0 6px, var(--s-200) 6px 12px); }
+    .ex-row .rbody { flex: 1; min-width: 0; }
+    .ex-row .rname { font-weight: 600; font-size: 13px; color: var(--s-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ex-row .rmeta { font-size: 11px; color: var(--s-500); margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    /* filter rail (desktop) */
+    .filter-rail { border: 1px solid var(--s-200); border-radius: 10px; background: #fff; padding: 4px 0; }
+    .fr-group { padding: 12px 14px; border-bottom: 1px solid var(--s-100); }
+    .fr-group:last-child { border-bottom: none; }
+    .fr-group h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--s-500); font-weight: 700; margin-bottom: 9px; display: flex; align-items: center; justify-content: space-between; }
+    .fr-opt { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--s-700); }
+    .fr-check { width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--s-300); flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; }
+    .fr-check.on { background: var(--honey-500); border-color: var(--honey-500); color: #fff; }
+    .fr-check.on i { font-size: 9px; }
+    .fr-opt .cnt { margin-left: auto; font-size: 10px; color: var(--s-400); }
+
+    /* form bits */
+    .field { margin-bottom: 18px; }
+    .field > label { display: block; font-size: 12px; font-weight: 600; color: var(--s-800); margin-bottom: 6px; }
+    .field .req { color: var(--coral-500); }
+    .field .opt { color: var(--s-400); font-weight: 500; }
+    .field .hint { font-size: 11px; color: var(--s-500); margin-top: 5px; line-height: 1.5; }
+    .inp { width: 100%; border: 1px solid var(--s-300); border-radius: 8px; padding: 9px 12px; font: inherit; font-size: 13px; color: var(--s-900); background: #fff; }
+    .inp::placeholder { color: var(--s-400); }
+    textarea.inp { resize: none; }
+    .inp-row { display: flex; align-items: center; gap: 8px; border: 1px solid var(--s-300); border-radius: 8px; padding: 0 12px; background: #fff; }
+    .inp-row input { flex: 1; border: none; outline: none; font: inherit; font-size: 13px; padding: 9px 0; background: transparent; }
+    .charcount { font-size: 10px; color: var(--s-400); }
+
+    /* kind radio cards */
+    .kind-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .kind-card { border: 1.5px solid var(--s-200); border-radius: 9px; padding: 10px 11px; cursor: default; position: relative; }
+    .kind-card.on { border-color: var(--honey-500); background: var(--honey-50); }
+    .kind-card .kc-h { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 12px; color: var(--s-900); }
+    .kind-card .kc-h i { color: var(--honey-600); }
+    .kind-card.on .kc-dot { position: absolute; top: 9px; right: 9px; color: var(--honey-500); }
+    .kind-card p { font-size: 10.5px; color: var(--s-500); margin-top: 4px; line-height: 1.45; }
+
+    /* segmented control */
+    .seg { display: inline-flex; background: var(--s-100); border-radius: 7px; padding: 2px; gap: 2px; }
+    .seg span { padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 600; color: var(--s-600); cursor: default; }
+    .seg span.on { background: #fff; color: var(--s-900); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+    /* toggle */
+    .toggle { width: 38px; height: 22px; border-radius: 999px; background: var(--s-300); position: relative; flex: 0 0 auto; }
+    .toggle::after { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+    .toggle.on { background: var(--honey-500); }
+    .toggle.on::after { left: 18px; }
+
+    /* buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 16px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; border: none; cursor: default; white-space: nowrap; }
+    .btn-primary { background: var(--honey-500); color: #fff; }
+    .btn-ghost { background: #fff; border: 1px solid var(--s-300); color: var(--s-700); }
+    .btn-navy { background: var(--navy-700); color: #fff; }
+    .btn-danger { background: var(--coral-500); color: #fff; }
+    .btn-sm { padding: 6px 11px; font-size: 12px; }
+    .btn-block { width: 100%; }
+
+    /* decision cards */
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .decision-card { background: #fff; border: 1px solid var(--s-200); border-radius: 12px; padding: 16px 18px; display: flex; gap: 14px; }
+    .decision-card .num { width: 30px; height: 30px; flex: 0 0 auto; background: var(--honey-100); color: var(--honey-700); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-family: 'Poppins'; font-weight: 700; font-size: 14px; }
+    .decision-card h3 { font-size: 14px; margin-bottom: 4px; }
+    .decision-card p { font-size: 12px; color: var(--s-600); line-height: 1.6; }
+    .decision-card p + p { margin-top: 6px; }
+    .decision-card .tag-pick { display: inline-block; margin-top: 9px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--teal-700); background: var(--teal-100); padding: 2px 8px; border-radius: 999px; }
+
+    .callout { padding: 16px 18px; border-radius: 12px; display: flex; gap: 12px; background: var(--honey-50); border: 1px solid var(--honey-200); }
+    .callout.teal { background: var(--teal-100); border-color: #99E9DD; }
+    .callout.rose { background: var(--rose-100); border-color: #FBCFE0; }
+    .callout i { color: var(--honey-600); font-size: 18px; margin-top: 1px; flex: 0 0 auto; }
+    .callout.teal i { color: var(--teal-700); }
+    .callout.rose i { color: var(--rose-700); }
+    .callout p { font-size: 13px; color: var(--s-700); line-height: 1.6; }
+    .callout strong { color: var(--s-900); }
+
+    /* stage labelling */
+    .stage-meta { display: flex; align-items: center; gap: 10px; margin: 26px 0 14px; flex-wrap: wrap; }
+    .stage-meta .num { width: 28px; height: 28px; background: var(--honey-500); color: #fff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: 'Poppins'; font-weight: 700; font-size: 13px; }
+    .stage-meta .ti { font-family: 'Poppins'; font-weight: 600; font-size: 15px; }
+    .stage-meta .note { color: var(--s-500); font-size: 12px; }
+
+    /* matrix / tables */
+    .matrix { background: #fff; border: 1px solid var(--s-200); border-radius: 12px; overflow: hidden; }
+    .matrix table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+    .matrix th { text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--s-600); padding: 11px 14px; background: var(--s-50); border-bottom: 1px solid var(--s-200); }
+    .matrix td { padding: 12px 14px; border-bottom: 1px solid var(--s-100); vertical-align: top; }
+    .matrix tr:last-child td { border-bottom: none; }
+    .matrix td.k { font-family: 'Poppins'; font-weight: 600; color: var(--s-900); white-space: nowrap; }
+    .matrix code { font-family: ui-monospace, monospace; font-size: 11.5px; background: var(--s-100); color: var(--navy-700); padding: 1px 6px; border-radius: 4px; }
+    .matrix .muted { color: var(--s-500); font-size: 12px; }
+
+    /* fields-used pills inside table */
+    .fcode { display: inline-block; font-family: ui-monospace, monospace; font-size: 11px; background: var(--s-100); color: var(--navy-700); padding: 2px 7px; border-radius: 5px; margin: 2px 3px 2px 0; }
+    .fcode.new { background: var(--rose-100); color: var(--rose-700); }
+
+    /* ordered open-questions */
+    .oq { counter-reset: oq; display: flex; flex-direction: column; gap: 10px; }
+    .oq-item { display: flex; gap: 12px; background: #fff; border: 1px solid var(--s-200); border-radius: 10px; padding: 13px 15px; }
+    .oq-item::before { counter-increment: oq; content: counter(oq); width: 24px; height: 24px; flex: 0 0 auto; background: var(--navy-700); color: #fff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: 'Poppins'; font-weight: 700; font-size: 12px; }
+    .oq-item .qx { font-size: 13px; color: var(--s-800); line-height: 1.55; }
+    .oq-item .qx strong { color: var(--s-900); }
+    .oq-item .qx .assume { display: block; margin-top: 4px; font-size: 11.5px; color: var(--teal-700); }
+
+    /* component inventory */
+    .inv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .inv-card { border: 1px solid var(--s-200); border-radius: 9px; background: #fff; padding: 11px 13px; }
+    .inv-card .cn { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; color: var(--navy-700); }
+    .inv-card .cd { font-size: 11px; color: var(--s-600); margin-top: 3px; line-height: 1.45; }
+    .inv-card .cu { font-size: 9.5px; color: var(--s-400); margin-top: 6px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+
+    /* skeleton */
+    @keyframes shimmer { 0% { opacity: .55; } 50% { opacity: 1; } 100% { opacity: .55; } }
+    .sk { background: var(--s-200); border-radius: 6px; animation: shimmer 1.4s ease-in-out infinite; }
+
+    /* toast */
+    .toast { display: flex; align-items: center; gap: 10px; background: var(--s-900); color: #fff; border-radius: 10px; padding: 11px 14px; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+    .toast i.lead { color: var(--teal-500); font-size: 15px; }
+    .toast .act { margin-left: 8px; color: var(--honey-300); font-weight: 700; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+    @media (max-width: 900px) { .two-col, .grid-3, .grid-2, .kind-grid, .inv { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="mono-hex">M</div>
+      <div>
+        <div class="eyebrow">MotionHive · Exercises module</div>
+        <h1>The exercise catalog — browse 870, create your own, fork the best.</h1>
+        <p class="lede">
+          A mid-fi spec for the <strong>Exercises module</strong> (S1–S8). Mobile-first, built on MotionHive's existing shell — the same top bar, sidebar, 5-tab bar, bottom sheets and FAB you already ship. Every screen is annotated with the product call it makes and the schema fields it touches, so this doc cross-checks directly against the migration. Visual polish is deliberately restrained; the priority is UX decisions and data shape.
+        </p>
+        <div class="toc">
+          <a href="#ia"><span class="k">·</span> IA &amp; nav</a>
+          <a href="#s1"><span class="k">S1</span> Catalog</a>
+          <a href="#s2"><span class="k">S2</span> Detail</a>
+          <a href="#s3"><span class="k">S3</span> Create</a>
+          <a href="#s4"><span class="k">S4</span> Edit</a>
+          <a href="#s5"><span class="k">S5</span> Fork</a>
+          <a href="#s6"><span class="k">S6</span> My exercises</a>
+          <a href="#s7"><span class="k">S7</span> Picker</a>
+          <a href="#s8"><span class="k">S8</span> States</a>
+          <a href="#fields">Fields used</a>
+          <a href="#needed">Fields needed</a>
+          <a href="#questions">Open questions</a>
+          <a href="#inventory">Components</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- IA & NAV -->
+    <section class="anchor" id="ia">
+      <h2>Where Exercises lives, and who can do what</h2>
+      <p class="sec-lede">Before the screens: two decisions that shape every one of them — where the module sits in navigation, and how the ownership/visibility rules translate into visible affordances.</p>
+
+      <div class="stage-meta" style="margin-top: 4px;"><span class="num">A</span><span class="ti">Navigation placement</span></div>
+      <div class="two-col">
+        <div>
+          <p style="font-size: 13px; color: var(--s-700); line-height: 1.65; margin-bottom: 14px;">Exercises is an <strong>instructor building-block</strong>, not a social surface — it belongs with the coaching tools, not next to Discover/Home. On desktop it gets a top-level item in the <strong>Coaching</strong> group of the sidebar. On mobile the 5-tab bar is full (Home · Discover · Sessions · Messages · More), so Exercises lives one level in under <strong>More</strong>, and — because instructors hit it constantly while programming — also surfaces as a shortcut on the Coaching hub. <strong>My exercises</strong> is <em>not</em> a separate nav item; it's an ownership filter inside the catalog (see S1/S6).</p>
+          <div class="callout">
+            <i class="pi pi-info-circle"></i>
+            <p><strong>The picker reuses the catalog.</strong> S7 (add-exercise from the program builder) is the same data and filters as S1 in a sheet/drawer. One catalog, three entry points: Coaching → Exercises, More → Exercises, and "Add exercise" inside a workout.</p>
+          </div>
+        </div>
+        <div class="web" style="box-shadow: none;">
+          <div class="web-topbar">
+            <div class="logo">M</div><div class="brand">MotionHive</div>
+            <div class="search"><i class="pi pi-search"></i> Search… <kbd>⌘K</kbd></div>
+            <div class="right"><span class="bell"><i class="pi pi-bell"></i></span><span class="avatar">AP</span></div>
+          </div>
+          <div class="web-body" style="grid-template-columns: 1fr; min-height: 0;">
+            <div class="web-sidebar" style="border-right: none;">
+              <div class="sb-item"><i class="pi pi-home"></i>Home</div>
+              <div class="sb-item"><i class="pi pi-compass"></i>Discover</div>
+              <div class="sb-item"><i class="pi pi-calendar"></i>Sessions</div>
+              <div class="sb-item"><i class="pi pi-comments"></i>Messages<span class="sb-badge">3</span></div>
+              <div class="sb-item"><i class="pi pi-sitemap"></i>Groups</div>
+              <div class="sb-group">Coaching</div>
+              <div class="sb-item"><i class="pi pi-users"></i>Clients</div>
+              <div class="sb-item"><i class="pi pi-objects-column"></i>Programs</div>
+              <div class="sb-item is-active"><i class="pi pi-bolt"></i>Exercises</div>
+              <div class="sb-item"><i class="pi pi-credit-card"></i>Payments</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-meta"><span class="num">B</span><span class="ti">Ownership &amp; visibility → what each role sees</span></div>
+      <div class="matrix">
+        <table>
+          <thead><tr><th style="width: 150px;">Source / visibility</th><th>Instructor (not owner)</th><th>Instructor (owner)</th><th>Client</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="k"><span class="src src-sys"><i class="pi pi-verified"></i> System</span></td>
+              <td>View · Fork? <span class="muted">no — system isn't forkable, it's already everyone's</span></td>
+              <td class="muted">— (no owner)</td>
+              <td>View only (when assigned)</td>
+            </tr>
+            <tr>
+              <td class="k"><span class="chip chip-sec"><i class="pi pi-lock" style="font-size:9px;"></i> Private</span></td>
+              <td class="muted">Not visible</td>
+              <td>View · <strong>Edit</strong> · Delete · Make public</td>
+              <td class="muted">Not visible (unless assigned in a program)</td>
+            </tr>
+            <tr>
+              <td class="k"><span class="chip chip-teal"><i class="pi pi-globe" style="font-size:9px;"></i> Public</span></td>
+              <td>View · <strong>Fork</strong> to my library · Use as-is</td>
+              <td>View · <strong>Edit</strong> · Delete · Make private · sees fork count</td>
+              <td>View only (when assigned)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout teal" style="margin-top: 14px;">
+        <i class="pi pi-shield"></i>
+        <p><strong>Color is never the only signal.</strong> Every source/level/visibility marker pairs a color with an icon and a word — <span class="src src-sys"><i class="pi pi-verified"></i> System</span>, <span class="lvl lvl-adv"><i class="pi pi-angle-double-up"></i> Advanced</span>, <span class="chip chip-teal"><i class="pi pi-globe" style="font-size:9px;"></i> Public</span> — so the catalog reads for colorblind users and in grayscale print.</p>
+      </div>
+    </section>
+    <!-- S1 CATALOG -->
+    <section class="anchor" id="s1">
+      <span class="screen-tag"><span class="sx">S1</span> Exercise catalog — browse</span>
+      <h2 style="margin-top: 12px;">The hub. Dense, filterable, searchable — built to scroll.</h2>
+      <p class="sec-lede">An instructor opens this to discover a movement or look one up fast. ~870 system exercises plus their own and public customs. High information density per screen (Hevy-leaning); the detail view is where it gets spacious.</p>
+
+      <!-- DESKTOP -->
+      <div class="stage-meta"><span class="num">1</span><span class="ti">Desktop · grid + persistent filter rail</span><span class="ttl-tag tt-desktop">Desktop</span></div>
+      <div class="web">
+        <div class="web-topbar">
+          <div class="logo">M</div><div class="brand">MotionHive</div>
+          <div class="search"><i class="pi pi-search"></i> Search… <kbd>⌘K</kbd></div>
+          <div class="right"><span class="bell"><i class="pi pi-bell"></i></span><i class="pi pi-moon"></i><span class="avatar">AP</span></div>
+        </div>
+        <div class="web-body">
+          <div class="web-sidebar">
+            <div class="sb-item"><i class="pi pi-home"></i>Home</div>
+            <div class="sb-item"><i class="pi pi-compass"></i>Discover</div>
+            <div class="sb-item"><i class="pi pi-calendar"></i>Sessions</div>
+            <div class="sb-item"><i class="pi pi-comments"></i>Messages<span class="sb-badge">3</span></div>
+            <div class="sb-item"><i class="pi pi-sitemap"></i>Groups</div>
+            <div class="sb-group">Coaching</div>
+            <div class="sb-item"><i class="pi pi-users"></i>Clients</div>
+            <div class="sb-item"><i class="pi pi-objects-column"></i>Programs</div>
+            <div class="sb-item is-active"><i class="pi pi-bolt"></i>Exercises</div>
+            <div class="sb-item"><i class="pi pi-credit-card"></i>Payments</div>
+          </div>
+          <div class="web-content" style="padding: 20px 22px; overflow: visible;">
+            <!-- header row -->
+            <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px;">
+              <div style="flex: 1;">
+                <h3 style="font-size: 18px;">Exercises</h3>
+                <p style="font-size: 12px; color: var(--s-500); margin-top: 2px;">872 exercises · 14 created by you</p>
+              </div>
+              <button class="btn btn-primary btn-sm"><i class="pi pi-plus"></i> Create custom exercise</button>
+            </div>
+            <!-- search + ownership tabs + sort -->
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+              <div class="inp-row" style="flex: 1; max-width: 360px;"><i class="pi pi-search" style="color: var(--s-400); font-size: 13px;"></i><input placeholder="Search by name…" /></div>
+              <div style="display: flex; gap: 6px;">
+                <span class="pill pill-active">All</span>
+                <span class="pill pill-idle">System</span>
+                <span class="pill pill-idle">My exercises <span style="opacity:.6;">14</span></span>
+                <span class="pill pill-idle">Public · others</span>
+              </div>
+              <div class="inp-row" style="margin-left: auto; width: auto; padding: 7px 11px; gap: 6px;"><i class="pi pi-sort-alt" style="font-size: 12px; color: var(--s-500);"></i><span style="font-size: 12px; color: var(--s-700); font-weight: 600;">Name A–Z</span><i class="pi pi-chevron-down" style="font-size: 10px; color: var(--s-500);"></i></div>
+              <div class="seg"><span><i class="pi pi-th-large" style="font-size:11px;"></i></span><span class="on"><i class="pi pi-bars" style="font-size:11px;"></i></span></div>
+            </div>
+            <!-- body: rail + grid -->
+            <div style="display: grid; grid-template-columns: 196px 1fr; gap: 16px; align-items: start;">
+              <div class="filter-rail">
+                <div class="fr-group">
+                  <h4>Kind</h4>
+                  <div class="fr-opt"><span class="fr-check on"><i class="pi pi-check"></i></span> Strength <span class="cnt">410</span></div>
+                  <div class="fr-opt"><span class="fr-check"></span> Cardio <span class="cnt">88</span></div>
+                  <div class="fr-opt"><span class="fr-check"></span> Bodyweight <span class="cnt">132</span></div>
+                  <div class="fr-opt"><span class="fr-check"></span> Mobility <span class="cnt">96</span></div>
+                  <div class="fr-opt" style="color: var(--honey-600); font-weight: 600;">+ Duration, Distance</div>
+                </div>
+                <div class="fr-group">
+                  <h4>Primary muscle</h4>
+                  <div class="fr-opt"><span class="fr-check"></span> Chest <span class="cnt">64</span></div>
+                  <div class="fr-opt"><span class="fr-check"></span> Quadriceps <span class="cnt">71</span></div>
+                  <div class="fr-opt"><span class="fr-check"></span> Lats <span class="cnt">38</span></div>
+                  <div class="fr-opt" style="color: var(--honey-600); font-weight: 600;">Show all 17 →</div>
+                </div>
+                <div class="fr-group">
+                  <h4>Equipment</h4>
+                  <div class="fr-opt"><span class="fr-check"></span> Barbell <span class="cnt">180</span></div>
+                  <div class="fr-opt"><span class="fr-check"></span> Dumbbell <span class="cnt">203</span></div>
+                  <div class="fr-opt"><span class="fr-check"></span> Bodyweight <span class="cnt">147</span></div>
+                  <div class="fr-opt" style="color: var(--honey-600); font-weight: 600;">Show all 15 →</div>
+                </div>
+                <div class="fr-group">
+                  <h4>Level</h4>
+                  <div class="fr-opt"><span class="fr-check"></span> Beginner</div>
+                  <div class="fr-opt"><span class="fr-check"></span> Intermediate</div>
+                  <div class="fr-opt"><span class="fr-check"></span> Advanced</div>
+                </div>
+                <div class="fr-group">
+                  <h4>More</h4>
+                  <div class="fr-opt" style="color: var(--s-500);">Movement pattern</div>
+                  <div class="fr-opt" style="color: var(--s-500);">Mechanic · Force</div>
+                </div>
+              </div>
+              <!-- grid -->
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 11px;">
+                  <span class="chip chip-honey">Strength <i class="pi pi-times" style="font-size: 8px;"></i></span>
+                  <span style="color: var(--s-500);">410 results</span>
+                  <span style="margin-left: auto; color: var(--honey-600); font-weight: 600; cursor: default;">Clear filters</span>
+                </div>
+                <div class="ex-grid">
+                  <!-- card: system -->
+                  <div class="ex-card">
+                    <div class="ex-thumb"><div class="ph-img"></div><span class="ph-lbl">start position</span><span class="topright src src-sys" style="background: rgba(255,255,255,.9); padding: 2px 6px; border-radius: 5px;"><i class="pi pi-verified"></i> System</span></div>
+                    <div class="ex-card-body">
+                      <div class="ex-card-name">Barbell back squat</div>
+                      <div class="ex-card-meta"><span class="mtag mtag-pri">Quads</span><span class="chip chip-outline">Barbell</span></div>
+                      <div class="ex-card-foot"><span class="lvl lvl-int"><i class="pi pi-equals"></i> Intermediate</span><span class="chip chip-sec">Compound</span></div>
+                    </div>
+                  </div>
+                  <!-- card: mine -->
+                  <div class="ex-card">
+                    <div class="ex-thumb"><div class="ph-img"></div><span class="play"><i class="pi pi-youtube"></i></span><span class="topright chip chip-teal"><i class="pi pi-lock" style="font-size:8px;"></i> Mine</span></div>
+                    <div class="ex-card-body">
+                      <div class="ex-card-name">Tempo goblet squat — 3-1-1</div>
+                      <div class="ex-card-meta"><span class="mtag mtag-pri">Quads</span><span class="chip chip-outline">Kettlebell</span></div>
+                      <div class="ex-card-foot"><span class="lvl lvl-beg"><i class="pi pi-angle-down"></i> Beginner</span><span class="src src-mine"><i class="pi pi-user"></i> You</span></div>
+                    </div>
+                  </div>
+                  <!-- card: public/other -->
+                  <div class="ex-card">
+                    <div class="ex-thumb"><div class="ph-img"></div><span class="ph-lbl">demo gif</span><span class="topright chip chip-blue"><i class="pi pi-globe" style="font-size:8px;"></i> Public</span></div>
+                    <div class="ex-card-body">
+                      <div class="ex-card-name">Bulgarian split squat (deficit)</div>
+                      <div class="ex-card-meta"><span class="mtag mtag-pri">Quads</span><span class="mtag mtag-sec">Glutes</span></div>
+                      <div class="ex-card-foot"><span class="src src-other"><span class="avatar" style="width:16px;height:16px;font-size:8px;background:var(--teal-600);">DM</span> D. Marin</span><span class="chip chip-sec"><i class="pi pi-share-alt" style="font-size:8px;"></i> 42</span></div>
+                    </div>
+                  </div>
+                  <div class="ex-card">
+                    <div class="ex-thumb"><div class="ph-img"></div><span class="ph-lbl">start position</span><span class="topright src src-sys" style="background: rgba(255,255,255,.9); padding: 2px 6px; border-radius: 5px;"><i class="pi pi-verified"></i> System</span></div>
+                    <div class="ex-card-body">
+                      <div class="ex-card-name">Romanian deadlift</div>
+                      <div class="ex-card-meta"><span class="mtag mtag-pri">Hamstrings</span><span class="chip chip-outline">Barbell</span></div>
+                      <div class="ex-card-foot"><span class="lvl lvl-int"><i class="pi pi-equals"></i> Intermediate</span><span class="chip chip-sec">Hinge</span></div>
+                    </div>
+                  </div>
+                  <div class="ex-card">
+                    <div class="ex-thumb"><div class="ph-img"></div><span class="ph-lbl">start position</span><span class="topright src src-sys" style="background: rgba(255,255,255,.9); padding: 2px 6px; border-radius: 5px;"><i class="pi pi-verified"></i> System</span></div>
+                    <div class="ex-card-body">
+                      <div class="ex-card-name">Front squat</div>
+                      <div class="ex-card-meta"><span class="mtag mtag-pri">Quads</span><span class="chip chip-outline">Barbell</span></div>
+                      <div class="ex-card-foot"><span class="lvl lvl-adv"><i class="pi pi-angle-double-up"></i> Advanced</span><span class="chip chip-sec">Compound</span></div>
+                    </div>
+                  </div>
+                  <div class="ex-card">
+                    <div class="ex-thumb"><div class="ph-img"></div><span class="ph-lbl">start position</span><span class="topright src src-sys" style="background: rgba(255,255,255,.9); padding: 2px 6px; border-radius: 5px;"><i class="pi pi-verified"></i> System</span></div>
+                    <div class="ex-card-body">
+                      <div class="ex-card-name">Goblet squat</div>
+                      <div class="ex-card-meta"><span class="mtag mtag-pri">Quads</span><span class="chip chip-outline">Dumbbell</span></div>
+                      <div class="ex-card-foot"><span class="lvl lvl-beg"><i class="pi pi-angle-down"></i> Beginner</span><span class="chip chip-sec">Compound</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div style="text-align: center; padding: 16px; color: var(--s-400); font-size: 12px;"><i class="pi pi-spin pi-spinner"></i> Loading more…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p style="font-size: 12px; color: var(--s-600); margin-top: 12px; line-height: 1.6;"><strong style="color:var(--s-900);">Reading a card:</strong> thumbnail (start-position JPG for system; YouTube/GIF marker for custom) · name · primary muscle as a colored role tag + lead equipment · level badge (icon + word) · source. Public-from-others swaps the level slot for the <strong>author</strong> + <strong>fork count</strong>; "Mine" shows a visibility lock. Grid on desktop, with a list toggle (top-right) for power browsing.</p>
+
+      <!-- MOBILE -->
+      <div class="stage-meta"><span class="num">2</span><span class="ti">Mobile · dense list + filter sheet</span><span class="ttl-tag tt-mobile">Mobile</span></div>
+      <div class="phones">
+        <!-- 2A list -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2A</span><span class="ti">Catalog list</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t">Exercises</span><i class="pi pi-search ic"></i></div>
+            <!-- ownership tabs scroll row -->
+            <div style="background: #fff; padding: 7px 10px; border-bottom: 1px solid var(--s-200); display: flex; gap: 6px; overflow: hidden;">
+              <span class="pill pill-active" style="font-size:10px; padding:3px 9px;">All</span>
+              <span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">System</span>
+              <span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">Mine 14</span>
+              <span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">Public</span>
+            </div>
+            <!-- filter + sort chips -->
+            <div style="background: #fff; padding: 6px 10px; border-bottom: 1px solid var(--s-200); display: flex; gap: 6px; align-items: center;">
+              <span class="pill pill-idle" style="font-size:10px; padding:4px 9px; border-color: var(--honey-300); color: var(--honey-700); background: var(--honey-50);"><i class="pi pi-sliders-h" style="font-size:10px;"></i> Filters · 1</span>
+              <span class="pill pill-idle" style="font-size:10px; padding:4px 9px;"><i class="pi pi-sort-alt" style="font-size:10px;"></i> A–Z</span>
+              <span style="margin-left:auto; font-size:10px; color: var(--s-500);">410</span>
+            </div>
+            <div class="ph-body">
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Barbell back squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Barbell · <span class="lvl lvl-int" style="padding:1px 5px;"><i class="pi pi-equals"></i> Int</span></div></div><i class="pi pi-verified" style="color: var(--navy-500); font-size: 12px;"></i></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div><i class="pi pi-youtube" style="position:relative; color:#fff; background:rgba(0,0,0,.5); border-radius:50%; width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:10px;"></i></div><div class="rbody"><div class="rname">Tempo goblet squat — 3-1-1</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Kettlebell</div></div><i class="pi pi-lock" style="color: var(--teal-600); font-size: 11px;"></i></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Bulgarian split squat</div><div class="rmeta"><span class="avatar" style="width:14px;height:14px;font-size:7px;background:var(--teal-600);">DM</span> D. Marin · <i class="pi pi-share-alt" style="font-size:9px;"></i> 42</div></div><i class="pi pi-globe" style="color: var(--blue-700); font-size: 11px;"></i></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Romanian deadlift</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Hamstrings</span> Barbell · <span class="lvl lvl-int" style="padding:1px 5px;"><i class="pi pi-equals"></i> Int</span></div></div><i class="pi pi-verified" style="color: var(--navy-500); font-size: 12px;"></i></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Front squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Barbell · <span class="lvl lvl-adv" style="padding:1px 5px;"><i class="pi pi-angle-double-up"></i> Adv</span></div></div><i class="pi pi-verified" style="color: var(--navy-500); font-size: 12px;"></i></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Goblet squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Dumbbell · <span class="lvl lvl-beg" style="padding:1px 5px;"><i class="pi pi-angle-down"></i> Beg</span></div></div><i class="pi pi-verified" style="color: var(--navy-500); font-size: 12px;"></i></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Hack squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Machine · <span class="lvl lvl-beg" style="padding:1px 5px;"><i class="pi pi-angle-down"></i> Beg</span></div></div><i class="pi pi-verified" style="color: var(--navy-500); font-size: 12px;"></i></div>
+              <div style="text-align:center; padding: 12px; color: var(--s-400); font-size: 11px;"><i class="pi pi-spin pi-spinner"></i> Loading more…</div>
+            </div>
+            <div class="fab"><i class="pi pi-plus"></i></div>
+            <div class="ph-tabbar">
+              <div class="ph-tab"><i class="pi pi-home"></i>Home</div>
+              <div class="ph-tab"><i class="pi pi-compass"></i>Discover</div>
+              <div class="ph-tab"><i class="pi pi-calendar"></i>Sessions</div>
+              <div class="ph-tab"><i class="pi pi-comments"></i>Messages</div>
+              <div class="ph-tab on"><i class="pi pi-bars"></i>More</div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Density first.</strong> 52px thumb, two text lines, one trailing source icon — ~7 rows per screen. Tap row → detail. FAB = create. Tab bar matches the app's standard 5 (Exercises sits under More).</div>
+        </div>
+
+        <!-- 2B filter sheet -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2B</span><span class="ti">Filter sheet (tap "Filters")</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t">Exercises</span><i class="pi pi-search ic"></i></div>
+            <div class="ph-body" style="background:#fff;"></div>
+            <div class="bs-shell">
+              <div class="bs-sheet" style="max-height: 88%;">
+                <div class="bs-handle"></div>
+                <div class="bs-head"><span class="t">Filters</span><span style="font-size:12px; color: var(--honey-600); font-weight:600;">Reset</span><i class="pi pi-times ic"></i></div>
+                <div class="bs-body">
+                  <div class="label" style="margin-bottom:8px;">Kind</div>
+                  <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">
+                    <span class="pill pill-active" style="font-size:11px;">Strength</span><span class="pill pill-idle" style="font-size:11px;">Cardio</span><span class="pill pill-idle" style="font-size:11px;">Bodyweight</span><span class="pill pill-idle" style="font-size:11px;">Duration</span><span class="pill pill-idle" style="font-size:11px;">Distance</span><span class="pill pill-idle" style="font-size:11px;">Mobility</span>
+                  </div>
+                  <div class="label" style="margin-bottom:8px;">Primary muscle</div>
+                  <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">
+                    <span class="pill pill-idle" style="font-size:11px;">Chest</span><span class="pill pill-idle" style="font-size:11px;">Quads</span><span class="pill pill-idle" style="font-size:11px;">Hamstrings</span><span class="pill pill-idle" style="font-size:11px;">Glutes</span><span class="pill pill-idle" style="font-size:11px;">Back</span><span class="pill pill-idle" style="font-size:11px;">+ 12</span>
+                  </div>
+                  <div class="label" style="margin-bottom:8px;">Equipment</div>
+                  <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">
+                    <span class="pill pill-idle" style="font-size:11px;">Barbell</span><span class="pill pill-idle" style="font-size:11px;">Dumbbell</span><span class="pill pill-idle" style="font-size:11px;">Kettlebell</span><span class="pill pill-idle" style="font-size:11px;">Bodyweight</span><span class="pill pill-idle" style="font-size:11px;">+ 11</span>
+                  </div>
+                  <div class="label" style="margin-bottom:8px;">Level</div>
+                  <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                    <span class="pill pill-idle" style="font-size:11px;">Beginner</span><span class="pill pill-idle" style="font-size:11px;">Intermediate</span><span class="pill pill-idle" style="font-size:11px;">Advanced</span>
+                  </div>
+                </div>
+                <div class="bs-foot"><button class="btn btn-primary btn-block">Show 410 results</button></div>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Filters are a sheet, not a sidebar.</strong> Matches the Sessions pattern: scrolling chip groups, Reset top-right, the Apply button shows the live result count and the trigger chip mirrors the active filter count.</div>
+        </div>
+
+        <!-- 2C empty -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2C</span><span class="ti">Empty — no match</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t">Exercises</span><i class="pi pi-search ic"></i></div>
+            <div style="background: #fff; padding: 6px 10px; border-bottom: 1px solid var(--s-200); display: flex; gap: 6px; align-items: center;">
+              <span class="pill pill-idle" style="font-size:10px; padding:4px 9px; border-color: var(--honey-300); color: var(--honey-700); background: var(--honey-50);"><i class="pi pi-sliders-h" style="font-size:10px;"></i> Filters · 3</span>
+              <span style="margin-left:auto; font-size:10px; color: var(--s-500);">0</span>
+            </div>
+            <div class="ph-body" style="padding: 36px 22px; text-align: center;">
+              <div style="width: 56px; height: 56px; margin: 0 auto 14px; background: var(--s-100); border-radius: 50%; display: flex; align-items: center; justify-content: center;"><i class="pi pi-filter-slash" style="font-size: 22px; color: var(--s-400);"></i></div>
+              <div style="font-family:'Poppins'; font-weight:600; font-size:15px;">No exercises match</div>
+              <div style="font-size:12px; color: var(--s-600); margin-top:6px; line-height:1.5;">Advanced + Cardio + Kettlebell is a narrow combination. Loosen a filter to see more.</div>
+              <button class="btn btn-ghost btn-sm" style="margin-top:16px;">Clear all filters</button>
+              <div style="margin-top:20px;">
+                <button class="btn btn-primary btn-sm"><i class="pi pi-plus"></i> Create this exercise</button>
+                <div style="font-size:10px; color: var(--s-400); margin-top:6px;">Can't find it? It might be a custom movement.</div>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Empty is a fork in the road.</strong> Loosen filters, or — because a missing movement is often a custom one — jump straight into Create. Every dead end offers the next action.</div>
+        </div>
+      </div>
+
+      <!-- S1 decisions -->
+      <div class="grid-3" style="margin-top: 26px;">
+        <div class="decision-card"><div class="num">1</div><div><h3>Infinite scroll, not pages</h3><p>Browsing is exploratory and thumb-driven on the gym floor — page chrome breaks the scroll rhythm. An IntersectionObserver sentinel loads the next 24 as you near the bottom.</p><p>"Most-forked" still works: it's just the sort order of the same infinite stream, with the fork count on each card. A result-count header ("410 results") gives the sense of scale that pagination usually provides.</p><span class="tag-pick">Confirmed with you</span></div></div>
+        <div class="decision-card"><div class="num">2</div><div><h3>Filters: rail on desktop, sheet on mobile</h3><p>Desktop has the horizontal room for a persistent left rail with live counts — instructors refine without losing the grid. Mobile collapses it into a bottom sheet behind a "Filters · N" chip, so the list keeps full height and scroll position.</p><span class="tag-pick">Decision</span></div></div>
+        <div class="decision-card"><div class="num">3</div><div><h3>Ownership is tabs; everything else is filters</h3><p>All / System / My exercises / Public-from-others is the one facet users switch between as a mode, so it gets pill tabs at the top — not buried in the filter sheet. It doubles as the entry to S6 (My exercises).</p><span class="tag-pick">Decision</span></div></div>
+        <div class="decision-card"><div class="num">4</div><div><h3>Grid desktop · list mobile (toggle either way)</h3><p>Grid shows thumbnails large enough to recognize a movement at a glance; the dense list packs ~7 rows on a phone. A view toggle lets power users flip to list on desktop for scanning long result sets.</p><span class="tag-pick">Decision</span></div></div>
+        <div class="decision-card"><div class="num">5</div><div><h3>Skeletons, not spinners</h3><p>The card shape is known, so the first load paints card-shaped skeletons (see S8) — perceived speed beats a centered spinner. Subsequent infinite-scroll batches use a small inline spinner at the sentinel.</p><span class="tag-pick">Decision</span></div></div>
+        <div class="decision-card"><div class="num">6</div><div><h3>Create CTA is always one tap away</h3><p>Desktop: a primary button in the header. Mobile: the standard honey FAB. It also appears contextually inside the empty state and the picker (S7), because "I can't find it" is the strongest moment to author one.</p><span class="tag-pick">Decision</span></div></div>
+      </div>
+    </section>
+    <!-- S2 DETAIL -->
+    <section class="anchor" id="s2">
+      <span class="screen-tag"><span class="sx">S2</span> Exercise detail</span>
+      <h2 style="margin-top: 12px;">One layout, role-aware actions. Where the data breathes.</h2>
+      <p class="sec-lede">Same screen for instructor and client — the client simply has no edit/fork bar. Hero media up top, then muscles, equipment, instructions, with classification metadata kept secondary. The action bar is what changes by ownership.</p>
+
+      <!-- DESKTOP -->
+      <div class="stage-meta"><span class="num">1</span><span class="ti">Desktop · public exercise by another instructor (fork-eligible)</span><span class="ttl-tag tt-desktop">Desktop</span></div>
+      <div class="web">
+        <div class="web-topbar">
+          <div class="logo">M</div><div class="brand">MotionHive</div>
+          <div class="search"><i class="pi pi-search"></i> Search… <kbd>⌘K</kbd></div>
+          <div class="right"><span class="bell"><i class="pi pi-bell"></i></span><span class="avatar">AP</span></div>
+        </div>
+        <div class="web-body">
+          <div class="web-sidebar">
+            <div class="sb-item"><i class="pi pi-home"></i>Home</div>
+            <div class="sb-item"><i class="pi pi-compass"></i>Discover</div>
+            <div class="sb-item"><i class="pi pi-calendar"></i>Sessions</div>
+            <div class="sb-item"><i class="pi pi-comments"></i>Messages</div>
+            <div class="sb-item"><i class="pi pi-sitemap"></i>Groups</div>
+            <div class="sb-group">Coaching</div>
+            <div class="sb-item"><i class="pi pi-users"></i>Clients</div>
+            <div class="sb-item"><i class="pi pi-objects-column"></i>Programs</div>
+            <div class="sb-item is-active"><i class="pi pi-bolt"></i>Exercises</div>
+            <div class="sb-item"><i class="pi pi-credit-card"></i>Payments</div>
+          </div>
+          <div class="web-content" style="padding: 18px 24px 28px; overflow: visible;">
+            <div style="font-size: 12px; color: var(--s-500); margin-bottom: 14px;"><span style="color: var(--honey-600); font-weight: 600;">Exercises</span> <i class="pi pi-angle-right" style="font-size:10px;"></i> Bulgarian split squat (deficit)</div>
+            <div style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 26px; align-items: start;">
+              <!-- left: media -->
+              <div>
+                <div style="aspect-ratio: 16/10; border-radius: 12px; background: var(--s-100); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                  <div style="position:absolute; inset:0; background-image: repeating-linear-gradient(135deg, var(--s-100) 0 10px, var(--s-200) 10px 20px);"></div>
+                  <span style="position: relative; width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.6); color:#fff; display:flex; align-items:center; justify-content:center; font-size: 22px;"><i class="pi pi-play"></i></span>
+                  <span style="position:absolute; bottom:10px; left:10px; font-family: ui-monospace, monospace; font-size: 10px; color: var(--s-600); background: rgba(255,255,255,.88); padding: 3px 8px; border-radius: 5px;"><i class="pi pi-youtube" style="color:#FF0000;"></i> YouTube demo</span>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                  <div style="flex:1; aspect-ratio: 16/9; border-radius: 8px; background: repeating-linear-gradient(135deg, var(--s-100) 0 8px, var(--s-200) 8px 16px); position: relative;"><span style="position:absolute; bottom:5px; left:6px; font-family:ui-monospace,monospace; font-size:9px; color:var(--s-500); background:rgba(255,255,255,.85); padding:1px 5px; border-radius:4px;">start</span></div>
+                  <div style="flex:1; aspect-ratio: 16/9; border-radius: 8px; background: repeating-linear-gradient(135deg, var(--s-100) 0 8px, var(--s-200) 8px 16px); position: relative;"><span style="position:absolute; bottom:5px; left:6px; font-family:ui-monospace,monospace; font-size:9px; color:var(--s-500); background:rgba(255,255,255,.85); padding:1px 5px; border-radius:4px;">end</span></div>
+                </div>
+              </div>
+              <!-- right: meta -->
+              <div>
+                <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                  <span class="chip chip-blue"><i class="pi pi-globe" style="font-size:9px;"></i> Public</span>
+                  <span class="lvl lvl-adv"><i class="pi pi-angle-double-up"></i> Advanced</span>
+                  <span class="chip chip-sec"><i class="pi pi-bolt" style="font-size:9px;"></i> Strength</span>
+                </div>
+                <h2 style="font-size: 24px; line-height:1.2;">Bulgarian split squat <span style="color: var(--s-500); font-weight: 500;">(deficit)</span></h2>
+                <!-- attribution + fork -->
+                <div style="display:flex; align-items:center; gap:10px; margin: 12px 0 16px; padding: 10px 12px; background: var(--s-50); border:1px solid var(--s-200); border-radius:10px;">
+                  <span class="avatar" style="background: var(--teal-600);">DM</span>
+                  <div style="flex:1;"><div style="font-size:12px; font-weight:600; color: var(--s-900);">Created by Diana Marin</div><div style="font-size:11px; color: var(--s-500);"><span style="color: var(--honey-600); font-weight:600;">View profile</span> · <i class="pi pi-share-alt" style="font-size:9px;"></i> Forked by 42 instructors</div></div>
+                  <button class="btn btn-navy btn-sm"><i class="pi pi-clone"></i> Fork to my library</button>
+                </div>
+                <!-- muscles -->
+                <div class="label" style="margin-bottom:7px;">Muscles worked</div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;">
+                  <span class="mtag mtag-pri">Quadriceps</span>
+                  <span class="mtag mtag-sec">Glutes</span><span class="mtag mtag-sec">Hamstrings</span>
+                  <span class="mtag mtag-stab">Abdominals</span><span class="mtag mtag-stab">Adductors</span>
+                </div>
+                <!-- equipment -->
+                <div class="label" style="margin-bottom:7px;">Equipment</div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;">
+                  <span class="chip chip-outline"><i class="pi pi-box" style="font-size:9px;"></i> Dumbbell</span>
+                  <span class="chip chip-outline"><i class="pi pi-stop" style="font-size:9px;"></i> Bench</span>
+                </div>
+                <!-- description + instructions -->
+                <div class="label" style="margin-bottom:6px;">Description</div>
+                <p style="font-size: 13px; color: var(--s-700); line-height: 1.65; margin-bottom: 14px;">A single-leg squat with the rear foot elevated on a bench and the front foot on a small plate, increasing range of motion at the bottom. Builds unilateral strength and exposes side-to-side imbalances.</p>
+                <div class="label" style="margin-bottom:6px;">Instructions</div>
+                <p style="font-size: 13px; color: var(--s-700); line-height: 1.65; margin-bottom: 16px;">Set the rear foot on a bench, front foot on a 5–10cm plate. Keep the torso tall, drop straight down until the front thigh passes parallel, then drive through the mid-foot. Keep the front knee tracking over the toes.</p>
+                <!-- secondary metadata -->
+                <div style="border-top: 1px solid var(--s-200); padding-top: 12px;">
+                  <div class="label" style="margin-bottom:8px;">Classification</div>
+                  <div style="display:flex; flex-wrap:wrap; gap: 18px; font-size: 12px;">
+                    <div><span style="color: var(--s-500);">Pattern</span><br/><strong style="color: var(--s-800);">Lunge</strong></div>
+                    <div><span style="color: var(--s-500);">Mechanic</span><br/><strong style="color: var(--s-800);">Compound</strong></div>
+                    <div><span style="color: var(--s-500);">Force</span><br/><strong style="color: var(--s-800);">Push</strong></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p style="font-size: 12px; color: var(--s-600); margin-top: 12px; line-height: 1.6;"><strong style="color:var(--s-900);">Muscle hierarchy is visual.</strong> Primary (honey, filled square), secondary (blue), stabilizer (muted grey) — three weights of the same tag so the target reads instantly. Classification sits below the fold as a labelled strip; it matters to programmers, not to a quick lookup.</p>
+
+      <!-- MOBILE detail variants -->
+      <div class="stage-meta"><span class="num">2</span><span class="ti">Mobile · the three action states</span><span class="ttl-tag tt-mobile">Mobile</span></div>
+      <div class="phones">
+        <!-- 2A system -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2A</span><span class="ti">System exercise — no edit</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t"></span><i class="pi pi-share-alt ic"></i><i class="pi pi-bookmark ic"></i></div>
+            <div class="ph-body" style="padding-bottom: 76px;">
+              <div style="aspect-ratio: 16/10; background: repeating-linear-gradient(135deg, var(--s-100) 0 10px, var(--s-200) 10px 20px); position: relative; display:flex; align-items:center; justify-content:center;"><span style="font-family:ui-monospace,monospace; font-size:10px; color:var(--s-600); background:rgba(255,255,255,.85); padding:2px 7px; border-radius:5px;">start position</span></div>
+              <div style="padding: 12px 14px;">
+                <div style="display:flex; gap:6px; margin-bottom:7px;"><span class="src src-sys" style="font-size:10px;"><i class="pi pi-verified"></i> System</span><span class="lvl lvl-int"><i class="pi pi-equals"></i> Intermediate</span><span class="chip chip-sec">Strength</span></div>
+                <h3 style="font-size:18px;">Barbell back squat</h3>
+                <div class="label" style="margin:14px 0 6px;">Muscles</div>
+                <div style="display:flex; flex-wrap:wrap; gap:5px;"><span class="mtag mtag-pri" style="font-size:10px;">Quadriceps</span><span class="mtag mtag-sec" style="font-size:10px;">Glutes</span><span class="mtag mtag-sec" style="font-size:10px;">Hamstrings</span><span class="mtag mtag-stab" style="font-size:10px;">Lower back</span><span class="mtag mtag-stab" style="font-size:10px;">Abs</span></div>
+                <div class="label" style="margin:14px 0 6px;">Equipment</div>
+                <div style="display:flex; gap:5px;"><span class="chip chip-outline">Barbell</span></div>
+                <div class="label" style="margin:14px 0 6px;">Instructions</div>
+                <p style="font-size:12px; color:var(--s-700); line-height:1.6;">Bar on the upper traps, brace the core, sit between the hips until the thighs are parallel, then drive up. Knees track over the toes throughout.</p>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>No action bar.</strong> System exercises can't be edited or forked — they're already everyone's. Sticky top icons cover share + bookmark only.</div>
+        </div>
+
+        <!-- 2B public other -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2B</span><span class="ti">Public (not mine) — fork</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t"></span><i class="pi pi-share-alt ic"></i><i class="pi pi-bookmark ic"></i></div>
+            <div class="ph-body" style="padding-bottom: 68px;">
+              <div style="aspect-ratio: 16/10; background: repeating-linear-gradient(135deg, var(--s-100) 0 10px, var(--s-200) 10px 20px); position: relative; display:flex; align-items:center; justify-content:center;"><span style="width:48px;height:48px;border-radius:50%; background:rgba(0,0,0,.55); color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px;"><i class="pi pi-play"></i></span><span style="position:absolute; bottom:8px; left:8px; font-family:ui-monospace,monospace; font-size:9px; color:var(--s-600); background:rgba(255,255,255,.85); padding:2px 6px; border-radius:4px;"><i class="pi pi-youtube" style="color:#FF0000;"></i> demo</span></div>
+              <div style="padding: 12px 14px;">
+                <div style="display:flex; gap:6px; margin-bottom:7px;"><span class="chip chip-blue"><i class="pi pi-globe" style="font-size:8px;"></i> Public</span><span class="lvl lvl-adv"><i class="pi pi-angle-double-up"></i> Advanced</span></div>
+                <h3 style="font-size:17px;">Bulgarian split squat (deficit)</h3>
+                <div style="display:flex; align-items:center; gap:8px; margin:10px 0; padding:8px 10px; background:var(--s-50); border:1px solid var(--s-200); border-radius:9px;">
+                  <span class="avatar" style="width:24px;height:24px;font-size:9px;background:var(--teal-600);">DM</span>
+                  <div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:600;">Diana Marin</div><div style="font-size:10px; color:var(--s-500);"><i class="pi pi-share-alt" style="font-size:8px;"></i> 42 forks</div></div>
+                </div>
+                <div class="label" style="margin:12px 0 6px;">Muscles</div>
+                <div style="display:flex; flex-wrap:wrap; gap:5px;"><span class="mtag mtag-pri" style="font-size:10px;">Quads</span><span class="mtag mtag-sec" style="font-size:10px;">Glutes</span><span class="mtag mtag-stab" style="font-size:10px;">Abs</span></div>
+              </div>
+            </div>
+            <!-- sticky action bar -->
+            <div style="position:absolute; left:0; right:0; bottom:6px; padding: 8px 12px; background:#fff; border-top:1px solid var(--s-200); display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm" style="flex:0 0 auto;"><i class="pi pi-plus"></i></button>
+              <button class="btn btn-navy btn-sm" style="flex:1;"><i class="pi pi-clone"></i> Fork to my library</button>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Fork is the hero action.</strong> A public exercise I don't own → "Fork to my library" sticky at the bottom; the + adds it straight into the program I'm building. Author + fork count sit in an attribution strip.</div>
+        </div>
+
+        <!-- 2C mine -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2C</span><span class="ti">Mine — edit / visibility / delete</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t"></span><i class="pi pi-pencil ic"></i><i class="pi pi-ellipsis-v ic"></i></div>
+            <div class="ph-body" style="padding-bottom: 68px;">
+              <div style="aspect-ratio: 16/10; background: repeating-linear-gradient(135deg, var(--s-100) 0 10px, var(--s-200) 10px 20px); position: relative; display:flex; align-items:center; justify-content:center;"><span style="width:48px;height:48px;border-radius:50%; background:rgba(0,0,0,.55); color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px;"><i class="pi pi-play"></i></span></div>
+              <div style="padding: 12px 14px;">
+                <div style="display:flex; gap:6px; margin-bottom:7px;"><span class="chip chip-teal"><i class="pi pi-lock" style="font-size:8px;"></i> Private</span><span class="lvl lvl-beg"><i class="pi pi-angle-down"></i> Beginner</span></div>
+                <h3 style="font-size:17px;">Tempo goblet squat — 3-1-1</h3>
+                <div class="label" style="margin:14px 0 6px;">Muscles</div>
+                <div style="display:flex; flex-wrap:wrap; gap:5px;"><span class="mtag mtag-pri" style="font-size:10px;">Quads</span><span class="mtag mtag-sec" style="font-size:10px;">Glutes</span></div>
+                <div class="label" style="margin:14px 0 6px;">Visibility</div>
+                <div style="display:flex; align-items:center; gap:10px; padding:9px 11px; border:1px solid var(--s-200); border-radius:9px;"><i class="pi pi-lock" style="color:var(--s-500); font-size:13px;"></i><div style="flex:1;"><div style="font-size:11px; font-weight:600;">Private</div><div style="font-size:10px; color:var(--s-500);">Only you can see this</div></div><div class="toggle"></div></div>
+              </div>
+            </div>
+            <div style="position:absolute; left:0; right:0; bottom:6px; padding: 8px 12px; background:#fff; border-top:1px solid var(--s-200); display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm" style="flex:1;"><i class="pi pi-pencil"></i> Edit</button>
+              <button class="btn btn-primary btn-sm" style="flex:1;"><i class="pi pi-plus"></i> Add to workout</button>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Owner controls inline.</strong> Edit + a visibility toggle on the page; Delete and Make-public live in the ⋮ sheet (destructive/rare verbs out of the primary path). No fork button — you can't fork your own.</div>
+        </div>
+      </div>
+
+      <div class="callout teal" style="margin-top: 22px;">
+        <i class="pi pi-user"></i>
+        <p><strong>The client sees 2A's layout for everything.</strong> Identical detail page, zero action bar — no edit, fork, visibility or delete. Clients reach detail only from an assigned program, so the screen is purely "how do I do this movement". This keeps one component serving both roles with a single <code>canEdit</code> / <code>canFork</code> gate.</p>
+      </div>
+    </section>
+    <!-- S3 CREATE -->
+    <section class="anchor" id="s3">
+      <span class="screen-tag"><span class="sx">S3</span> Create custom exercise</span>
+      <h2 style="margin-top: 12px;">A single scrolling form — not a wizard.</h2>
+      <p class="sec-lede">Instructors batch-create their custom movements; a 4-step wizard would tax that. ~10 fields fit one page with smart defaults (Bodyweight equipment, kind-driven mechanic/force). The page is the same on desktop (two columns) and mobile (one column in a full-height sheet).</p>
+
+      <!-- DESKTOP form -->
+      <div class="stage-meta"><span class="num">1</span><span class="ti">Desktop · single-page form</span><span class="ttl-tag tt-desktop">Desktop</span></div>
+      <div class="web">
+        <div class="web-topbar">
+          <div class="logo">M</div><div class="brand">MotionHive</div>
+          <div class="search"><i class="pi pi-search"></i> Search… <kbd>⌘K</kbd></div>
+          <div class="right"><span class="bell"><i class="pi pi-bell"></i></span><span class="avatar">AP</span></div>
+        </div>
+        <div class="web-body" style="grid-template-columns: 1fr;">
+          <div class="web-content" style="padding: 0; overflow: visible;">
+            <!-- sticky form header -->
+            <div style="display:flex; align-items:center; gap:12px; padding: 14px 24px; border-bottom: 1px solid var(--s-200); background: #fff;">
+              <i class="pi pi-times" style="color: var(--s-500);"></i>
+              <h3 style="flex:1; font-size:16px;">New custom exercise</h3>
+              <button class="btn btn-ghost btn-sm">Save &amp; add another</button>
+              <button class="btn btn-primary btn-sm"><i class="pi pi-check"></i> Save exercise</button>
+            </div>
+            <div style="padding: 22px 24px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 30px; align-items: start; max-width: 1000px;">
+              <!-- LEFT column -->
+              <div>
+                <div class="field">
+                  <label>Name <span class="req">*</span> <span class="charcount" style="float:right;">19 / 200</span></label>
+                  <input class="inp" value="Tempo goblet squat" />
+                </div>
+                <div class="field">
+                  <label>Kind <span class="req">*</span></label>
+                  <div class="hint" style="margin-top:0; margin-bottom:8px;">Determines what gets tracked when a client logs this.</div>
+                  <div class="kind-grid">
+                    <div class="kind-card on"><i class="pi pi-check kc-dot"></i><div class="kc-h"><i class="pi pi-bolt"></i> Strength</div><p>Reps + weight</p></div>
+                    <div class="kind-card"><div class="kc-h"><i class="pi pi-heart"></i> Cardio</div><p>Duration + distance + HR</p></div>
+                    <div class="kind-card"><div class="kc-h"><i class="pi pi-clock"></i> Duration</div><p>Time only — e.g. plank</p></div>
+                    <div class="kind-card"><div class="kc-h"><i class="pi pi-map"></i> Distance</div><p>Distance only</p></div>
+                    <div class="kind-card"><div class="kc-h"><i class="pi pi-user"></i> Bodyweight</div><p>Reps, no load</p></div>
+                    <div class="kind-card"><div class="kc-h"><i class="pi pi-sync"></i> Mobility</div><p>Time / reps, mobility</p></div>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Primary muscles <span class="req">*</span> <span class="opt">— 1–3</span></label>
+                  <div class="hint" style="margin-top:0; margin-bottom:8px;">Search a muscle, then set its role on the chip. At least one Primary is required.</div>
+                  <div class="inp-row"><i class="pi pi-search" style="color:var(--s-400); font-size:12px;"></i><input placeholder="Add a muscle…" /></div>
+                  <div style="display:flex; flex-direction:column; gap:7px; margin-top:10px;">
+                    <div style="display:flex; align-items:center; gap:10px; padding:7px 9px; border:1px solid var(--s-200); border-radius:8px;">
+                      <span style="flex:1; font-size:13px; font-weight:600;">Quadriceps</span>
+                      <div class="seg"><span class="on">Primary</span><span>Secondary</span><span>Stabilizer</span></div>
+                      <i class="pi pi-times" style="color:var(--s-400); font-size:11px;"></i>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px; padding:7px 9px; border:1px solid var(--s-200); border-radius:8px;">
+                      <span style="flex:1; font-size:13px; font-weight:600;">Glutes</span>
+                      <div class="seg"><span>Primary</span><span class="on">Secondary</span><span>Stabilizer</span></div>
+                      <i class="pi pi-times" style="color:var(--s-400); font-size:11px;"></i>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px; padding:7px 9px; border:1px solid var(--s-200); border-radius:8px;">
+                      <span style="flex:1; font-size:13px; font-weight:600;">Abdominals</span>
+                      <div class="seg"><span>Primary</span><span>Secondary</span><span class="on">Stabilizer</span></div>
+                      <i class="pi pi-times" style="color:var(--s-400); font-size:11px;"></i>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Description <span class="opt">— optional</span></label>
+                  <textarea class="inp" rows="2" placeholder="1–3 sentences about the movement…"></textarea>
+                </div>
+                <div class="field">
+                  <label>Instructions <span class="opt">— optional</span></label>
+                  <textarea class="inp" rows="4" placeholder="Step-by-step form cues…"></textarea>
+                </div>
+              </div>
+              <!-- RIGHT column -->
+              <div>
+                <div class="field">
+                  <label>Level <span class="req">*</span></label>
+                  <div style="display:flex; gap:6px;"><span class="pill pill-idle"><i class="pi pi-angle-down" style="font-size:10px;"></i> Beginner</span><span class="pill pill-active"><i class="pi pi-equals" style="font-size:10px;"></i> Intermediate</span><span class="pill pill-idle"><i class="pi pi-angle-double-up" style="font-size:10px;"></i> Advanced</span></div>
+                </div>
+                <div class="field">
+                  <label>Equipment <span class="opt">— Bodyweight if none</span></label>
+                  <div style="display:flex; flex-wrap:wrap; gap:6px;"><span class="pill pill-active">Kettlebell</span><span class="pill pill-idle">Dumbbell</span><span class="pill pill-idle">Barbell</span><span class="pill pill-idle">Bench</span><span class="pill pill-idle">+ more</span></div>
+                </div>
+                <!-- youtube -->
+                <div class="field">
+                  <label>YouTube demo <span class="opt">— optional</span></label>
+                  <div class="inp-row"><i class="pi pi-youtube" style="color:#FF0000; font-size:13px;"></i><input value="youtube.com/watch?v=aclHkVaku9U" /><i class="pi pi-check-circle" style="color:var(--green-700);"></i></div>
+                  <div style="margin-top:9px; display:flex; gap:10px; align-items:center; padding:8px; border:1px solid var(--s-200); border-radius:9px; background:var(--s-50);">
+                    <div style="width:72px; aspect-ratio:16/9; border-radius:6px; background:repeating-linear-gradient(135deg, var(--s-200) 0 8px, var(--s-300) 8px 16px); position:relative; display:flex; align-items:center; justify-content:center;"><i class="pi pi-play" style="color:#fff; font-size:11px;"></i></div>
+                    <div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:600;">Thumbnail fetched ✓</div><div style="font-size:10px; color:var(--s-500);">Auto-pulled via oEmbed · used in catalog</div></div>
+                  </div>
+                  <div class="hint">Paste any YouTube URL — the thumbnail loads live as you type. (Native video upload comes in V2.)</div>
+                </div>
+                <!-- classification (collapsed) -->
+                <div class="field">
+                  <label>Classification <span class="opt">— optional, prefilled from kind</span></label>
+                  <div style="display:flex; flex-direction:column; gap:7px;">
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;"><span style="width:78px; color:var(--s-500);">Pattern</span><div class="inp-row" style="flex:1; padding:5px 10px;"><span style="font-size:12px; flex:1;">Squat</span><i class="pi pi-chevron-down" style="font-size:9px; color:var(--s-400);"></i></div></div>
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;"><span style="width:78px; color:var(--s-500);">Mechanic</span><div class="inp-row" style="flex:1; padding:5px 10px;"><span style="font-size:12px; flex:1;">Compound</span><i class="pi pi-chevron-down" style="font-size:9px; color:var(--s-400);"></i></div></div>
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;"><span style="width:78px; color:var(--s-500);">Force</span><div class="inp-row" style="flex:1; padding:5px 10px;"><span style="font-size:12px; flex:1;">Push</span><i class="pi pi-chevron-down" style="font-size:9px; color:var(--s-400);"></i></div></div>
+                  </div>
+                </div>
+                <!-- visibility -->
+                <div class="field" style="margin-bottom:0;">
+                  <label>Visibility</label>
+                  <div style="border:1px solid var(--s-200); border-radius:10px; overflow:hidden;">
+                    <div style="display:flex; align-items:center; gap:10px; padding:11px 12px; background:var(--honey-50);"><i class="pi pi-lock" style="color:var(--honey-700);"></i><div style="flex:1;"><div style="font-size:12px; font-weight:600;">Private</div><div style="font-size:11px; color:var(--s-600);">Only you can see and use it.</div></div><div class="toggle"></div></div>
+                  </div>
+                  <div class="callout" style="margin-top:10px; padding:10px 12px;"><i class="pi pi-globe" style="font-size:15px;"></i><p style="font-size:11.5px;">Flip to <strong>Public</strong> and any instructor can view it and <strong>fork</strong> their own copy. You stay the only editor, and you'll be notified on each fork. You can switch back to private anytime.</p></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOBILE create -->
+      <div class="stage-meta"><span class="num">2</span><span class="ti">Mobile · full-height sheet</span><span class="ttl-tag tt-mobile">Mobile</span></div>
+      <div class="phones">
+        <!-- 2A form top -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2A</span><span class="ti">Form — identity &amp; kind</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-body" style="background:#fff;"></div>
+            <div class="bs-shell">
+              <div class="bs-sheet" style="max-height: 94%;">
+                <div class="bs-handle"></div>
+                <div class="bs-head"><i class="pi pi-times ic"></i><span class="t" style="font-size:14px;">New exercise</span><span style="font-size:12px; font-weight:600; color:var(--s-400);">Save</span></div>
+                <div class="bs-body">
+                  <div class="field"><label>Name <span class="req">*</span></label><input class="inp" value="Tempo goblet squat" /></div>
+                  <div class="field"><label>Kind <span class="req">*</span></label>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                      <div class="kind-card on" style="padding:8px 9px;"><div class="kc-h" style="font-size:11px;"><i class="pi pi-bolt"></i> Strength</div><p>Reps + weight</p></div>
+                      <div class="kind-card" style="padding:8px 9px;"><div class="kc-h" style="font-size:11px;"><i class="pi pi-heart"></i> Cardio</div><p>Time + dist + HR</p></div>
+                      <div class="kind-card" style="padding:8px 9px;"><div class="kc-h" style="font-size:11px;"><i class="pi pi-clock"></i> Duration</div><p>Time only</p></div>
+                      <div class="kind-card" style="padding:8px 9px;"><div class="kc-h" style="font-size:11px;"><i class="pi pi-user"></i> Bodyweight</div><p>Reps, no load</p></div>
+                    </div>
+                  </div>
+                  <div class="field" style="margin-bottom:0;"><label>Level <span class="req">*</span></label><div style="display:flex; gap:5px;"><span class="pill pill-idle" style="font-size:10px;">Beginner</span><span class="pill pill-active" style="font-size:10px;">Intermediate</span><span class="pill pill-idle" style="font-size:10px;">Advanced</span></div></div>
+                </div>
+                <div class="bs-foot"><button class="btn btn-ghost btn-sm" style="flex:1;">Save &amp; add another</button><button class="btn btn-primary btn-sm" style="flex:1;">Save</button></div>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Same form, one column.</strong> A full-height sheet (the app's standard for create flows), sticky header with close + Save, sticky footer with the two save actions.</div>
+        </div>
+
+        <!-- 2B muscle picker -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2B</span><span class="ti">Muscle picker — role on the chip</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-body" style="background:#fff;"></div>
+            <div class="bs-shell">
+              <div class="bs-sheet" style="max-height: 94%;">
+                <div class="bs-handle"></div>
+                <div class="bs-head"><i class="pi pi-arrow-left ic"></i><span class="t" style="font-size:14px;">Muscles</span></div>
+                <div class="bs-body">
+                  <div class="inp-row" style="margin-bottom:12px;"><i class="pi pi-search" style="color:var(--s-400); font-size:12px;"></i><input placeholder="Search a muscle…" value="qua" /></div>
+                  <div class="label" style="margin-bottom:8px;">Selected</div>
+                  <div style="display:flex; flex-direction:column; gap:7px; margin-bottom:14px;">
+                    <div style="display:flex; align-items:center; gap:8px; padding:7px 9px; border:1px solid var(--s-200); border-radius:8px;"><span style="flex:1; font-size:12px; font-weight:600;">Quadriceps</span><div class="seg" style="transform:scale(.92); transform-origin:right;"><span class="on">P</span><span>S</span><span>St</span></div><i class="pi pi-times" style="color:var(--s-400); font-size:11px;"></i></div>
+                    <div style="display:flex; align-items:center; gap:8px; padding:7px 9px; border:1px solid var(--s-200); border-radius:8px;"><span style="flex:1; font-size:12px; font-weight:600;">Glutes</span><div class="seg" style="transform:scale(.92); transform-origin:right;"><span>P</span><span class="on">S</span><span>St</span></div><i class="pi pi-times" style="color:var(--s-400); font-size:11px;"></i></div>
+                  </div>
+                  <div class="label" style="margin-bottom:6px;">Matches</div>
+                  <div style="font-size:13px; color:var(--s-700);"><div style="padding:8px 4px; border-bottom:1px solid var(--s-100); display:flex; align-items:center; gap:8px;"><i class="pi pi-plus" style="color:var(--honey-600); font-size:11px;"></i> Quadratus lumborum</div></div>
+                </div>
+                <div class="bs-foot"><button class="btn btn-primary btn-block">Done · 2 muscles</button></div>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>One picker, role per chip.</strong> Search adds a muscle as a chip; the P/S/St segmented control sets Primary/Secondary/Stabilizer right there. No separate field per role — avoids the same muscle being pickable three times.</div>
+        </div>
+
+        <!-- 2C visibility public confirm -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2C</span><span class="ti">Switching to Public</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-body" style="background:#fff;"></div>
+            <div class="bs-shell">
+              <div class="bs-sheet" style="max-height: 62%;">
+                <div class="bs-handle"></div>
+                <div class="bs-body" style="text-align:center; padding-top:18px;">
+                  <div style="width:48px;height:48px;margin:0 auto 12px; border-radius:50%; background:var(--teal-100); color:var(--teal-700); display:flex; align-items:center; justify-content:center; font-size:20px;"><i class="pi pi-globe"></i></div>
+                  <div style="font-family:'Poppins'; font-weight:600; font-size:16px;">Make this public?</div>
+                  <p style="font-size:12px; color:var(--s-600); margin-top:8px; line-height:1.55; text-align:left; padding:0 4px;">Any instructor will be able to find this exercise and <strong>fork their own copy</strong>. You stay the only person who can edit the original, and forks are independent — your later edits won't change theirs. You'll get a notification each time someone forks it.</p>
+                </div>
+                <div class="bs-foot" style="flex-direction:column; gap:8px;"><button class="btn btn-navy btn-block"><i class="pi pi-globe"></i> Make public</button><button class="btn btn-ghost btn-block">Keep private</button></div>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>The warning lives at the toggle.</strong> Flipping Private→Public opens this confirm sheet so the implications (forkable, you stay sole editor, forks are independent) are read before it ships, not buried in fine print.</div>
+        </div>
+      </div>
+
+      <!-- S3 decisions -->
+      <div class="grid-2" style="margin-top: 26px;">
+        <div class="decision-card"><div class="num">1</div><div><h3>Single page beats a wizard</h3><p>The field set is shallow and mostly optional. A wizard adds steps and hides the "required vs optional" shape that lets a power user fill three fields and save. Smart defaults (Bodyweight, kind→mechanic/force) shrink it further.</p><span class="tag-pick">Decision</span></div></div>
+        <div class="decision-card"><div class="num">2</div><div><h3>Muscle role is a property of the chip</h3><p>Pick the muscle once, then set Primary/Secondary/Stabilizer on its chip. Beats three separate multi-selects (which let you assign the same muscle conflicting roles) and beats a body-map (heavy to build, overkill for a text-first catalog).</p><span class="tag-pick">Decision</span></div></div>
+        <div class="decision-card"><div class="num">3</div><div><h3>Kind teaches as it selects</h3><p>Each of the 6 kinds is a card stating what gets logged ("Reps + weight", "Time only"). It's the field that drives logging downstream, so the consequence is shown at the point of choice.</p><span class="tag-pick">Decision</span></div></div>
+        <div class="decision-card"><div class="num">4</div><div><h3>Two saves, no draft</h3><p>"Save" exits to the new exercise; "Save &amp; add another" clears and keeps the sheet open for batch authoring. No explicit draft state — an exercise is cheap to keep Private and finish later, so Private <em>is</em> the draft.</p><span class="tag-pick">Decision</span></div></div>
+      </div>
+    </section>
+    <!-- S4 EDIT + S5 FORK -->
+    <section class="anchor" id="s4">
+      <span class="screen-tag"><span class="sx">S4</span> Edit</span>
+      <span class="screen-tag" style="margin-left:8px;"><span class="sx">S5</span> Fork</span>
+      <h2 style="margin-top: 12px;">Edit reuses the create form. Fork is a one-tap clone.</h2>
+      <p class="sec-lede">Edit (S4) is S3 pre-populated, plus one piece of context the author needs: existing forks are independent and won't receive these changes. Fork (S5) skips the form entirely — it clones silently and confirms with a toast.</p>
+
+      <div class="two-col">
+        <!-- S4 -->
+        <div>
+          <div class="stage-meta" style="margin-top:0;"><span class="num">S4</span><span class="ti">Edit — fork-divergence banner</span></div>
+          <div class="phone" style="margin: 0 auto;">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-body" style="background:#fff;"></div>
+            <div class="bs-shell">
+              <div class="bs-sheet" style="max-height: 94%;">
+                <div class="bs-handle"></div>
+                <div class="bs-head"><i class="pi pi-times ic"></i><span class="t" style="font-size:14px;">Edit exercise</span><span style="font-size:12px; font-weight:600; color:var(--honey-600);">Save</span></div>
+                <div class="bs-body">
+                  <div class="callout" style="margin-bottom:14px; padding:10px 12px;"><i class="pi pi-info-circle" style="font-size:15px;"></i><p style="font-size:11.5px;"><strong>42 instructors have forked this.</strong> Their copies are independent — your edits here won't change them. Only the original updates.</p></div>
+                  <div class="field"><label>Name <span class="req">*</span></label><input class="inp" value="Bulgarian split squat (deficit)" /></div>
+                  <div class="field"><label>Level <span class="req">*</span></label><div style="display:flex; gap:5px;"><span class="pill pill-idle" style="font-size:10px;">Beginner</span><span class="pill pill-idle" style="font-size:10px;">Intermediate</span><span class="pill pill-active" style="font-size:10px;">Advanced</span></div></div>
+                  <div class="field" style="margin-bottom:0;"><label>Primary muscles <span class="req">*</span></label>
+                    <div style="display:flex; align-items:center; gap:8px; padding:7px 9px; border:1px solid var(--s-200); border-radius:8px;"><span style="flex:1; font-size:12px; font-weight:600;">Quadriceps</span><div class="seg" style="transform:scale(.92); transform-origin:right;"><span class="on">P</span><span>S</span><span>St</span></div><i class="pi pi-times" style="color:var(--s-400); font-size:11px;"></i></div>
+                  </div>
+                </div>
+                <div class="bs-foot"><button class="btn btn-ghost btn-sm" style="flex:0 0 auto;"><i class="pi pi-trash"></i></button><button class="btn btn-primary btn-sm" style="flex:1;">Save changes</button></div>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption" style="max-width:320px; margin: 10px auto 0;"><strong>Only difference from Create:</strong> the divergence banner (shown only when fork count &gt; 0 and the exercise is public), a Delete affordance in the footer, and a pre-filled state. Same component, an <code>editing</code> flag.</div>
+        </div>
+
+        <!-- S5 -->
+        <div>
+          <div class="stage-meta" style="margin-top:0;"><span class="num">S5</span><span class="ti">Fork — silent clone + toast</span></div>
+          <div class="phone" style="margin: 0 auto;">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t"></span><i class="pi pi-share-alt ic"></i><i class="pi pi-bookmark ic"></i></div>
+            <div class="ph-body" style="padding-bottom: 68px;">
+              <div style="aspect-ratio: 16/10; background: repeating-linear-gradient(135deg, var(--s-100) 0 10px, var(--s-200) 10px 20px); position: relative; display:flex; align-items:center; justify-content:center;"><span style="width:48px;height:48px;border-radius:50%; background:rgba(0,0,0,.55); color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px;"><i class="pi pi-play"></i></span></div>
+              <div style="padding: 12px 14px;">
+                <div style="display:flex; gap:6px; margin-bottom:7px;"><span class="chip chip-blue"><i class="pi pi-globe" style="font-size:8px;"></i> Public</span><span class="lvl lvl-adv"><i class="pi pi-angle-double-up"></i> Advanced</span></div>
+                <h3 style="font-size:17px;">Bulgarian split squat (deficit)</h3>
+                <div style="display:flex; align-items:center; gap:8px; margin:10px 0; padding:8px 10px; background:var(--s-50); border:1px solid var(--s-200); border-radius:9px;"><span class="avatar" style="width:24px;height:24px;font-size:9px;background:var(--teal-600);">DM</span><div style="flex:1;"><div style="font-size:11px; font-weight:600;">Diana Marin</div><div style="font-size:10px; color:var(--s-500);"><i class="pi pi-share-alt" style="font-size:8px;"></i> 43 forks</div></div></div>
+              </div>
+              <!-- toast overlay -->
+              <div style="position:absolute; left:12px; right:12px; bottom:78px;"><div class="toast"><i class="pi pi-check-circle lead"></i><div style="flex:1;">Forked to your library — now Private.<span class="act">Edit copy</span></div></div></div>
+            </div>
+            <div style="position:absolute; left:0; right:0; bottom:6px; padding: 8px 12px; background:#fff; border-top:1px solid var(--s-200); display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm" style="flex:0 0 auto;"><i class="pi pi-plus"></i></button>
+              <button class="btn btn-navy btn-sm" style="flex:1;"><i class="pi pi-check"></i> Forked</button>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption" style="max-width:320px; margin: 10px auto 0;"><strong>Clone, don't interrupt.</strong> Tap Fork → an independent Private copy is created instantly, the button flips to "Forked", and a toast offers "Edit copy" for those who want to tweak now. The original author gets an <code>EXERCISE_FORKED</code> notification server-side.</div>
+        </div>
+      </div>
+
+      <div class="grid-3" style="margin-top: 24px;">
+        <div class="decision-card"><div class="num">1</div><div><h3>Silent clone over pre-filled form</h3><p>Most forks are "save it to my library to tweak later", not "edit it right now". Opening a full form every time adds friction to the common path; the toast's "Edit copy" serves the minority who want to edit immediately.</p><span class="tag-pick">Decision</span></div></div>
+        <div class="decision-card"><div class="num">2</div><div><h3>Forks start Private</h3><p>A fork is your working copy. It clones the name, media, muscles and metadata but resets <code>visibility</code> to Private and points <code>forked_from_id</code> at the source. You can republish it later if you want.</p><span class="tag-pick">Decision</span></div></div>
+        <div class="decision-card"><div class="num">3</div><div><h3>Divergence is surfaced, not enforced</h3><p>The edit banner makes the independence of forks legible so authors don't expect changes to propagate. We don't try to sync forks — that's the whole point of a fork.</p><span class="tag-pick">Decision</span></div></div>
+      </div>
+    </section>
+    <!-- S6 MY EXERCISES -->
+    <section class="anchor" id="s6">
+      <span class="screen-tag"><span class="sx">S6</span> My exercises</span>
+      <h2 style="margin-top: 12px;">Not a separate page — the catalog, filtered to me.</h2>
+      <p class="sec-lede">"My exercises" is the ownership tab from S1, with two additions: a visibility badge and fork count on every row, and inline quick-edit / delete. It's where instructors manage what they've authored.</p>
+
+      <div class="stage-meta"><span class="num">1</span><span class="ti">Desktop · list mode with inline management</span><span class="ttl-tag tt-desktop">Desktop</span></div>
+      <div class="web">
+        <div class="web-topbar"><div class="logo">M</div><div class="brand">MotionHive</div><div class="search"><i class="pi pi-search"></i> Search… <kbd>⌘K</kbd></div><div class="right"><span class="bell"><i class="pi pi-bell"></i></span><span class="avatar">AP</span></div></div>
+        <div class="web-body">
+          <div class="web-sidebar">
+            <div class="sb-item"><i class="pi pi-home"></i>Home</div><div class="sb-item"><i class="pi pi-compass"></i>Discover</div><div class="sb-item"><i class="pi pi-calendar"></i>Sessions</div><div class="sb-item"><i class="pi pi-comments"></i>Messages</div><div class="sb-item"><i class="pi pi-sitemap"></i>Groups</div>
+            <div class="sb-group">Coaching</div>
+            <div class="sb-item"><i class="pi pi-users"></i>Clients</div><div class="sb-item"><i class="pi pi-objects-column"></i>Programs</div><div class="sb-item is-active"><i class="pi pi-bolt"></i>Exercises</div><div class="sb-item"><i class="pi pi-credit-card"></i>Payments</div>
+          </div>
+          <div class="web-content" style="padding: 20px 22px; overflow: visible;">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;"><div style="flex:1;"><h3 style="font-size:18px;">Exercises</h3><p style="font-size:12px; color:var(--s-500); margin-top:2px;">14 created by you · 9 private · 5 public · 67 total forks</p></div><button class="btn btn-primary btn-sm"><i class="pi pi-plus"></i> Create custom exercise</button></div>
+            <div style="display:flex; gap:6px; margin-bottom:14px;"><span class="pill pill-idle">All</span><span class="pill pill-idle">System</span><span class="pill pill-active">My exercises 14</span><span class="pill pill-idle">Public · others</span></div>
+            <div style="border:1px solid var(--s-200); border-radius:10px; overflow:hidden;">
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div><i class="pi pi-youtube" style="position:relative; color:#fff; background:rgba(0,0,0,.5); border-radius:50%; width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:9px;"></i></div><div class="rbody"><div class="rname">Tempo goblet squat — 3-1-1</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Kettlebell · <span class="lvl lvl-beg" style="padding:1px 5px;"><i class="pi pi-angle-down"></i> Beg</span></div></div><span class="chip chip-teal"><i class="pi pi-lock" style="font-size:8px;"></i> Private</span><div style="display:flex; gap:4px; margin-left:8px;"><i class="pi pi-pencil ic" style="color:var(--s-500);"></i><i class="pi pi-ellipsis-v ic" style="color:var(--s-500);"></i></div></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Banded glute bridge — pause</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Glutes</span> Bands · <span class="lvl lvl-beg" style="padding:1px 5px;"><i class="pi pi-angle-down"></i> Beg</span></div></div><span class="chip chip-blue"><i class="pi pi-globe" style="font-size:8px;"></i> Public</span><span class="chip chip-sec" style="margin-left:6px;"><i class="pi pi-share-alt" style="font-size:8px;"></i> 42</span><div style="display:flex; gap:4px; margin-left:8px;"><i class="pi pi-pencil ic" style="color:var(--s-500);"></i><i class="pi pi-ellipsis-v ic" style="color:var(--s-500);"></i></div></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Half-kneeling cable lift</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Abs</span> Cable · <span class="lvl lvl-int" style="padding:1px 5px;"><i class="pi pi-equals"></i> Int</span></div></div><span class="chip chip-blue"><i class="pi pi-globe" style="font-size:8px;"></i> Public</span><span class="chip chip-sec" style="margin-left:6px;"><i class="pi pi-share-alt" style="font-size:8px;"></i> 18</span><div style="display:flex; gap:4px; margin-left:8px;"><i class="pi pi-pencil ic" style="color:var(--s-500);"></i><i class="pi pi-ellipsis-v ic" style="color:var(--s-500);"></i></div></div>
+              <div class="ex-row" style="border-bottom:none;"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Copenhagen plank (regressed)</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Adductors</span> Bodyweight · <span class="lvl lvl-adv" style="padding:1px 5px;"><i class="pi pi-angle-double-up"></i> Adv</span> · <span style="color:var(--s-400);">forked from D. Ene</span></div></div><span class="chip chip-teal"><i class="pi pi-lock" style="font-size:8px;"></i> Private</span><div style="display:flex; gap:4px; margin-left:8px;"><i class="pi pi-pencil ic" style="color:var(--s-500);"></i><i class="pi pi-ellipsis-v ic" style="color:var(--s-500);"></i></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-meta"><span class="num">2</span><span class="ti">Mobile · My exercises + the "nothing yet" empty state</span><span class="ttl-tag tt-mobile">Mobile</span></div>
+      <div class="phones">
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2A</span><span class="ti">My exercises</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t">Exercises</span><i class="pi pi-search ic"></i></div>
+            <div style="background:#fff; padding:7px 10px; border-bottom:1px solid var(--s-200); display:flex; gap:6px; overflow:hidden;"><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">All</span><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">System</span><span class="pill pill-active" style="font-size:10px; padding:3px 9px;">Mine 14</span><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">Public</span></div>
+            <div class="ph-body">
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div><i class="pi pi-youtube" style="position:relative; color:#fff; background:rgba(0,0,0,.5); border-radius:50%; width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:9px;"></i></div><div class="rbody"><div class="rname">Tempo goblet squat</div><div class="rmeta"><span class="chip chip-teal" style="font-size:9px;"><i class="pi pi-lock" style="font-size:7px;"></i> Private</span></div></div><i class="pi pi-ellipsis-v ic" style="color:var(--s-400);"></i></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Banded glute bridge</div><div class="rmeta"><span class="chip chip-blue" style="font-size:9px;"><i class="pi pi-globe" style="font-size:7px;"></i> Public</span> <span style="color:var(--s-400);"><i class="pi pi-share-alt" style="font-size:9px;"></i> 42</span></div></div><i class="pi pi-ellipsis-v ic" style="color:var(--s-400);"></i></div>
+              <div class="ex-row"><div class="rthumb"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Half-kneeling cable lift</div><div class="rmeta"><span class="chip chip-blue" style="font-size:9px;"><i class="pi pi-globe" style="font-size:7px;"></i> Public</span> <span style="color:var(--s-400);"><i class="pi pi-share-alt" style="font-size:9px;"></i> 18</span></div></div><i class="pi pi-ellipsis-v ic" style="color:var(--s-400);"></i></div>
+            </div>
+            <div class="fab"><i class="pi pi-plus"></i></div>
+            <div class="ph-tabbar"><div class="ph-tab"><i class="pi pi-home"></i>Home</div><div class="ph-tab"><i class="pi pi-compass"></i>Discover</div><div class="ph-tab"><i class="pi pi-calendar"></i>Sessions</div><div class="ph-tab"><i class="pi pi-comments"></i>Messages</div><div class="ph-tab on"><i class="pi pi-bars"></i>More</div></div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Visibility + forks per row.</strong> The ⋮ opens a sheet: Edit · Duplicate · Make public/private · Delete. Same row component as S1, with the management trailing block switched on.</div>
+        </div>
+
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2B</span><span class="ti">Empty — none created yet</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t">Exercises</span><i class="pi pi-search ic"></i></div>
+            <div style="background:#fff; padding:7px 10px; border-bottom:1px solid var(--s-200); display:flex; gap:6px; overflow:hidden;"><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">All</span><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">System</span><span class="pill pill-active" style="font-size:10px; padding:3px 9px;">Mine 0</span><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">Public</span></div>
+            <div class="ph-body" style="padding: 40px 24px; text-align:center;">
+              <div style="width:64px; height:64px; margin:0 auto 16px; border-radius:18px; background:var(--honey-50); border:1px solid var(--honey-200); display:flex; align-items:center; justify-content:center;"><i class="pi pi-bolt" style="font-size:26px; color:var(--honey-500);"></i></div>
+              <div style="font-family:'Poppins'; font-weight:600; font-size:16px;">No custom exercises yet</div>
+              <p style="font-size:12px; color:var(--s-600); margin-top:8px; line-height:1.55;">Build movements specific to your coaching style, or fork a public one to make it your own.</p>
+              <button class="btn btn-primary btn-block" style="margin-top:18px;"><i class="pi pi-plus"></i> Create your first exercise</button>
+              <button class="btn btn-ghost btn-block" style="margin-top:8px;"><i class="pi pi-compass"></i> Browse the catalog to fork</button>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Two ways to start.</strong> Author from scratch, or fork an existing public exercise — the empty state names both paths so a new instructor isn't staring at a blank library.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- S7 PICKER -->
+    <section class="anchor" id="s7">
+      <span class="screen-tag"><span class="sx">S7</span> Exercise picker</span>
+      <h2 style="margin-top: 12px;">The catalog, borrowed by the program builder.</h2>
+      <p class="sec-lede">Opened from "Add exercise" while building a workout. Same data and filters as S1, compressed, with one job added: multi-select that returns one or many. Desktop opens it as a right drawer (the builder stays visible behind); mobile uses a bottom sheet.</p>
+
+      <div class="stage-meta"><span class="num">1</span><span class="ti">Desktop · right drawer over the program builder</span><span class="ttl-tag tt-desktop">Desktop</span></div>
+      <div class="web" style="position:relative;">
+        <div class="web-topbar"><div class="logo">M</div><div class="brand">MotionHive</div><div class="search"><i class="pi pi-search"></i> Search… <kbd>⌘K</kbd></div><div class="right"><span class="bell"><i class="pi pi-bell"></i></span><span class="avatar">AP</span></div></div>
+        <div class="web-body" style="grid-template-columns: 1fr;">
+          <!-- faint builder behind -->
+          <div class="web-content" style="padding: 22px; opacity:.4; overflow:hidden;">
+            <div style="height:24px; width:240px; background:var(--s-200); border-radius:6px; margin-bottom:16px;"></div>
+            <div style="height:60px; background:#fff; border-radius:10px; margin-bottom:8px;"></div>
+            <div style="height:60px; background:#fff; border-radius:10px; margin-bottom:8px;"></div>
+            <div style="height:60px; background:#fff; border-radius:10px;"></div>
+          </div>
+          <!-- drawer -->
+          <div style="position:absolute; top:52px; right:0; bottom:0; width:460px; background:#fff; border-left:1px solid var(--s-200); box-shadow:-12px 0 32px rgba(0,0,0,.10); display:flex; flex-direction:column;">
+            <div style="padding:14px 18px; border-bottom:1px solid var(--s-200); display:flex; align-items:center; gap:10px;"><h3 style="flex:1; font-size:15px;">Add exercises</h3><span style="font-size:11px; color:var(--s-500);">Day 2 · Lower</span><i class="pi pi-times" style="color:var(--s-500);"></i></div>
+            <div style="padding:12px 18px 8px;">
+              <div class="inp-row" style="margin-bottom:9px;"><i class="pi pi-search" style="color:var(--s-400); font-size:13px;"></i><input placeholder="Search exercises…" value="squat" /></div>
+              <div style="display:flex; gap:6px; overflow:hidden;"><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;"><i class="pi pi-sliders-h" style="font-size:9px;"></i> Filters</span><span class="pill pill-active" style="font-size:10px; padding:3px 9px;">All</span><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">System</span><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">Mine</span></div>
+            </div>
+            <div style="flex:1; overflow:auto;">
+              <div class="ex-row" style="background:var(--honey-50);"><span style="width:18px; height:18px; border-radius:5px; background:var(--honey-500); color:#fff; display:flex; align-items:center; justify-content:center; flex:0 0 auto;"><i class="pi pi-check" style="font-size:10px;"></i></span><div class="rthumb" style="width:42px; height:42px;"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Barbell back squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Barbell</div></div><i class="pi pi-verified" style="color:var(--navy-500); font-size:11px;"></i></div>
+              <div class="ex-row"><span style="width:18px; height:18px; border-radius:5px; border:1.5px solid var(--s-300); flex:0 0 auto;"></span><div class="rthumb" style="width:42px; height:42px;"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Front squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Barbell</div></div><i class="pi pi-verified" style="color:var(--navy-500); font-size:11px;"></i></div>
+              <div class="ex-row" style="background:var(--honey-50);"><span style="width:18px; height:18px; border-radius:5px; background:var(--honey-500); color:#fff; display:flex; align-items:center; justify-content:center; flex:0 0 auto;"><i class="pi pi-check" style="font-size:10px;"></i></span><div class="rthumb" style="width:42px; height:42px;"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Goblet squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Dumbbell</div></div><i class="pi pi-verified" style="color:var(--navy-500); font-size:11px;"></i></div>
+              <div class="ex-row"><span style="width:18px; height:18px; border-radius:5px; border:1.5px solid var(--s-300); flex:0 0 auto;"></span><div class="rthumb" style="width:42px; height:42px;"><div class="ph-img"></div></div><div class="rbody"><div class="rname">Tempo goblet squat — 3-1-1</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Kettlebell</div></div><i class="pi pi-lock" style="color:var(--teal-600); font-size:11px;"></i></div>
+              <div style="padding:10px 18px; display:flex; align-items:center; gap:8px; font-size:12px; color:var(--honey-600); font-weight:600; border-top:1px solid var(--s-100);"><i class="pi pi-plus-circle"></i> Create a new custom exercise</div>
+            </div>
+            <div style="padding:12px 18px; border-top:1px solid var(--s-200); display:flex; align-items:center; gap:10px;"><span style="font-size:12px; color:var(--s-600);"><strong style="color:var(--s-900);">2</strong> selected</span><button class="btn btn-ghost btn-sm" style="margin-left:auto;">Cancel</button><button class="btn btn-primary btn-sm"><i class="pi pi-plus"></i> Add 2 to Day 2</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-meta"><span class="num">2</span><span class="ti">Mobile · picker sheet + create-in-place</span><span class="ttl-tag tt-mobile">Mobile</span></div>
+      <div class="phones">
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2A</span><span class="ti">Multi-select sheet</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-body" style="background:#fff;"></div>
+            <div class="bs-shell">
+              <div class="bs-sheet" style="max-height:92%;">
+                <div class="bs-handle"></div>
+                <div class="bs-head"><span class="t" style="font-size:14px;">Add exercises</span><i class="pi pi-times ic"></i></div>
+                <div style="padding:10px 16px 6px;"><div class="inp-row" style="margin-bottom:8px;"><i class="pi pi-search" style="color:var(--s-400); font-size:12px;"></i><input placeholder="Search…" value="squat" /></div><div style="display:flex; gap:6px; overflow:hidden;"><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;"><i class="pi pi-sliders-h" style="font-size:9px;"></i> Filters</span><span class="pill pill-active" style="font-size:10px; padding:3px 9px;">All</span><span class="pill pill-idle" style="font-size:10px; padding:3px 9px;">Mine</span></div></div>
+                <div class="bs-body" style="padding:0;">
+                  <div class="ex-row" style="background:var(--honey-50);"><span style="width:18px; height:18px; border-radius:5px; background:var(--honey-500); color:#fff; display:flex; align-items:center; justify-content:center; flex:0 0 auto;"><i class="pi pi-check" style="font-size:10px;"></i></span><div class="rbody"><div class="rname">Barbell back squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Barbell</div></div></div>
+                  <div class="ex-row"><span style="width:18px; height:18px; border-radius:5px; border:1.5px solid var(--s-300); flex:0 0 auto;"></span><div class="rbody"><div class="rname">Front squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Barbell</div></div></div>
+                  <div class="ex-row" style="background:var(--honey-50);"><span style="width:18px; height:18px; border-radius:5px; background:var(--honey-500); color:#fff; display:flex; align-items:center; justify-content:center; flex:0 0 auto;"><i class="pi pi-check" style="font-size:10px;"></i></span><div class="rbody"><div class="rname">Goblet squat</div><div class="rmeta"><span class="mtag mtag-pri" style="padding:1px 6px;">Quads</span> Dumbbell</div></div></div>
+                  <div class="ex-row" style="color:var(--honey-600); font-weight:600; font-size:12px;"><i class="pi pi-plus-circle"></i> Create new custom exercise</div>
+                </div>
+                <div class="bs-foot"><button class="btn btn-primary btn-block"><i class="pi pi-plus"></i> Add 2 to workout</button></div>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Checkbox rows + sticky count.</strong> Tap to toggle, the footer button always shows how many you'll add. Filters collapse to a chip; the compressed row drops the level/source trailing icons to keep selection fast.</div>
+        </div>
+
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">2B</span><span class="ti">Create-in-place (sub-sheet)</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-body" style="background:#fff;"></div>
+            <div class="bs-shell" style="background:rgba(20,18,12,.5);">
+              <div class="bs-sheet" style="max-height:88%;">
+                <div class="bs-handle"></div>
+                <div class="bs-head"><i class="pi pi-arrow-left ic"></i><span class="t" style="font-size:14px;">New exercise</span><span style="font-size:12px; font-weight:600; color:var(--honey-600);">Save</span></div>
+                <div class="bs-body">
+                  <div class="phone-caption" style="margin-bottom:12px; background:var(--honey-50);"><i class="pi pi-info-circle" style="color:var(--honey-600);"></i> Saves, then drops you back in the picker with it pre-selected.</div>
+                  <div class="field"><label>Name <span class="req">*</span></label><input class="inp" value="Heels-elevated squat" /></div>
+                  <div class="field" style="margin-bottom:0;"><label>Kind <span class="req">*</span></label><div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;"><div class="kind-card on" style="padding:8px 9px;"><div class="kc-h" style="font-size:11px;"><i class="pi pi-bolt"></i> Strength</div><p>Reps + weight</p></div><div class="kind-card" style="padding:8px 9px;"><div class="kc-h" style="font-size:11px;"><i class="pi pi-user"></i> Bodyweight</div><p>Reps, no load</p></div></div></div>
+                </div>
+                <div class="bs-foot"><button class="btn btn-primary btn-block">Save &amp; select</button></div>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Author without leaving the flow.</strong> "Create new" opens S3 as a sub-sheet; on save it returns to the picker with the new exercise already checked, so building a workout never breaks stride.</div>
+        </div>
+      </div>
+
+      <div class="callout teal" style="margin-top:22px;"><i class="pi pi-sync"></i><p><strong>The picker is the catalog with a selection mode.</strong> It shares the search, filter and row components from S1 — the only additions are a checkbox column, a running-count footer, and the inline "create new" shortcut. Building it as a mode of the catalog (not a parallel screen) keeps the two from drifting apart.</p></div>
+    </section>
+    <!-- S8 STATES -->
+    <section class="anchor" id="s8">
+      <span class="screen-tag"><span class="sx">S8</span> States</span>
+      <h2 style="margin-top: 12px;">Loading, error, confirm, toast.</h2>
+      <p class="sec-lede">Empties live with their screens (S1 no-match, S6 nothing-yet). Here are the cross-cutting states: skeleton loading, two failure modes, the destructive confirm, and success toasts.</p>
+
+      <div class="phones">
+        <!-- Loading skeleton -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">A</span><span class="ti">Loading — skeletons</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t">Exercises</span><i class="pi pi-search ic"></i></div>
+            <div style="background:#fff; padding:7px 10px; border-bottom:1px solid var(--s-200); display:flex; gap:6px;"><span class="sk" style="width:44px; height:20px; border-radius:999px;"></span><span class="sk" style="width:60px; height:20px; border-radius:999px;"></span><span class="sk" style="width:50px; height:20px; border-radius:999px;"></span></div>
+            <div class="ph-body" style="padding-top:4px;">
+              <div class="ex-row"><div class="sk" style="width:52px; height:52px; flex:0 0 auto;"></div><div class="rbody"><div class="sk" style="width:75%; height:13px; margin-bottom:7px;"></div><div class="sk" style="width:50%; height:10px;"></div></div></div>
+              <div class="ex-row"><div class="sk" style="width:52px; height:52px; flex:0 0 auto;"></div><div class="rbody"><div class="sk" style="width:60%; height:13px; margin-bottom:7px;"></div><div class="sk" style="width:55%; height:10px;"></div></div></div>
+              <div class="ex-row"><div class="sk" style="width:52px; height:52px; flex:0 0 auto;"></div><div class="rbody"><div class="sk" style="width:80%; height:13px; margin-bottom:7px;"></div><div class="sk" style="width:45%; height:10px;"></div></div></div>
+              <div class="ex-row"><div class="sk" style="width:52px; height:52px; flex:0 0 auto;"></div><div class="rbody"><div class="sk" style="width:68%; height:13px; margin-bottom:7px;"></div><div class="sk" style="width:52%; height:10px;"></div></div></div>
+              <div class="ex-row"><div class="sk" style="width:52px; height:52px; flex:0 0 auto;"></div><div class="rbody"><div class="sk" style="width:72%; height:13px; margin-bottom:7px;"></div><div class="sk" style="width:48%; height:10px;"></div></div></div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Skeleton, not spinner.</strong> The row shape is known, so first load paints card/row-shaped placeholders. Infinite-scroll batches use a small inline spinner at the sentinel instead.</div>
+        </div>
+
+        <!-- Error catalog -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">B</span><span class="ti">Error — catalog failed</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-appbar"><i class="pi pi-arrow-left ic"></i><span class="t">Exercises</span><i class="pi pi-search ic"></i></div>
+            <div class="ph-body" style="padding:40px 24px; text-align:center;">
+              <div style="width:60px; height:60px; margin:0 auto 14px; border-radius:50%; background:var(--coral-100); color:#B91C1C; display:flex; align-items:center; justify-content:center; font-size:24px;"><i class="pi pi-wifi"></i></div>
+              <div style="font-family:'Poppins'; font-weight:600; font-size:16px;">Couldn't load exercises</div>
+              <p style="font-size:12px; color:var(--s-600); margin-top:8px; line-height:1.55;">Check your connection and try again. Your filters are saved.</p>
+              <button class="btn btn-primary btn-sm" style="margin-top:16px;"><i class="pi pi-refresh"></i> Retry</button>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Recoverable, state preserved.</strong> Network failure keeps the search + filters intact so Retry returns to the same query — no re-work.</div>
+        </div>
+
+        <!-- Delete confirm -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">C</span><span class="ti">Confirm — delete (irreversible)</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-body" style="background:#fff;"></div>
+            <div class="bs-shell">
+              <div class="bs-sheet" style="max-height:58%;">
+                <div class="bs-handle"></div>
+                <div class="bs-body" style="text-align:center; padding-top:16px;">
+                  <div style="width:48px;height:48px;margin:0 auto 12px; border-radius:50%; background:var(--coral-100); color:#B91C1C; display:flex; align-items:center; justify-content:center; font-size:20px;"><i class="pi pi-trash"></i></div>
+                  <div style="font-family:'Poppins'; font-weight:600; font-size:16px;">Delete "Banded glute bridge"?</div>
+                  <p style="font-size:12px; color:var(--s-600); margin-top:8px; line-height:1.55; padding:0 6px;">This can't be undone. It's public and <strong>forked by 42 instructors</strong> — their copies are independent and stay intact, but you'll lose your original.</p>
+                </div>
+                <div class="bs-foot" style="flex-direction:column; gap:8px;"><button class="btn btn-danger btn-block"><i class="pi pi-trash"></i> Delete exercise</button><button class="btn btn-ghost btn-block">Cancel</button></div>
+              </div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Name the consequence.</strong> The confirm spells out irreversibility and reassures that forks survive — the most likely worry for a public exercise.</div>
+        </div>
+
+        <!-- toasts + form error -->
+        <div class="phone-wrap">
+          <div class="phone-meta"><span class="num">D</span><span class="ti">Form error + toasts</span></div>
+          <div class="phone">
+            <div class="ph-status"><span>9:42</span><span><i class="pi pi-wifi" style="font-size: 11px;"></i></span></div>
+            <div class="ph-body" style="background:#fff;"></div>
+            <div class="bs-shell">
+              <div class="bs-sheet" style="max-height:78%;">
+                <div class="bs-handle"></div>
+                <div class="bs-head"><i class="pi pi-times ic"></i><span class="t" style="font-size:14px;">New exercise</span><span style="font-size:12px; font-weight:600; color:var(--honey-600);">Save</span></div>
+                <div class="bs-body">
+                  <div class="callout rose" style="margin-bottom:14px; padding:10px 12px;"><i class="pi pi-exclamation-circle" style="font-size:15px;"></i><p style="font-size:11.5px;"><strong>Couldn't save.</strong> The server rejected it — your inputs are kept. Fix the highlighted field and retry.</p></div>
+                  <div class="field"><label style="color:var(--rose-700);">Name <span class="req">*</span></label><input class="inp" style="border-color:var(--coral-500);" value="" placeholder="Required" /><div style="font-size:11px; color:var(--rose-700); margin-top:5px;" role="alert">Name is required.</div></div>
+                  <div class="field" style="margin-bottom:0;"><label style="color:var(--rose-700);">Primary muscles <span class="req">*</span></label><div class="inp-row" style="border-color:var(--coral-500);"><i class="pi pi-search" style="color:var(--s-400); font-size:12px;"></i><input placeholder="Add at least one" /></div><div style="font-size:11px; color:var(--rose-700); margin-top:5px;" role="alert">Pick at least one primary muscle.</div></div>
+                </div>
+                <div class="bs-foot"><button class="btn btn-primary btn-block">Save</button></div>
+              </div>
+            </div>
+            <!-- toast stack -->
+            <div style="position:absolute; left:12px; right:12px; bottom:14px; display:flex; flex-direction:column; gap:8px;">
+              <div class="toast"><i class="pi pi-check-circle lead"></i><div style="flex:1;">Exercise saved.<span class="act">View</span></div></div>
+            </div>
+            <div class="ph-home"></div>
+          </div>
+          <div class="phone-caption"><strong>Errors are inline + announced.</strong> Field errors render under the field with <code>role="alert"</code> for screen readers; the form-level banner keeps inputs so nothing is retyped. Success toasts (saved / forked) carry a follow-up action.</div>
+        </div>
+      </div>
+
+      <div class="matrix" style="margin-top:24px;">
+        <table>
+          <thead><tr><th style="width:160px;">State</th><th>Treatment</th><th>Where it appears</th></tr></thead>
+          <tbody>
+            <tr><td class="k">Empty · no match</td><td>Icon + loosen-filters + create CTA</td><td class="muted">S1 (2C)</td></tr>
+            <tr><td class="k">Empty · none created</td><td>Illustrated, two start paths (create / fork)</td><td class="muted">S6 (2B)</td></tr>
+            <tr><td class="k">Loading</td><td>Skeleton rows/cards; inline spinner for scroll batches</td><td class="muted">S8 (A)</td></tr>
+            <tr><td class="k">Error · list</td><td>Recoverable, filters preserved, Retry</td><td class="muted">S8 (B)</td></tr>
+            <tr><td class="k">Error · form</td><td>Banner keeps inputs + inline field errors (a11y)</td><td class="muted">S8 (D)</td></tr>
+            <tr><td class="k">Confirm · delete</td><td>Destructive sheet, names consequence + fork safety</td><td class="muted">S8 (C)</td></tr>
+            <tr><td class="k">Toast · success</td><td>Saved / forked, with a follow-up action</td><td class="muted">S5, S8 (D)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <!-- FIELDS USED -->
+    <section class="anchor" id="fields">
+      <h2>Fields used — per screen</h2>
+      <p class="sec-lede">Every schema field placed in the UI, by screen. Cross-check this against the migration: if a field is here it needs to be readable on that screen's payload; if a schema field is missing everywhere, question whether the UI needs it.</p>
+      <div class="matrix">
+        <table>
+          <thead><tr><th style="width:130px;">Screen</th><th>Schema fields placed in the UI</th></tr></thead>
+          <tbody>
+            <tr><td class="k">S1 Catalog</td><td><span class="fcode">name</span><span class="fcode">thumbnail_url</span><span class="fcode">media_kind</span><span class="fcode">level</span><span class="fcode">kind</span><span class="fcode">mechanic</span><span class="fcode">muscles.PRIMARY</span><span class="fcode">equipment</span><span class="fcode">source</span><span class="fcode">visibility</span><span class="fcode">owner_id</span><span class="fcode">movement_pattern</span><span class="fcode">force</span> · filters on kind/muscle/equipment/level/pattern/mechanic/force <span class="fcode new">fork_count</span><span class="fcode new">created_at</span><span class="fcode new">owner.name</span></td></tr>
+            <tr><td class="k">S2 Detail</td><td><span class="fcode">name</span><span class="fcode">description</span><span class="fcode">instructions</span><span class="fcode">kind</span><span class="fcode">level</span><span class="fcode">movement_pattern</span><span class="fcode">mechanic</span><span class="fcode">force</span><span class="fcode">muscles.*</span><span class="fcode">equipment</span><span class="fcode">media_kind</span><span class="fcode">thumbnail_url</span><span class="fcode">youtube_url</span><span class="fcode">source</span><span class="fcode">owner_id</span><span class="fcode">visibility</span><span class="fcode">forked_from_id</span> <span class="fcode new">fork_count</span><span class="fcode new">owner.name/avatar/slug</span><span class="fcode new">forked_from.name/slug</span><span class="fcode new">start/end image urls</span></td></tr>
+            <tr><td class="k">S3 Create</td><td><span class="fcode">name</span><span class="fcode">description</span><span class="fcode">instructions</span><span class="fcode">kind</span><span class="fcode">level</span><span class="fcode">movement_pattern</span><span class="fcode">mechanic</span><span class="fcode">force</span><span class="fcode">muscles.* (+role)</span><span class="fcode">equipment</span><span class="fcode">youtube_url</span><span class="fcode">media_kind</span><span class="fcode">visibility</span> · writes <span class="fcode">source=INSTRUCTOR</span><span class="fcode">owner_id</span><span class="fcode">slug</span> (auto) <span class="fcode new">met_value?</span></td></tr>
+            <tr><td class="k">S4 Edit</td><td>Same as S3, pre-filled · reads <span class="fcode">forked_from_id</span> <span class="fcode new">fork_count</span> for the divergence banner</td></tr>
+            <tr><td class="k">S5 Fork</td><td>Clones all content fields · writes <span class="fcode">forked_from_id</span><span class="fcode">owner_id</span><span class="fcode">source=INSTRUCTOR</span><span class="fcode">visibility=PRIVATE</span></td></tr>
+            <tr><td class="k">S6 My exercises</td><td><span class="fcode">name</span><span class="fcode">thumbnail_url</span><span class="fcode">level</span><span class="fcode">muscles.PRIMARY</span><span class="fcode">equipment</span><span class="fcode">visibility</span><span class="fcode">forked_from_id</span> filtered by <span class="fcode">owner_id</span> <span class="fcode new">fork_count</span><span class="fcode new">forked_from.name</span></td></tr>
+            <tr><td class="k">S7 Picker</td><td><span class="fcode">name</span><span class="fcode">thumbnail_url</span><span class="fcode">muscles.PRIMARY</span><span class="fcode">equipment</span><span class="fcode">level</span><span class="fcode">source</span> · returns <span class="fcode">id[]</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:11px; color:var(--s-500); margin-top:10px;"><span class="fcode" style="margin:0;">grey</span> = present in the schema as written · <span class="fcode new" style="margin:0 0 0 6px;">rose</span> = needed by the UI but <strong>not</strong> in the schema (see below). <code>met_value</code> exists in schema but is currently unplaced — see open question 11.</p>
+    </section>
+
+    <!-- FIELDS NEEDED -->
+    <section class="anchor" id="needed">
+      <h2>Fields needed — candidates for the migration</h2>
+      <p class="sec-lede">Things the UI wants that aren't in the schema as written. These are the cheap-to-decide-now / expensive-to-add-later items — please confirm before locking.</p>
+      <div class="grid-2">
+        <div class="decision-card"><div class="num" style="background:var(--rose-100); color:var(--rose-700);">!</div><div><h3><code>fork_count</code></h3><p>Shown on cards, detail ("Forked by 42"), My exercises, and drives the "most-forked" sort. Derivable by counting rows where <code>forked_from_id = x</code>, but needs to be queryable/sortable — likely a denormalized counter on the exercise.</p></div></div>
+        <div class="decision-card"><div class="num" style="background:var(--rose-100); color:var(--rose-700);">!</div><div><h3><code>created_at</code> / <code>updated_at</code></h3><p>The "Newest" sort and any "recently edited" affordance need timestamps. Not listed in the schema — assumed present as standard audit columns; please confirm they're exposed on the payload.</p></div></div>
+        <div class="decision-card"><div class="num" style="background:var(--rose-100); color:var(--rose-700);">!</div><div><h3>Author identity (denormalized)</h3><p>Schema has <code>owner_id</code> only. Attribution needs the owner's <strong>display name, avatar, and profile slug</strong> ("Created by Diana Marin → profile"). Either expand <code>owner</code> in the payload or denormalize <code>owner_name</code>/<code>owner_slug</code>.</p></div></div>
+        <div class="decision-card"><div class="num" style="background:var(--rose-100); color:var(--rose-700);">!</div><div><h3><code>forked_from</code> name + slug</h3><p>"Forked from [Original Exercise]" is a link — it needs the source's <strong>name and slug</strong>, not just <code>forked_from_id</code>. Expand the relation or denormalize a small <code>{id,name,slug}</code>.</p></div></div>
+        <div class="decision-card"><div class="num" style="background:var(--rose-100); color:var(--rose-700);">!</div><div><h3>Start + end images for SYSTEM</h3><p>The brief says two static JPGs (start + end) exist per system exercise, but the schema has a single <code>thumbnail_url</code>. We need either <code>image_urls[]</code> or explicit <code>start_image_url</code>/<code>end_image_url</code> — and a rule for which one is the catalog thumbnail.</p></div></div>
+        <div class="decision-card"><div class="num">?</div><div><h3>Faceted filter counts</h3><p>The filter rail shows live counts ("Strength · 410"). That's an aggregation the search endpoint must return per facet, not a field — flag the API need, or we drop the counts.</p></div></div>
+        <div class="decision-card"><div class="num">?</div><div><h3>Search aliases / synonyms <span style="font-weight:500; color:var(--s-400);">(nice-to-have)</span></h3><p>Partial-match on <code>name</code> alone misses "hip thrust" vs "glute bridge". An optional <code>aliases[]</code> would make search forgiving. Low priority, but cheap if added now.</p></div></div>
+        <div class="decision-card"><div class="num">?</div><div><h3>Laterality <span style="font-weight:500; color:var(--s-400);">(minor)</span></h3><p>Unilateral movements (split squats, single-arm rows) are common; a <code>unilateral</code> boolean would help logging and labelling later. Not blocking — noting it while we're in the schema.</p></div></div>
+      </div>
+    </section>
+
+    <!-- OPEN QUESTIONS -->
+    <section class="anchor" id="questions">
+      <h2>Open questions</h2>
+      <p class="sec-lede">Things I had to assume to make the screens concrete. Each has my working assumption in teal — overturn any of them and the affected screen changes.</p>
+      <div class="oq">
+        <div class="oq-item"><div class="qx"><strong>Can clients browse the full catalog (S1), or only view exercises assigned to them?</strong> The brief calls clients read-only "in the catalog context" but doesn't say whether they get the browse hub at all.<span class="assume">Assumed: clients reach detail (S2) only from an assigned program; they don't get the S1 browse hub. If they should browse, S1 needs a client variant with no create/fork affordances.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>Is <code>fork_count</code> a stored counter or computed on read?</strong> It appears on cards, detail and the "most-forked" sort.<span class="assume">Assumed: a denormalized counter incremented on fork, so it's sortable without a join.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>Do <code>created_at</code>/<code>updated_at</code> exist and ship on the payload?</strong> Required for the "Newest" sort.<span class="assume">Assumed: yes, standard audit columns exposed to the client.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>SYSTEM start/end images — one field or two?</strong> Schema has a single <code>thumbnail_url</code> but the seed has two JPGs.<span class="assume">Assumed: <code>thumbnail_url</code> is the catalog image (start position); detail shows start + end from an <code>image_urls[]</code> we add.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>Can a forked (Private) copy be re-published as Public?</strong> Affects the visibility toggle on forks.<span class="assume">Assumed: yes — a fork is a normal INSTRUCTOR exercise and can be made Public, keeping its <code>forked_from_id</code>.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>What happens to instructors <em>using</em> a public exercise as-is (not forked) when the owner makes it Private or deletes it?</strong> Forks are independent and safe; direct references in live programs are not addressed by the brief.<span class="assume">Assumed: a program references the exercise by id; if it's pulled, the program shows a "no longer available" placeholder. Needs product confirmation.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>Is the primary-muscle max (~3) a hard cap?</strong> And are secondary/stabilizer counts bounded?<span class="assume">Assumed: Primary hard-capped at 3, secondary/stabilizer unbounded.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>Should <code>met_value</code> surface in the UI?</strong> It's in the schema (cardio intensity) but I haven't placed it.<span class="assume">Assumed: kept internal for downstream calorie math, not shown on detail. Easy to add to the cardio classification strip if wanted.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>YouTube oEmbed thumbnail — fetched client-side or server-proxied?</strong> Affects the live-preview behaviour in S3.<span class="assume">Assumed: server-proxied on URL submit (CORS + caching + validation), with an optimistic client preview while it resolves.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>Search scope — name only, or also description/aliases?</strong> The brief specifies "search by name".<span class="assume">Assumed: name-only partial match for V1; aliases noted as a later enhancement.</span></div></div>
+        <div class="oq-item"><div class="qx"><strong>Is <code>slug</code> ever instructor-facing?</strong> It's auto-generated from name.<span class="assume">Assumed: fully server-generated and hidden from the create/edit UI.</span></div></div>
+      </div>
+    </section>
+
+    <!-- COMPONENT INVENTORY -->
+    <section class="anchor" id="inventory">
+      <h2>Component inventory</h2>
+      <p class="sec-lede">Reusable pieces this spec implies, for engineering scope. Names are suggestions; the <code>mh-</code> prefix and PrimeNG-first conventions from the repo apply.</p>
+      <div class="inv">
+        <div class="inv-card"><div class="cn">ExerciseCard</div><div class="cd">Grid tile: thumb, name, primary muscle, equipment, level/source foot.</div><div class="cu">S1</div></div>
+        <div class="inv-card"><div class="cn">ExerciseRow</div><div class="cd">Dense list row with variants: <code>browse</code> · <code>manage</code> (edit/⋮) · <code>select</code> (checkbox).</div><div class="cu">S1 · S6 · S7</div></div>
+        <div class="inv-card"><div class="cn">ExerciseThumb</div><div class="cd">Handles image / GIF / YouTube marker / placeholder fallback.</div><div class="cu">all</div></div>
+        <div class="inv-card"><div class="cn">SourceBadge · LevelBadge · KindBadge · VisibilityBadge</div><div class="cd">Icon + text + color tokens; never color alone.</div><div class="cu">all</div></div>
+        <div class="inv-card"><div class="cn">MuscleTag</div><div class="cd">Role-weighted tag (primary / secondary / stabilizer).</div><div class="cu">S1 · S2 · S3</div></div>
+        <div class="inv-card"><div class="cn">CatalogToolbar</div><div class="cd">Search + ownership tabs + sort menu + grid/list toggle.</div><div class="cu">S1 · S6</div></div>
+        <div class="inv-card"><div class="cn">FilterRail / FilterSheet</div><div class="cd">Shared facet model; rail on desktop, bottom sheet on mobile, live counts.</div><div class="cu">S1 · S7</div></div>
+        <div class="inv-card"><div class="cn">InfiniteList</div><div class="cd">IntersectionObserver sentinel + skeleton first-load + inline batch spinner.</div><div class="cu">S1 · S6 · S7</div></div>
+        <div class="inv-card"><div class="cn">ExerciseDetailHero</div><div class="cd">Media block: YouTube embed, start/end image pair, GIF.</div><div class="cu">S2</div></div>
+        <div class="inv-card"><div class="cn">AttributionStrip</div><div class="cd">Author avatar/name/profile link + fork count + fork button.</div><div class="cu">S2 · S5</div></div>
+        <div class="inv-card"><div class="cn">ClassificationStrip</div><div class="cd">Secondary metadata: pattern / mechanic / force.</div><div class="cu">S2 · S3</div></div>
+        <div class="inv-card"><div class="cn">ExerciseForm</div><div class="cd">Create + edit (one component, <code>editing</code> flag + divergence banner).</div><div class="cu">S3 · S4 · S7</div></div>
+        <div class="inv-card"><div class="cn">KindSelectCards</div><div class="cd">6 radio cards, each stating what gets logged.</div><div class="cu">S3</div></div>
+        <div class="inv-card"><div class="cn">MusclePicker</div><div class="cd">Search-to-chip with per-chip P/S/St role segmented control.</div><div class="cu">S3 · S4</div></div>
+        <div class="inv-card"><div class="cn">YouTubeUrlField</div><div class="cd">Validated URL input + live oEmbed thumbnail preview.</div><div class="cu">S3 · S4</div></div>
+        <div class="inv-card"><div class="cn">VisibilityToggle + PublicConfirm</div><div class="cd">Private/Public switch with the "make public" implications sheet.</div><div class="cu">S2 · S3 · S4</div></div>
+        <div class="inv-card"><div class="cn">ExercisePicker</div><div class="cd">Drawer (desktop) / sheet (mobile), multi-select, selection-count footer, create-in-place.</div><div class="cu">S7</div></div>
+        <div class="inv-card"><div class="cn">ConfirmDialog · Toaster</div><div class="cd">Destructive confirm sheet + success toasts with follow-up action.</div><div class="cu">S5 · S8</div></div>
+        <div class="inv-card"><div class="cn">EmptyState · ErrorState · Skeletons</div><div class="cd">No-match / nothing-yet / network-error / loading placeholders.</div><div class="cu">S1 · S6 · S8</div></div>
+      </div>
+
+      <div class="callout" style="margin-top:24px;"><i class="pi pi-flag"></i><p><strong>Net-new module.</strong> Nothing exercise-related exists in the codebase today, so this builds clean. It leans on existing shell primitives — the sidebar, top bar, 5-tab bar, bottom-sheet pattern, FAB, chips and avatars are already shipping — so the new surface area is the catalog data layer, the form, and the picker. Estimate against the inventory above.</p></div>
+    </section>
+
+    <div style="text-align:center; padding:30px 0 10px; color:var(--s-400); font-size:11px; border-top:1px solid var(--s-200); margin-top:40px;">MotionHive · Exercises module · mid-fi spec · S1–S8 + deliverables</div>
+<!-- END -->
+  </div>
+</body>
+</html>
