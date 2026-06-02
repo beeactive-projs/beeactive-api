@@ -1,22 +1,34 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 
+import { InstructorClient } from '../client/entities/instructor-client.entity';
+import { ExerciseModule } from '../exercise/exercise.module';
+import { RoleModule } from '../role/role.module';
+import { User } from '../user/entities/user.entity';
+import { AssignedExercise } from './entities/assigned-exercise.entity';
+import { AssignedSet } from './entities/assigned-set.entity';
+import { AssignedWorkout } from './entities/assigned-workout.entity';
 import { ExerciseBlock } from './entities/exercise-block.entity';
+import { LoggedExercise } from './entities/logged-exercise.entity';
+import { LoggedSet } from './entities/logged-set.entity';
+import { OneRepMax } from './entities/one-rep-max.entity';
 import { PrescribedExercise } from './entities/prescribed-exercise.entity';
 import { PrescribedSet } from './entities/prescribed-set.entity';
 import { Program } from './entities/program.entity';
+import { ProgramAssignment } from './entities/program-assignment.entity';
 import { ProgramWorkout } from './entities/program-workout.entity';
+import { WorkoutLog } from './entities/workout-log.entity';
+import { ProgramAssignmentController } from './program-assignment.controller';
+import { ProgramAssignmentService } from './program-assignment.service';
+import { ProgramController } from './program.controller';
+import { ProgramService } from './program.service';
+import { WorkoutLogController } from './workout-log.controller';
+import { WorkoutLogService } from './workout-log.service';
 
 /**
- * Workout Module — owns the program-authoring tree (program →
- * program_workout → exercise_block → prescribed_exercise →
- * prescribed_set), plus future ProgramAssignment / WorkoutLog /
- * OneRepMax surfaces (next sub-slices).
- *
- * This first slice registers the entities so Sequelize relations
- * resolve (the existing exercise module's PrescribedExercise.exerciseId
- * → Exercise FK only links here once both modules are loaded). No
- * controllers / services yet — those land in B1.5 (program CRUD).
+ * Workout Module — full surface: program authoring (B1.5), client
+ * assignment with copy-on-assign tx (B2), and client-side workout
+ * logging with %1RM resolution + 1RM history (B3).
  */
 @Module({
   imports: [
@@ -26,10 +38,31 @@ import { ProgramWorkout } from './entities/program-workout.entity';
       ExerciseBlock,
       PrescribedExercise,
       PrescribedSet,
+      ProgramAssignment,
+      AssignedWorkout,
+      AssignedExercise,
+      AssignedSet,
+      WorkoutLog,
+      LoggedExercise,
+      LoggedSet,
+      OneRepMax,
+      InstructorClient,
+      User,
     ]),
+    ExerciseModule,
+    RoleModule,
   ],
-  controllers: [],
-  providers: [],
-  exports: [SequelizeModule],
+  controllers: [
+    ProgramController,
+    ProgramAssignmentController,
+    WorkoutLogController,
+  ],
+  providers: [ProgramService, ProgramAssignmentService, WorkoutLogService],
+  exports: [
+    ProgramService,
+    ProgramAssignmentService,
+    WorkoutLogService,
+    SequelizeModule,
+  ],
 })
 export class WorkoutModule {}

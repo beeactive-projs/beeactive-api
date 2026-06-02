@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsOptional,
   IsString,
   IsNumber,
@@ -91,4 +92,21 @@ export class UpdateUserDto {
   @IsString()
   @MaxLength(100)
   city?: string;
+
+  /**
+   * Client-side exercise catalog browse gate (locked decision §19).
+   * Stores ONLY the explicit opt-in; effective access is computed at
+   * read time on the catalog endpoints as `optIn OR has-any-active-
+   * assignment`. The profile toggle UI surfaces the computed value.
+   */
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'Opt-in to the exercise catalog browse surface. Auto-resolves to ' +
+      'true at read time when the user has any non-cancelled program ' +
+      'assignment, regardless of this flag.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  exerciseCatalogOptIn?: boolean;
 }

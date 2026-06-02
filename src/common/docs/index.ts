@@ -26,3 +26,4 @@ export * from './user.docs';
 export * from './payment.docs';
 export * from './notification.docs';
 export * from './exercise.docs';
+export * from './program.docs';

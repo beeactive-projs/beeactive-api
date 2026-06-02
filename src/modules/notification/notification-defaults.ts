@@ -127,6 +127,9 @@ export const NOTIFICATION_DEFAULTS: Record<
   // Fork notifications are high-volume on popular public exercises;
   // keep them in-app to avoid an inbox flood.
   [NotificationType.EXERCISE_FORKED]: IN_APP_ONLY,
+  // Program assignment is a real coaching event — email so the
+  // client sees it even when they're not in the app.
+  [NotificationType.PROGRAM_ASSIGNED]: IN_APP_AND_EMAIL,
 };
 
 /**

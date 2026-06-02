@@ -59,4 +59,5 @@ export enum NotificationType {
   MESSAGE_RECEIVED = 'MESSAGE_RECEIVED',
   // ── Workouts (exercises + programs) ──────────────────────
   EXERCISE_FORKED = 'EXERCISE_FORKED',
+  PROGRAM_ASSIGNED = 'PROGRAM_ASSIGNED',
 }
