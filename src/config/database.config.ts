@@ -42,8 +42,22 @@ export const getDatabaseConfig = (
     pool: {
       max: 10,
       min: 0,
-      acquire: 30000,
+      // Wait up to 60s to get a connection from the pool. This MUST be
+      // >= `dialectOptions.connectTimeout` below — otherwise the pool
+      // gives up before a fresh Neon connection finishes handshaking,
+      // and we surface a 500 on the first request after a quiet period
+      // (Neon serverless cold-start: 5–30s typical, up to ~60s in the
+      // worst case). Symptom of the old 30s setting:
+      //   `SequelizeConnectionError: Authentication timed out`
+      acquire: 60000,
+      // Drop pooled sockets after 10s of idle so we don't hand out a
+      // connection Neon has already killed compute-side.
       idle: 10000,
+      // Reap idle sockets every 1s. Without this, the eviction only
+      // runs on pool acquire; with sparse traffic, a "dead" socket can
+      // linger in the pool well past the `idle` threshold and get
+      // handed to the next request, producing an opaque ECONNRESET.
+      evict: 1000,
     },
     // Disable Sequelize's per-query retry. It is NOT transaction-aware:
     // a retry of a query that already aborted its transaction just hits
