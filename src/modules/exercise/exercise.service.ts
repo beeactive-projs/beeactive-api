@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -467,49 +466,31 @@ export class ExerciseService {
   // ────────────────────────────────────────────────────────────────────
 
   /**
-   * Effective access for a client (USER role) — true when the user has
-   * explicitly opted in OR has any non-cancelled program assignment.
+   * Catalog browsing is open to any signed-in user. The original gate
+   * (opt-in OR an existing program assignment) made sense back when
+   * the only client surface was "see what your coach assigned" — a
+   * focus aid. With freestyle workouts now a primary surface, anyone
+   * starting a session needs the catalog, so a hard 403 here just
+   * dead-ends the freestyle flow. Visibility of private custom
+   * exercises authored by *other* users is still enforced by the
+   * `visibility` column on each row (`buildListWhere`).
    *
-   * INSTRUCTOR role always returns true (the gate doesn't apply).
+   * The `exerciseCatalogOptIn` field stays on the user model (no
+   * migration churn); it can come back as a soft "filter to my coach's
+   * picks" preference later if that turns out to be a real user need.
+   *
+   * @returns always `true` — kept for call-site compatibility.
    */
-  async canClientBrowseCatalog(principal: PrincipalContext): Promise<boolean> {
-    if (principal.isInstructor) return true;
-
-    const user = await this.userModel.findByPk(principal.userId, {
-      attributes: ['id', 'exerciseCatalogOptIn'],
-    });
-    if (user?.exerciseCatalogOptIn === true) return true;
-
-    // Raw SQL — `program_assignment` is owned by the workout module
-    // (no entity registered yet). Migration 047 created the table; the
-    // raw query keeps this service decoupled from a module that doesn't
-    // exist yet.
-    const rows = await this.sequelize.query<{ has: boolean }>(
-      `SELECT EXISTS (
-         SELECT 1 FROM program_assignment
-          WHERE client_id = :uid
-            AND status <> 'CANCELLED'
-            AND deleted_at IS NULL
-       ) AS has`,
-      {
-        replacements: { uid: principal.userId },
-        type: QueryTypes.SELECT,
-      },
-    );
-    return Boolean(rows[0]?.has);
+  canClientBrowseCatalog(_principal: PrincipalContext): Promise<boolean> {
+    return Promise.resolve(true);
   }
 
   /**
-   * Throws 403 with a stable error code when the principal is a USER
-   * who is not eligible to browse the catalog.
+   * Kept for call-site compatibility — currently a no-op. See
+   * `canClientBrowseCatalog` for why the gate was lifted.
    */
-  async assertClientCanBrowse(principal: PrincipalContext): Promise<void> {
-    const allowed = await this.canClientBrowseCatalog(principal);
-    if (!allowed) {
-      throw new ForbiddenException(
-        'Exercise catalog is not available — enable it in your profile or wait until a program is assigned.',
-      );
-    }
+  assertClientCanBrowse(_principal: PrincipalContext): Promise<void> {
+    return Promise.resolve();
   }
 
   // ────────────────────────────────────────────────────────────────────

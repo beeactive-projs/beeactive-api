@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -107,7 +106,7 @@ describe('ExerciseService (smoke — not exhaustive)', () => {
     service = module.get(ExerciseService);
   });
 
-  // ─── Browse gate (locked decision §19) ───────────────────────────
+  // ─── Browse gate (originally locked decision §19; lifted post-freestyle) ───
 
   describe('canClientBrowseCatalog', () => {
     it('returns true for an instructor without touching the DB', async () => {
@@ -117,46 +116,21 @@ describe('ExerciseService (smoke — not exhaustive)', () => {
       expect(sequelize.query).not.toHaveBeenCalled();
     });
 
-    it('returns true when the client has explicitly opted in', async () => {
-      userModel.findByPk.mockResolvedValueOnce({ exerciseCatalogOptIn: true });
-
+    it('returns true for any signed-in client (gate lifted)', async () => {
       const result = await service.canClientBrowseCatalog({
         userId: 'u',
         isInstructor: false,
       });
       expect(result).toBe(true);
+      // The gate now no-ops so we shouldn't hit the DB for it.
+      expect(userModel.findByPk).not.toHaveBeenCalled();
       expect(sequelize.query).not.toHaveBeenCalled();
     });
 
-    it('returns true when the client has an active program assignment', async () => {
-      userModel.findByPk.mockResolvedValueOnce({ exerciseCatalogOptIn: false });
-      sequelize.query.mockResolvedValueOnce([{ has: true }]);
-
-      const result = await service.canClientBrowseCatalog({
-        userId: 'u',
-        isInstructor: false,
-      });
-      expect(result).toBe(true);
-    });
-
-    it('returns false when neither opt-in nor assignment present', async () => {
-      userModel.findByPk.mockResolvedValueOnce({ exerciseCatalogOptIn: false });
-      sequelize.query.mockResolvedValueOnce([{ has: false }]);
-
-      const result = await service.canClientBrowseCatalog({
-        userId: 'u',
-        isInstructor: false,
-      });
-      expect(result).toBe(false);
-    });
-
-    it('assertClientCanBrowse throws 403 when not allowed', async () => {
-      userModel.findByPk.mockResolvedValueOnce({ exerciseCatalogOptIn: false });
-      sequelize.query.mockResolvedValueOnce([{ has: false }]);
-
+    it('assertClientCanBrowse is now a no-op', async () => {
       await expect(
         service.assertClientCanBrowse({ userId: 'u', isInstructor: false }),
-      ).rejects.toThrow(ForbiddenException);
+      ).resolves.toBeUndefined();
     });
   });
 
