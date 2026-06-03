@@ -22,6 +22,7 @@ import { AssignedWorkout } from './entities/assigned-workout.entity';
 import { LoggedExercise } from './entities/logged-exercise.entity';
 import { LoggedSet } from './entities/logged-set.entity';
 import { OneRepMax } from './entities/one-rep-max.entity';
+import { ProgramAssignment } from './entities/program-assignment.entity';
 import { WorkoutLog } from './entities/workout-log.entity';
 import { OneRepMaxSource, WorkoutLogStatus } from './entities/workout.enums';
 import { CompleteWorkoutDto } from './dto/complete-workout.dto';
@@ -367,11 +368,41 @@ export class WorkoutLogService {
   async listForUser(userId: string, query: PaginationDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+    // History = completed sessions only. In-progress logs still surface
+    // through the active log + plan detail, not here.
     const { rows, count } = await this.logModel.findAndCountAll({
-      where: { userId },
+      where: { userId, status: WorkoutLogStatus.Completed },
+      include: [
+        // Eager-load the program name so the row subtitle ("12-week
+        // hypertrophy base · W5") doesn't need a follow-up fetch.
+        // Nullable for freestyle logs.
+        {
+          model: ProgramAssignment,
+          as: 'assignment',
+          attributes: ['id', 'programNameSnapshot', 'masterProgramId'],
+          required: false,
+        },
+        // Bring back logged_exercise → logged_set just for the count.
+        // FE sums them client-side to render "18 sets".
+        {
+          model: LoggedExercise,
+          as: 'exercises',
+          attributes: ['id'],
+          include: [
+            {
+              model: LoggedSet,
+              as: 'sets',
+              attributes: ['id', 'isCompleted'],
+              required: false,
+            },
+          ],
+          required: false,
+        },
+      ],
       order: [['startedAt', 'DESC']],
       offset: getOffset(page, limit),
       limit,
+      distinct: true,
     });
     return buildPaginatedResponse(rows, count, page, limit);
   }
@@ -385,11 +416,37 @@ export class WorkoutLogService {
           separate: true,
           order: [['orderIndex', 'ASC']],
           include: [
+            // Eager-load the catalog exercise so the FE has name +
+            // thumbnail without a second hop. `exerciseId` is nullable
+            // on freestyle logs so `required: false` keeps the LEFT JOIN.
+            {
+              model: Exercise,
+              as: 'exercise',
+              attributes: [
+                'id',
+                'name',
+                'slug',
+                'kind',
+                'level',
+                'thumbnailUrl',
+              ],
+              required: false,
+            },
             {
               model: LoggedSet,
               as: 'sets',
               separate: true,
               order: [['orderIndex', 'ASC']],
+              include: [
+                // Eager-load the prescription so the FE can render the
+                // target column (reps range, weight, %1RM, etc.).
+                // `assignedSet` is nullable for freestyle sets.
+                {
+                  model: AssignedSet,
+                  as: 'assignedSet',
+                  required: false,
+                },
+              ],
             },
           ],
         },
