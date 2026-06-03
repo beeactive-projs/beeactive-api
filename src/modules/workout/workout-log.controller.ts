@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -18,6 +20,8 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
+import { AddLogExerciseDto } from './dto/add-log-exercise.dto';
+import { AddLogSetDto } from './dto/add-log-set.dto';
 import { CompleteWorkoutDto } from './dto/complete-workout.dto';
 import { LogSetDto } from './dto/log-set.dto';
 import { RecordOneRepMaxDto } from './dto/record-one-rep-max.dto';
@@ -56,6 +60,58 @@ export class WorkoutLogController {
     @Body() dto: LogSetDto,
   ) {
     return this.workoutLogService.logSet(id, setId, dto, req.user.id);
+  }
+
+  // ── Mid-session mutations (freestyle + S14 affordances) ──────────
+
+  @Post('workout-logs/:id/exercises')
+  async addExercise(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddLogExerciseDto,
+  ) {
+    return this.workoutLogService.addExerciseToLog(
+      id,
+      dto.exerciseId,
+      req.user.id,
+    );
+  }
+
+  @Delete('workout-logs/:id/exercises/:exerciseId')
+  @HttpCode(204)
+  async removeExercise(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('exerciseId', ParseUUIDPipe) exerciseId: string,
+  ): Promise<void> {
+    await this.workoutLogService.removeExerciseFromLog(
+      id,
+      exerciseId,
+      req.user.id,
+    );
+  }
+
+  @Post('workout-logs/:id/exercises/:exerciseId/sets')
+  async addSet(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('exerciseId', ParseUUIDPipe) exerciseId: string,
+    @Body() dto: AddLogSetDto,
+  ) {
+    return this.workoutLogService.addSetToLog(id, exerciseId, dto, req.user.id);
+  }
+
+  // ── "Last time you did this" — for the LastTimeHint component ────
+
+  @Get('workout-logs/last-for-exercise/:exerciseId')
+  async lastSessionForExercise(
+    @Request() req: AuthenticatedRequest,
+    @Param('exerciseId', ParseUUIDPipe) exerciseId: string,
+  ) {
+    return this.workoutLogService.lastSessionForExercise(
+      req.user.id,
+      exerciseId,
+    );
   }
 
   @Post('workout-logs/:id/complete')

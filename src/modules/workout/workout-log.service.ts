@@ -259,6 +259,150 @@ export class WorkoutLogService {
   }
 
   // ────────────────────────────────────────────────────────────────────
+  // Add / remove exercise mid-session (freestyle + S14 affordances)
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * Append a catalog exercise to a logged session. Used by:
+   *   - freestyle workouts (no assignment) building one exercise at a time
+   *   - assigned workouts where the client adds an extra exercise
+   *
+   * The exercise must be readable (SYSTEM, owned, or PUBLIC custom);
+   * the `prescribed`-style ownership check lives on the catalog model.
+   * Snapshots name + thumbnail at write time so historical logs survive
+   * catalog renames/deletes (matches the `start` flow).
+   */
+  async addExerciseToLog(
+    workoutLogId: string,
+    exerciseId: string,
+    userId: string,
+  ): Promise<LoggedExercise> {
+    const log = await this._loadOwnedLog(workoutLogId, userId);
+    if (log.status !== WorkoutLogStatus.InProgress) {
+      throw new BadRequestException(
+        'Cannot add exercises to a workout that is no longer in progress.',
+      );
+    }
+    const exercise = await this.exerciseModel.findByPk(exerciseId, {
+      attributes: ['id', 'name', 'thumbnailUrl', 'visibility', 'ownerId'],
+    });
+    if (
+      !exercise ||
+      (exercise.visibility === 'PRIVATE' && exercise.ownerId !== userId)
+    ) {
+      throw new NotFoundException('Exercise not found.');
+    }
+    // Append at the end of the existing order.
+    const last = await this.loggedExerciseModel.max('orderIndex', {
+      where: { workoutLogId },
+    });
+    const orderIndex = last == null ? 0 : Number(last) + 1;
+    return this.loggedExerciseModel.create({
+      workoutLogId,
+      exerciseId,
+      assignedExerciseId: null,
+      exerciseNameSnapshot: exercise.name,
+      exerciseThumbnailUrlSnapshot: exercise.thumbnailUrl,
+      orderIndex,
+      supersetGroupId: null,
+      notes: null,
+    });
+  }
+
+  /**
+   * Remove a logged exercise (and CASCADE its sets) from a session.
+   * The S14 "skip exercise" lives on top of this. Refuses on completed
+   * logs since they're frozen history.
+   */
+  async removeExerciseFromLog(
+    workoutLogId: string,
+    loggedExerciseId: string,
+    userId: string,
+  ): Promise<void> {
+    const log = await this._loadOwnedLog(workoutLogId, userId);
+    if (log.status !== WorkoutLogStatus.InProgress) {
+      throw new BadRequestException(
+        'Cannot edit a workout that is no longer in progress.',
+      );
+    }
+    const ex = await this.loggedExerciseModel.findByPk(loggedExerciseId);
+    if (!ex || ex.workoutLogId !== workoutLogId) {
+      throw new NotFoundException('Logged exercise not found.');
+    }
+    await ex.destroy();
+  }
+
+  /**
+   * Append an empty set to a logged exercise. Used by:
+   *   - the per-exercise "+ Add set" CTA (S14)
+   *   - freestyle exercises that don't pre-seed any sets
+   *
+   * Set type defaults to NORMAL; actuals + targets are null until the
+   * client logs them via `logSet`.
+   */
+  async addSetToLog(
+    workoutLogId: string,
+    loggedExerciseId: string,
+    dto: { setType?: string },
+    userId: string,
+  ): Promise<LoggedSet> {
+    const log = await this._loadOwnedLog(workoutLogId, userId);
+    if (log.status !== WorkoutLogStatus.InProgress) {
+      throw new BadRequestException(
+        'Cannot add sets to a workout that is no longer in progress.',
+      );
+    }
+    const ex = await this.loggedExerciseModel.findByPk(loggedExerciseId);
+    if (!ex || ex.workoutLogId !== workoutLogId) {
+      throw new NotFoundException('Logged exercise not found.');
+    }
+    const last = await this.loggedSetModel.max('orderIndex', {
+      where: { loggedExerciseId },
+    });
+    const orderIndex = last == null ? 0 : Number(last) + 1;
+    return this.loggedSetModel.create({
+      loggedExerciseId,
+      assignedSetId: null,
+      orderIndex,
+      setType: dto.setType ?? 'NORMAL',
+      isCompleted: false,
+    });
+  }
+
+  /**
+   * "Last time you did this" — most-recent completed log set for this
+   * exercise. Powers the `LastTimeHint` component on the active log.
+   * Returns up to 6 actual rows (one workout's worth), newest first.
+   */
+  async lastSessionForExercise(
+    userId: string,
+    exerciseId: string,
+  ): Promise<LoggedSet[]> {
+    // Find the most-recent completed logged_exercise row for this user
+    // + exercise. Cheaper than a nested include subquery (Sequelize
+    // mangles the outer ORDER BY when attributes are restricted).
+    const recent = (await this.loggedExerciseModel.findOne({
+      where: { exerciseId },
+      include: [
+        {
+          model: WorkoutLog,
+          as: 'log',
+          required: true,
+          where: { userId, status: WorkoutLogStatus.Completed },
+          attributes: ['id', 'completedAt'],
+        },
+      ],
+      order: [[{ model: WorkoutLog, as: 'log' }, 'completedAt', 'DESC']],
+    })) as (LoggedExercise & { log?: WorkoutLog }) | null;
+    if (!recent) return [];
+    return this.loggedSetModel.findAll({
+      where: { loggedExerciseId: recent.id, isCompleted: true },
+      order: [['orderIndex', 'ASC']],
+      limit: 6,
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────────────
   // Complete
   // ────────────────────────────────────────────────────────────────────
 
