@@ -30,6 +30,7 @@ import { WaitlistModule } from './modules/waitlist/waitlist.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { VenueModule } from './modules/venue/venue.module';
 import { ExerciseModule } from './modules/exercise/exercise.module';
+import { RoutineModule } from './modules/routine/routine.module';
 import { WorkoutModule } from './modules/workout/workout.module';
 import { SearchModule } from './modules/search/search.module';
 import { PostModule } from './modules/post/post.module';
@@ -107,6 +108,7 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     VenueModule,
     ExerciseModule,
     WorkoutModule,
+    RoutineModule,
     SearchModule,
     PostModule,
     ReviewModule,
