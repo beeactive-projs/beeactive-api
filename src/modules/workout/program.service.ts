@@ -157,7 +157,7 @@ export class ProgramService {
       description: dto.description?.trim() || null,
       kind: dto.kind ?? 'WORKOUT',
       status: dto.status ?? ProgramStatus.Draft,
-      durationWeeks: dto.durationWeeks ?? null,
+      durationDays: dto.durationDays ?? null,
       periodizationModel: dto.periodizationModel?.trim() || null,
       coverImageUrl: dto.coverImageUrl ?? null,
       goalTags: dto.goalTags ?? null,
@@ -178,8 +178,8 @@ export class ProgramService {
       }),
       ...(dto.kind !== undefined && { kind: dto.kind }),
       ...(dto.status !== undefined && { status: dto.status }),
-      ...(dto.durationWeeks !== undefined && {
-        durationWeeks: dto.durationWeeks,
+      ...(dto.durationDays !== undefined && {
+        durationDays: dto.durationDays,
       }),
       ...(dto.periodizationModel !== undefined && {
         periodizationModel: dto.periodizationModel?.trim() || null,

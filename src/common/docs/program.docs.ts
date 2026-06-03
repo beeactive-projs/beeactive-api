@@ -8,7 +8,7 @@ const programExample = {
   description: 'Beginner barbell program, 3 days/week, full-body, linear.',
   kind: 'WORKOUT',
   status: 'DRAFT',
-  durationWeeks: 8,
+  durationDays: 56,
   periodizationModel: 'linear',
   coverImageUrl: null,
   goalTags: ['strength', 'beginner'],

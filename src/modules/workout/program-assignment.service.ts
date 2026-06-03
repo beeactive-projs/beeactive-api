@@ -442,9 +442,9 @@ export class ProgramAssignmentService {
   }
 
   private computeEndDate(program: Program, startDate: string): string | null {
-    if (!program.durationWeeks) return null;
-    // End on the last day of the final week.
-    return this.addDays(startDate, program.durationWeeks * 7 - 1);
+    if (!program.durationDays) return null;
+    // End on the final day of the program.
+    return this.addDays(startDate, program.durationDays - 1);
   }
 
   private addDays(isoDate: string, days: number): string {

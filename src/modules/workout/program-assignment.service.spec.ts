@@ -98,7 +98,7 @@ describe('ProgramAssignmentService (smoke — not exhaustive)', () => {
     id: 'prog-1',
     ownerId: me,
     name: 'Tiny program',
-    durationWeeks: 2,
+    durationDays: 14,
     deletedAt: null,
     workouts: [
       {
@@ -282,7 +282,7 @@ describe('ProgramAssignmentService (smoke — not exhaustive)', () => {
         id: 'p',
         ownerId: me,
         name: 'P',
-        durationWeeks: null,
+        durationDays: null,
         deletedAt: null,
         workouts: [
           {

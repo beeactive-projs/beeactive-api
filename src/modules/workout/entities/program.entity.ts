@@ -60,8 +60,12 @@ export class Program extends Model {
   })
   declare status: ProgramStatus;
 
-  @Column({ type: DataType.SMALLINT, allowNull: true })
-  declare durationWeeks: number | null;
+  /**
+   * Program length in days. Author UI defaults to "Weeks" with a unit
+   * toggle (locked V1 decision, mirrors Trainerize). Null = open-ended.
+   */
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare durationDays: number | null;
 
   /** Free-text UX hint only (e.g. "linear", "block periodization"). */
   @Column({ type: DataType.STRING(50), allowNull: true })

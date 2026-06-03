@@ -56,12 +56,17 @@ export class CreateProgramDto {
   @IsEnum(ProgramStatus)
   status?: ProgramStatus;
 
-  @ApiPropertyOptional({ example: 8, minimum: 1, maximum: 104 })
+  /**
+   * Program length in days. Coaches typically author in weeks (× 7) but
+   * day-counted shapes ("21-day starter") are first-class. Null/omit =
+   * open-ended. Capped at 104 weeks (728 days) to match the migration.
+   */
+  @ApiPropertyOptional({ example: 56, minimum: 1, maximum: 728 })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(104)
-  durationWeeks?: number;
+  @Max(728)
+  durationDays?: number;
 
   @ApiPropertyOptional({
     example: 'linear',
