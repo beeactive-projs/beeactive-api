@@ -99,6 +99,19 @@ export class ProgramAssignmentController {
     return this.assignmentService.listForClient(req.user.id, query);
   }
 
+  /**
+   * Client manually skips an assigned workout. Locked V1 decision:
+   * skip is both auto-derived (passed date, no log) and manual.
+   */
+  @Post('my/assigned-workouts/:id/skip')
+  @Roles('USER')
+  async skipAsClient(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.assignmentService.skipAssignedWorkoutAsClient(id, req.user.id);
+  }
+
   // ── Shared (either party) ────────────────────────────────────────
 
   @Get('program-assignments/:id')

@@ -36,7 +36,10 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
     findAndCountAll: jest.fn(),
     create: jest.fn(),
   };
-  const loggedExerciseModel = { create: jest.fn() };
+  const loggedExerciseModel = {
+    create: jest.fn(),
+    findAll: jest.fn().mockResolvedValue([]),
+  };
   const loggedSetModel = { findByPk: jest.fn(), bulkCreate: jest.fn() };
   const assignedWorkoutModel = {
     findByPk: jest.fn(),

@@ -303,9 +303,146 @@ export class WorkoutLogService {
       if (log.programAssignmentId) {
         await this.recomputeAssignmentProgress(log.programAssignmentId, tx);
       }
+
+      // PR detection — Epley-estimate a 1RM for every loaded set
+      // logged in this session and write a new one_rep_max row when it
+      // tops the user's prior best for that exercise. The completed-at
+      // timestamp on the row is the workout's completedAt so a GET on
+      // the log can find the new PRs by time-window.
+      await this._writePrsFromLog(log.id, userId, completedAt, tx);
     });
 
     return log;
+  }
+
+  /**
+   * Walk every loaded set in `workoutLogId`, Epley-estimate its 1RM,
+   * compare against the user's best for that exercise, and insert a
+   * new one_rep_max row when it's a record. Same tx as `complete()`
+   * so a rollback unwinds the PRs too.
+   */
+  private async _writePrsFromLog(
+    workoutLogId: string,
+    userId: string,
+    recordedAt: Date,
+    tx: Transaction,
+  ): Promise<void> {
+    const exercises = await this.loggedExerciseModel.findAll({
+      where: { workoutLogId },
+      include: [{ model: LoggedSet, as: 'sets' }],
+      transaction: tx,
+    });
+
+    // Best estimated 1RM per exercise from this session.
+    const sessionBest = new Map<string, number>();
+    for (const ex of exercises) {
+      if (!ex.exerciseId) continue;
+      let best = 0;
+      for (const s of ex.sets ?? []) {
+        if (!s.isCompleted) continue;
+        const est = this.estimateOneRepMaxEpley(s.reps, s.weightKg);
+        if (est != null && est > best) best = est;
+      }
+      if (best > 0) sessionBest.set(ex.exerciseId, best);
+    }
+    if (sessionBest.size === 0) return;
+
+    // Look up prior bests in a single query.
+    const priorRows = await this.oneRepMaxModel.findAll({
+      where: {
+        userId,
+        exerciseId: { [Op.in]: Array.from(sessionBest.keys()) },
+      },
+      attributes: ['exerciseId', 'weightKg'],
+      transaction: tx,
+    });
+    const priorBest = new Map<string, number>();
+    for (const r of priorRows) {
+      const cur = priorBest.get(r.exerciseId) ?? 0;
+      if (r.weightKg > cur) priorBest.set(r.exerciseId, r.weightKg);
+    }
+
+    for (const [exerciseId, estimated] of sessionBest) {
+      const prior = priorBest.get(exerciseId) ?? 0;
+      if (estimated <= prior) continue;
+      await this.oneRepMaxModel.create(
+        {
+          userId,
+          exerciseId,
+          weightKg: estimated,
+          source: OneRepMaxSource.EstimatedEpley,
+          recordedAt,
+          notes: null,
+        },
+        { transaction: tx },
+      );
+    }
+  }
+
+  /**
+   * Find the one_rep_max rows that were written during this log's
+   * session (between startedAt and completedAt, inclusive) so the FE
+   * can render them on the workout-complete screen. Returns an empty
+   * array when the log isn't completed yet or hit no PRs.
+   */
+  private async _findSessionPrs(log: WorkoutLog): Promise<
+    {
+      id: string;
+      exerciseId: string;
+      exerciseName: string;
+      weightKg: number;
+      deltaKg: number;
+    }[]
+  > {
+    if (log.status !== WorkoutLogStatus.Completed || !log.completedAt) {
+      return [];
+    }
+    const rows = await this.oneRepMaxModel.findAll({
+      where: {
+        userId: log.userId,
+        source: OneRepMaxSource.EstimatedEpley,
+        recordedAt: {
+          [Op.gte]: log.startedAt,
+          [Op.lte]: log.completedAt,
+        },
+      },
+      include: [
+        {
+          model: Exercise,
+          as: 'exercise',
+          attributes: ['id', 'name'],
+        },
+      ],
+    });
+
+    // For the delta, fetch each exercise's previous best (before this
+    // PR was set). Cheap query — most workouts hit ≤3 PRs.
+    return Promise.all(
+      rows.map(async (pr) => {
+        const prior = await this.oneRepMaxModel.findOne({
+          where: {
+            userId: log.userId,
+            exerciseId: pr.exerciseId,
+            recordedAt: { [Op.lt]: pr.recordedAt },
+          },
+          order: [['weightKg', 'DESC']],
+          attributes: ['weightKg'],
+        });
+        const deltaKg = prior
+          ? Math.round((pr.weightKg - prior.weightKg) * 100) / 100
+          : pr.weightKg;
+        const exerciseName =
+          (pr as unknown as { exercise?: { name?: string } }).exercise?.name ??
+          'Exercise';
+        return {
+          id: pr.id,
+          exerciseId: pr.exerciseId,
+          exerciseName,
+          weightKg: pr.weightKg,
+          deltaKg,
+        };
+      }),
+    );
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -404,7 +541,65 @@ export class WorkoutLogService {
       limit,
       distinct: true,
     });
-    return buildPaginatedResponse(rows, count, page, limit);
+
+    // Tag each row with the PR count for the session window. The
+    // history view shows a "PR" trophy chip when this is > 0.
+    // Sequelize instances drop arbitrary attached props on JSON
+    // serialization, so we project to plain objects first.
+    const prCounts =
+      rows.length > 0
+        ? await this._countSessionPrs(rows)
+        : new Map<string, number>();
+    const plainRows = rows.map((r) => {
+      const plain = r.get({ plain: true }) as WorkoutLog & { prCount?: number };
+      const n = prCounts.get(r.id) ?? 0;
+      if (n > 0) plain.prCount = n;
+      return plain;
+    });
+    return buildPaginatedResponse(plainRows, count, page, limit);
+  }
+
+  /**
+   * Counts one_rep_max rows recorded within each log's session window
+   * in a single query. Returns logId → count.
+   */
+  private async _countSessionPrs(
+    logs: WorkoutLog[],
+  ): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    const completedLogs = logs.filter(
+      (l) => l.status === WorkoutLogStatus.Completed && l.completedAt,
+    );
+    if (completedLogs.length === 0) return map;
+
+    // Build one large query that scans the time windows for this user.
+    // Tiny dataset per page (≤ 30) so a per-log COUNT is fine.
+    const userId = logs[0].userId;
+    const candidateRows = await this.oneRepMaxModel.findAll({
+      where: {
+        userId,
+        source: OneRepMaxSource.EstimatedEpley,
+        recordedAt: {
+          [Op.gte]: new Date(
+            Math.min(...completedLogs.map((l) => l.startedAt.getTime())),
+          ),
+          [Op.lte]: new Date(
+            Math.max(...completedLogs.map((l) => l.completedAt!.getTime())),
+          ),
+        },
+      },
+      attributes: ['recordedAt'],
+    });
+    for (const log of completedLogs) {
+      const start = log.startedAt.getTime();
+      const end = log.completedAt!.getTime();
+      const n = candidateRows.filter((r) => {
+        const t = r.recordedAt.getTime();
+        return t >= start && t <= end;
+      }).length;
+      if (n > 0) map.set(log.id, n);
+    }
+    return map;
   }
 
   async findById(id: string, userId: string): Promise<WorkoutLog> {
@@ -455,7 +650,16 @@ export class WorkoutLogService {
     if (!log || log.userId !== userId) {
       throw new NotFoundException('Workout log not found.');
     }
-    return log;
+    // Attach session PRs as a virtual property so the FE can render
+    // the workout-complete trophy tile without a second hop. Sequelize
+    // strips arbitrary props on JSON serialization, so we project to
+    // a plain object first.
+    const prs = await this._findSessionPrs(log);
+    const plain = log.get({ plain: true }) as WorkoutLog & {
+      personalRecords?: typeof prs;
+    };
+    if (prs.length > 0) plain.personalRecords = prs;
+    return plain;
   }
 
   // ────────────────────────────────────────────────────────────────────

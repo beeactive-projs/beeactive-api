@@ -8,7 +8,7 @@ import {
 import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { Transaction } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
 
 import {
@@ -30,7 +30,10 @@ import { PrescribedSet } from './entities/prescribed-set.entity';
 import { Program } from './entities/program.entity';
 import { ProgramAssignment } from './entities/program-assignment.entity';
 import { ProgramWorkout } from './entities/program-workout.entity';
-import { ProgramAssignmentStatus } from './entities/workout.enums';
+import {
+  ProgramAssignmentStatus,
+  WorkoutLogStatus,
+} from './entities/workout.enums';
 import { AssignProgramDto } from './dto/assign-program.dto';
 import { ListAssignmentsQueryDto } from './dto/list-assignments.query.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
@@ -340,6 +343,64 @@ export class ProgramAssignmentService {
   async softDelete(id: string, instructorId: string): Promise<void> {
     const assignment = await this._loadOwnedByInstructor(id, instructorId);
     await assignment.destroy();
+  }
+
+  /**
+   * Client manually marks an assigned workout as skipped. Locked V1
+   * decision: clients can skip ahead — no reason capture in V1. This
+   * mirrors what the auto-skip cron would do once it lands.
+   *
+   * 404s on cross-tenant access (hides existence). Won't reopen a
+   * COMPLETED workout (would lie about the client's history).
+   */
+  async skipAssignedWorkoutAsClient(
+    assignedWorkoutId: string,
+    clientId: string,
+  ): Promise<AssignedWorkout> {
+    const aw = await this.assignedWorkoutModel.findByPk(assignedWorkoutId, {
+      include: [
+        {
+          model: this.assignmentModel,
+          as: 'assignment',
+          attributes: ['id', 'clientId'],
+        },
+      ],
+    });
+    if (!aw || !aw.assignment || aw.assignment.clientId !== clientId) {
+      throw new NotFoundException('Workout not found.');
+    }
+    if (aw.status === WorkoutLogStatus.Completed) {
+      throw new BadRequestException(
+        "This workout is already complete and can't be skipped.",
+      );
+    }
+    await aw.update({ status: WorkoutLogStatus.Skipped });
+    // Bump completion% so the plan progress reflects the skip. SKIPPED
+    // counts toward "this workout is done with" the same way COMPLETED
+    // does — the client moves past it either way.
+    await this._recomputeProgressForSkip(aw.programAssignmentId);
+    return aw;
+  }
+
+  private async _recomputeProgressForSkip(assignmentId: string): Promise<void> {
+    const [total, done] = await Promise.all([
+      this.assignedWorkoutModel.count({
+        where: { programAssignmentId: assignmentId },
+      }),
+      this.assignedWorkoutModel.count({
+        where: {
+          programAssignmentId: assignmentId,
+          status: {
+            [Op.in]: [WorkoutLogStatus.Completed, WorkoutLogStatus.Skipped],
+          },
+        },
+      }),
+    ]);
+    const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+    await this.assignmentModel.update(
+      { completionPercent: percent },
+      { where: { id: assignmentId } },
+    );
   }
 
   // ────────────────────────────────────────────────────────────────────
