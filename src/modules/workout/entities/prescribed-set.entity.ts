@@ -74,6 +74,11 @@ export class PrescribedSet extends Model {
 
   /** 0–100. Resolved to weight at workout-start using one_rep_max. */
   @Column({
+    // Sequelize's underscored() rule joins "percent1rm" without a
+    // separator, but the migration column is `target_weight_percent_1rm`
+    // (underscore before the number). Pin the field name explicitly so
+    // the INSERT/SELECT hits the right column.
+    field: 'target_weight_percent_1rm',
     type: DataType.DECIMAL(5, 2),
     allowNull: true,
     get(this: PrescribedSet): number | null {

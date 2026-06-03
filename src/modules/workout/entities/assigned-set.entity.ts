@@ -75,6 +75,8 @@ export class AssignedSet extends Model {
   declare targetWeightKg: number | null;
 
   @Column({
+    // See PrescribedSet.targetWeightPercent1rm for why we pin `field`.
+    field: 'target_weight_percent_1rm',
     type: DataType.DECIMAL(5, 2),
     allowNull: true,
     get(this: AssignedSet): number | null {
