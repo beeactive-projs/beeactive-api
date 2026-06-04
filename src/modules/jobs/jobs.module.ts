@@ -1,9 +1,12 @@
 import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { NotificationModule } from '../notification/notification.module';
+import { SessionModule } from '../session/session.module';
 import { JobsService } from './jobs.service';
 import { QUEUE_DEFAULTS, QueueName } from './job-registry';
 import { EmailSendWorker } from './workers/notifications/email-send.worker';
+import { SessionsWorker } from './workers/sessions/sessions.worker';
+import { SessionsScheduler } from './schedulers/sessions.scheduler';
 
 /**
  * JobsModule — the producer-facing API + workers.
@@ -42,15 +45,26 @@ import { EmailSendWorker } from './workers/notifications/email-send.worker';
       defaultJobOptions:
         QUEUE_DEFAULTS[QueueName.Notifications].defaultJobOptions,
     }),
+    BullModule.registerQueue({
+      name: QueueName.Sessions,
+      defaultJobOptions: QUEUE_DEFAULTS[QueueName.Sessions].defaultJobOptions,
+    }),
     // We need the notification receipt service inside EmailSendWorker
     // (to record per-channel outcomes after delivery). NotificationModule
     // is @Global so the providers are available, but importing it
     // explicitly makes the dependency clear.
     NotificationModule,
+    // SessionModule exports the services the SessionsWorker delegates to
+    // (reminder dispatch, lifecycle transitions, recurring generation,
+    // stale-pending cleanup). One-way import: JobsModule is @Global, so
+    // SessionModule never imports it back — no circular dependency.
+    SessionModule,
   ],
   providers: [
     JobsService,
     EmailSendWorker,
+    SessionsWorker,
+    SessionsScheduler,
     // EmailService comes in via the @Global EmailModule registered
     // in AppModule — no need to declare it locally.
   ],

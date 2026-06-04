@@ -15,6 +15,7 @@ import { SessionBookingService } from './services/session-booking.service';
 import { SessionWaitlistService } from './services/session-waitlist.service';
 import { SessionConflictService } from './services/session-conflict.service';
 import { SessionLifecycleService } from './services/session-lifecycle.service';
+import { SessionReminderDispatchService } from './services/session-reminder-dispatch.service';
 import { SessionDiscoverService } from './services/session-discover.service';
 import { SessionDiscoverController } from './session-discover.controller';
 import { SessionClientService } from './services/session-client.service';
@@ -76,6 +77,7 @@ import { GroupModule } from '../group/group.module';
     SessionWaitlistService,
     SessionConflictService,
     SessionLifecycleService,
+    SessionReminderDispatchService,
     SessionDiscoverService,
     SessionClientService,
   ],
@@ -88,6 +90,7 @@ import { GroupModule } from '../group/group.module';
     SessionWaitlistService,
     SessionConflictService,
     SessionLifecycleService,
+    SessionReminderDispatchService,
     SessionDiscoverService,
     SessionClientService,
   ],

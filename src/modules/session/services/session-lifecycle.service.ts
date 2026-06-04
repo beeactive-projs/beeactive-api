@@ -78,6 +78,50 @@ export class SessionLifecycleService {
     private readonly logger: LoggerService,
   ) {}
 
+  // ─── SYSTEM SWEEP (jobs module) ──────────────────────────────────────
+
+  /**
+   * Advance instance lifecycle by the clock — driven by the
+   * `sessions.status_transition` cron:
+   *   SCHEDULED   → IN_PROGRESS  once `startAt` has passed
+   *   IN_PROGRESS → COMPLETED    once `endAt` has passed
+   *
+   * Start-transition runs first so a long-overdue instance (e.g. the
+   * cron was down for a while) lands on COMPLETED in a single run.
+   * Idempotent via the WHERE guards; paranoid default scope excludes
+   * soft-deleted rows. Silent — auto-transitions never notify
+   * participants (locked decision). Cancelled instances are untouched.
+   */
+  async runStatusTransitions(
+    now: Date,
+  ): Promise<{ started: number; completed: number }> {
+    return this.sequelize.transaction(async (tx) => {
+      const [started] = await this.instanceModel.update(
+        { status: SessionInstanceStatus.InProgress },
+        {
+          where: {
+            status: SessionInstanceStatus.Scheduled,
+            startAt: { [Op.lte]: now },
+          },
+          transaction: tx,
+        },
+      );
+
+      const [completed] = await this.instanceModel.update(
+        { status: SessionInstanceStatus.Completed },
+        {
+          where: {
+            status: SessionInstanceStatus.InProgress,
+            endAt: { [Op.lte]: now },
+          },
+          transaction: tx,
+        },
+      );
+
+      return { started, completed };
+    });
+  }
+
   // ─── CANCEL (scope: this | thisAndFuture | series) ───────────────────
 
   async cancel(

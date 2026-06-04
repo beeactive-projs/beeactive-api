@@ -29,6 +29,8 @@
  */
 export enum QueueName {
   Notifications = 'notifications',
+  Sessions = 'sessions',
+  Workouts = 'workouts',
 }
 
 /**
@@ -64,6 +66,29 @@ export interface JobPayloads {
     /** Button label shown next to the CTA URL. */
     ctaLabel?: string;
   };
+
+  // ── Sessions ────────────────────────────────────────────────────────
+  // System-wide sweeps. No per-call payload — the worker queries the DB
+  // for what's due at run time (resilient: a run catches up everything
+  // outstanding, not just one row). `runKey` is an optional dedup tag
+  // the scheduler stamps from a coarse time bucket so overlapping cron
+  // ticks collapse to one job.
+
+  /** Read due `session_reminder_schedule` rows and fan out reminders. */
+  'sessions.reminder_dispatch': { runKey?: string };
+  /** Flip SCHEDULED→IN_PROGRESS (start passed) and IN_PROGRESS→COMPLETED (end passed). */
+  'sessions.status_transition': { runKey?: string };
+  /** Top up future occurrences for recurring templates to the horizon. */
+  'sessions.generate_recurring': { runKey?: string };
+  /** Decline PENDING_APPROVAL bookings whose session start has passed. */
+  'sessions.cleanup_stale_participants': { runKey?: string };
+
+  // ── Workouts ────────────────────────────────────────────────────────
+
+  /** Skip never-started assigned workouts whose scheduled date is in the past. */
+  'workouts.auto_skip_past_workouts': { runKey?: string };
+  /** Complete assignments whose workouts are all COMPLETED or SKIPPED. */
+  'workouts.auto_complete_assignments': { runKey?: string };
 }
 
 /**
@@ -80,6 +105,12 @@ export type JobPayload<K extends keyof JobPayloads> = JobPayloads[K];
  */
 export const ALL_JOB_NAMES: ReadonlyArray<keyof JobPayloads> = [
   'notifications.email_send',
+  'sessions.reminder_dispatch',
+  'sessions.status_transition',
+  'sessions.generate_recurring',
+  'sessions.cleanup_stale_participants',
+  'workouts.auto_skip_past_workouts',
+  'workouts.auto_complete_assignments',
 ] as const;
 
 /**
@@ -103,6 +134,25 @@ export const QUEUE_DEFAULTS = {
       backoff: { type: 'exponential' as const, delay: 2_000 },
       removeOnComplete: { age: 86_400, count: 1_000 }, // 1 day or 1k jobs
       removeOnFail: { age: 7 * 86_400, count: 5_000 }, // 7 days or 5k jobs
+    },
+  },
+  // Sessions/Workouts jobs are idempotent system sweeps — a failed run
+  // just re-runs on the next cron tick, so we keep the retry budget
+  // small (3 attempts) and never want a stuck job to pin the queue.
+  [QueueName.Sessions]: {
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 5_000 },
+      removeOnComplete: { age: 86_400, count: 500 },
+      removeOnFail: { age: 7 * 86_400, count: 2_000 },
+    },
+  },
+  [QueueName.Workouts]: {
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 5_000 },
+      removeOnComplete: { age: 86_400, count: 500 },
+      removeOnFail: { age: 7 * 86_400, count: 2_000 },
     },
   },
 } as const;

@@ -75,6 +75,12 @@ function assertNotPast(value: Date): void {
 const TITLE_MAX = 255;
 const DESCRIPTION_MAX = 4000;
 
+/**
+ * Rolling horizon: how many future occurrences the recurring-generation
+ * sweep keeps materialised per active template.
+ */
+const RECURRING_MIN_FUTURE = 8;
+
 function slugifyBase(title: string): string {
   const normalized = title.normalize('NFKD').replace(/[̀-ͯ]/g, '');
   const slug = normalized
@@ -449,54 +455,86 @@ export class SessionTemplateService {
       throw new BadRequestException('Template is not recurring');
     }
 
-    // Find the latest existing instance to resume from
-    const latest = await this.instanceModel.findOne({
-      where: { templateId },
-      order: [['occurrenceIndex', 'DESC']],
-      paranoid: false,
-    });
-
-    const nextIndex = latest ? latest.occurrenceIndex + 1 : 0;
-    const afterDate = latest ? latest.startAt : template.firstStartAt;
-
-    // Generate occurrences after the last known one
-    const { dates } = this.recurrenceService.computeOccurrences(
-      template.firstStartAt,
-      template.recurrenceRule,
-      template.timezone,
-      nextIndex + dto.count,
-    );
-
-    const newDates = dates.slice(nextIndex, nextIndex + dto.count);
-
-    if (newDates.length === 0) {
-      return { generatedInstances: [], warnings: [] };
-    }
-
     const sequelize = this.templateModel.sequelize!;
     const tx = await sequelize.transaction();
 
     try {
-      const generatedInstances: SessionInstance[] = [];
-
-      for (let i = 0; i < newDates.length; i++) {
-        const d = newDates[i];
-        if (d <= afterDate && latest) continue; // skip any overlap
-        const instance = await this.createInstance(
-          template,
-          nextIndex + i,
-          d,
-          tx,
-        );
-        generatedInstances.push(instance);
-      }
-
+      const generatedInstances = await this._generateNext(
+        template,
+        dto.count,
+        tx,
+      );
       await tx.commit();
       return { generatedInstances, warnings: [] };
     } catch (err) {
       await tx.rollback();
       throw err;
     }
+  }
+
+  /**
+   * System sweep (jobs module, `sessions.generate_recurring`): keep
+   * every active recurring template topped up to a rolling horizon of
+   * future occurrences. Without this, recurring sessions stop being
+   * bookable once their initially-materialised batch is exhausted.
+   *
+   * Idempotent: `_generateNext` resumes from the latest existing
+   * `occurrenceIndex`, so a re-run never duplicates. Finite recurrences
+   * (endDate / endAfterOccurrences) naturally stop producing dates.
+   * Per-template tx; one bad template is logged and skipped, never
+   * aborting the whole sweep.
+   */
+  async generateDueRecurringForAll(now: Date): Promise<{
+    templatesScanned: number;
+    templatesToppedUp: number;
+    created: number;
+  }> {
+    const templates = await this.templateModel.findAll({
+      where: {
+        isRecurring: true,
+        status: SessionTemplateStatus.Active,
+      },
+    });
+
+    let created = 0;
+    let toppedUp = 0;
+
+    for (const template of templates) {
+      if (!template.recurrenceRule) continue;
+
+      const futureCount = await this.instanceModel.count({
+        where: {
+          templateId: template.id,
+          startAt: { [Op.gt]: now },
+          status: { [Op.ne]: SessionInstanceStatus.Cancelled },
+        },
+      });
+      if (futureCount >= RECURRING_MIN_FUTURE) continue;
+
+      const need = RECURRING_MIN_FUTURE - futureCount;
+      const tx = await this.templateModel.sequelize!.transaction();
+      try {
+        const newInstances = await this._generateNext(template, need, tx);
+        await tx.commit();
+        if (newInstances.length > 0) {
+          created += newInstances.length;
+          toppedUp += 1;
+        }
+      } catch (err) {
+        await tx.rollback();
+        this.logger.error?.(
+          `Recurring top-up failed for template ${template.id}: ${String(err)}`,
+          undefined,
+          'SessionTemplateService',
+        );
+      }
+    }
+
+    return {
+      templatesScanned: templates.length,
+      templatesToppedUp: toppedUp,
+      created,
+    };
   }
 
   // -----------------------------------------------------------------------
@@ -522,6 +560,49 @@ export class SessionTemplateService {
 
     // Fallback: random 6-char suffix
     return `${base}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  /**
+   * Generate up to `count` occurrences *after* the latest existing one
+   * for a recurring template, inside the caller's transaction. Shared
+   * by `regenerate` (instructor-triggered) and `generateDueRecurringForAll`
+   * (system sweep). Resumes from the latest `occurrenceIndex` so it's
+   * idempotent — re-running never duplicates. Caller must have verified
+   * `template.recurrenceRule` is present.
+   */
+  private async _generateNext(
+    template: SessionTemplate,
+    count: number,
+    tx: import('sequelize').Transaction,
+  ): Promise<SessionInstance[]> {
+    if (count <= 0 || !template.recurrenceRule) return [];
+
+    const latest = await this.instanceModel.findOne({
+      where: { templateId: template.id },
+      order: [['occurrenceIndex', 'DESC']],
+      paranoid: false,
+      transaction: tx,
+    });
+
+    const nextIndex = latest ? latest.occurrenceIndex + 1 : 0;
+    const afterDate = latest ? latest.startAt : template.firstStartAt;
+
+    const { dates } = this.recurrenceService.computeOccurrences(
+      template.firstStartAt,
+      template.recurrenceRule,
+      template.timezone,
+      nextIndex + count,
+    );
+
+    const newDates = dates.slice(nextIndex, nextIndex + count);
+
+    const generated: SessionInstance[] = [];
+    for (let i = 0; i < newDates.length; i++) {
+      const d = newDates[i];
+      if (latest && d <= afterDate) continue; // skip any overlap
+      generated.push(await this.createInstance(template, nextIndex + i, d, tx));
+    }
+    return generated;
   }
 
   private async createInstance(
