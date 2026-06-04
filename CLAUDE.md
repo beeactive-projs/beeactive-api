@@ -9,7 +9,7 @@ Fitness platform REST API built with NestJS. Manages instructors, clients, group
 - **Framework**: NestJS 11 (TypeScript, ES2023)
 - **ORM**: Sequelize 6 (sequelize-typescript) + PostgreSQL (Neon, driver: `pg`)
 - **Auth**: Passport JWT (@nestjs/jwt 11), bcrypt, Google/Facebook OAuth
-- **Queue**: Bull + @nestjs/bull (imported, **no processors active yet**)
+- **Queue**: BullMQ + @nestjs/bullmq + @nestjs/schedule (3 queues live: notifications, sessions, workouts — see "Jobs module" under Known Issues)
 - **Email**: Resend
 - **Images**: Cloudinary
 - **Payments**: Stripe Connect Express (`stripe` 22.x)
@@ -157,7 +157,7 @@ Rewritten by migration 046 from a legacy single-table design into a **template +
 - **Sanitization**: `title` and `description` go through `stripHtml` (common/utils/text.utils.ts) before persist — drops `<script>`, collapses whitespace. Title rejected if empty after sanitization.
 - **Future-date guard**: `firstStartAt` enforced by `@IsFutureOrCloseToNow({skewMinutes:5})` validator + service-level recheck.
 - **Notifications**: 7 types declared in `notification-types.ts` with conservative defaults (reminders→push+email, cancel→email+push, participant churn→in-app only). Builders live in `src/modules/session/notifications.ts` — see `SESSION-FLOWS.md` for usage.
-- **Reminder schedule rows** are written into `session_reminder_schedule` on booking; dispatch worker is pending the jobs module (`project_jobs_module_pending.md`).
+- **Reminder schedule rows** are written into `session_reminder_schedule` on booking and dispatched by the `sessions.reminder_dispatch` cron (sweep model; idempotent via `sentAt`).
 - See `src/modules/session/SESSION-FLOWS.md` for the per-flow walkthrough.
 
 ### Venue Module
@@ -189,7 +189,11 @@ Full schema in `src/config/env.validation.ts` (Joi, `abortEarly: false`).
 
 ## Known Issues & Technical Debt
 
-- **Jobs module missing** — Bull and ScheduleModule are imported but no processors/cron exist. Blocks: session reminders, auto status transitions, recurring session generation, expiry cleanup, orphaned webhook reconciliation, invoice due-soon reminders, dunning, earnings summaries. See memory `project_jobs_module_pending.md`.
+- **Jobs module** — live (BullMQ via `@nestjs/bullmq` + `@nestjs/schedule`). Three queues run in-process: `notifications` (email_send), `sessions`, `workouts`.
+  - **Pattern**: queue catalog + typed payloads in `src/modules/jobs/job-registry.ts`; producers call `JobsService.enqueue(name, payload, {jobId})`. Single-job queues extend `BaseWorker`; multi-job queues use one `@Processor`-per-queue worker extending `MultiJobWorker` (routes by `job.name`). `@Cron` schedulers under `schedulers/` **only enqueue** — never `setTimeout`, never DB work. Skip-on-no-Redis preserved: no `REDIS_HOST` → `enqueue` no-ops + logs, app still boots.
+  - **Live crons**: `sessions.reminder_dispatch` (5m, sweep due `session_reminder_schedule`), `sessions.status_transition` (5m, SCHEDULED→IN_PROGRESS→COMPLETED), `sessions.generate_recurring` (daily, top up recurring templates to an 8-occurrence horizon), `sessions.cleanup_stale_participants` (hourly, decline past-start PENDING_APPROVAL), `workouts.auto_skip_past_workouts` (daily 02:00), `workouts.auto_complete_assignments` (daily 02:30).
+  - **Still pending** (later sprints, see memory `project_jobs_module_pending.md`): payments async (invoice/due-soon reminders, dunning, earnings summaries), orphaned-webhook reconciliation, webhook async refactor, cleanup queue for expired tokens/invitations, push/SMS channels. The `// TODO [jobs-module]:` markers in those areas are intentional.
+- **Bull Board** — admin UI at `/admin/queues`, HTTP basic auth via `BULL_BOARD_USER` + `BULL_BOARD_PASSWORD` env vars (both required to mount; missing either → route 404s, the "default off" posture). Queues auto-register from `QueueName`, so new queues appear without code changes. Never expose it unauthenticated in prod. Redis prod config: `REDIS_HOST` (required in production), `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS` ("true" for managed/Redis Cloud).
 - **Notification system** — Phase 1 stub only (logs). See `NOTIFICATION_SYSTEM_PLAN.md`. Research notes for the upcoming jobs/workers system live under `docs/research/jobs-system/`.
 - **Session overflow waitlist** — still not implemented. Full sessions return "full" with no queue. (Note: the `waitlist` module that exists is for landing-page email capture, unrelated.)
 - **APPROVAL join policy** — exists in enum, not implemented (dead code path).
@@ -199,7 +203,7 @@ Full schema in `src/config/env.validation.ts` (Joi, `abortEarly: false`).
 - **No batch invite** endpoint.
 - **Sessions ↔ venues** — `session.venue_id` exists at the DB level but the FE session create/edit form doesn't surface a venue picker yet.
 - **Incomplete modules**: `role` (service-only, no controller, empty `constants/` dir), `notification` (Phase 1 stub for delivery; in-app + email channels live, push/SMS not yet).
-- **Test coverage**: 27 suites / ~284 tests (auth, user, post, group, client, invitation, payment connect/invoice/stripe/subscription/webhook-handler, notification + receipt + preference + device-token + outbox + debug controller, jobs.service, email-send.worker, crypto, html-utils). Notably still missing: session, blog, profile, venue, analytics, feedback, waitlist, search.
+- **Test coverage**: 66 suites / 781 tests. Includes jobs (MultiJobWorker, sessions/workouts workers + schedulers) and session services (reminder-dispatch, lifecycle transitions, booking cleanup, recurring generation) and workout sweeps. Notably still thin: blog, profile, venue, analytics, feedback, waitlist, search.
 
 ## Coding Conventions
 - File names: **kebab-case** (`create-user.dto.ts`)
