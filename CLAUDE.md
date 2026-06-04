@@ -65,7 +65,7 @@ src/
     ├── blog/         # Blog posts, Cloudinary image upload, sitemap
     ├── analytics/    # Instructor summary, user activity, platform stats
     ├── notification/ # Phase 1 stub (@Global, logs only) — see NOTIFICATION_SYSTEM_PLAN.md
-    ├── payment/      # Stripe Connect (8 entities, 10 services, 3 controllers, multi-country)
+    ├── payment/      # Stripe Connect (9 entities, 13 services, 3 controllers, multi-country)
     ├── venue/        # Where instructors deliver sessions (gym/studio/park/online/client-home/other)
     ├── feedback/     # Public feedback (no userId from body — JWT-derived; submitter-supplied email)
     ├── waitlist/     # Landing-page email capture (NOT session overflow waitlist — that still doesn't exist)
@@ -124,9 +124,9 @@ Roles: `SUPER_ADMIN`, `ADMIN`, `SUPPORT`, `INSTRUCTOR`, `WRITER`, `USER`
 - **Migration 027** dropped `user_profile` (was unused), added `user.country_code` + `user.city`, dropped `instructor_profile.location_*` (location now lives on `user`), and created the `venue` table
 
 ### Payment Module Shape
-- **8 entities**: `payment`, `invoice`, `product`, `subscription`, `stripe_account`, `stripe_customer`, `payment_consent`, `webhook_event`
+- **9 entities**: `payment`, `invoice`, `product`, `subscription`, `stripe_account`, `stripe_customer`, `payment_consent`, `webhook_event`, `dispute`
 - **3 controllers**: `PaymentController` (INSTRUCTOR), `PaymentClientController` (USER), `PaymentWebhookController` (@Public, raw body)
-- **10 services**: `StripeService`, `ConnectService`, `CustomerService`, `ProductService`, `InvoiceService`, `CheckoutService`, `SubscriptionService`, `RefundService`, `EarningsService`, `WebhookHandlerService`
+- **13 services**: `StripeService`, `ConnectService`, `CustomerService`, `ProductService`, `InvoiceService`, `CheckoutService`, `SubscriptionService`, `RefundService`, `EarningsService`, `WebhookHandlerService`, `PaymentRemindersService`, `BalanceCacheService`, `DisputeService`
 - **Multi-country Connect**: `ConnectService.getOrCreateAccount` reads country from `user.countryCode` and validates against the Stripe Connect whitelist (`common/constants/countries.ts`). 400 if missing, 400 if not supported. Once a `stripe_account` row exists `user.countryCode` is locked — `UserService.updateUser` rejects changes with a clear message (Stripe doesn't allow country changes on a Connect account).
 - **Currency resolution**: `StripeService.resolveCurrency({explicit, accountCurrency, countryCode})` — explicit → `stripe_account.default_currency` → country→currency map → `'usd'` fallback. Used by `ProductService`, `InvoiceService`, `EarningsService` so each instructor's products/invoices default to their settlement currency.
 - Platform fee: 0 bps default, configurable per-instructor via `stripe_account.platform_fee_bps`
@@ -189,10 +189,12 @@ Full schema in `src/config/env.validation.ts` (Joi, `abortEarly: false`).
 
 ## Known Issues & Technical Debt
 
-- **Jobs module** — live (BullMQ via `@nestjs/bullmq` + `@nestjs/schedule`). Three queues run in-process: `notifications` (email_send), `sessions`, `workouts`.
-  - **Pattern**: queue catalog + typed payloads in `src/modules/jobs/job-registry.ts`; producers call `JobsService.enqueue(name, payload, {jobId})`. Single-job queues extend `BaseWorker`; multi-job queues use one `@Processor`-per-queue worker extending `MultiJobWorker` (routes by `job.name`). `@Cron` schedulers under `schedulers/` **only enqueue** — never `setTimeout`, never DB work. Skip-on-no-Redis preserved: no `REDIS_HOST` → `enqueue` no-ops + logs, app still boots.
-  - **Live crons**: `sessions.reminder_dispatch` (5m, sweep due `session_reminder_schedule`), `sessions.status_transition` (5m, SCHEDULED→IN_PROGRESS→COMPLETED), `sessions.generate_recurring` (daily, top up recurring templates to an 8-occurrence horizon), `sessions.cleanup_stale_participants` (hourly, decline past-start PENDING_APPROVAL), `workouts.auto_skip_past_workouts` (daily 02:00), `workouts.auto_complete_assignments` (daily 02:30).
-  - **Still pending** (later sprints, see memory `project_jobs_module_pending.md`): payments async (invoice/due-soon reminders, dunning, earnings summaries), orphaned-webhook reconciliation, webhook async refactor, cleanup queue for expired tokens/invitations, push/SMS channels. The `// TODO [jobs-module]:` markers in those areas are intentional.
+- **Jobs module** — live (BullMQ via `@nestjs/bullmq` + `@nestjs/schedule`). Five queues run in-process: `notifications` (email_send), `sessions`, `workouts`, `payments`, `maintenance`.
+  - **Pattern**: queue catalog + typed payloads in `src/modules/jobs/job-registry.ts`; producers call `JobsService.enqueue(name, payload, {jobId})`. Single-job queues extend `BaseWorker`; multi-job queues use one `@Processor`-per-queue worker extending `MultiJobWorker` (routes by `job.name`). `@Cron` schedulers under `schedulers/` **only enqueue** — never `setTimeout`, never DB work. Logic lives in domain services (workers are thin). **Invariant: every `QueueName` value must have a `registerQueue` in `jobs.module.ts`** (a dangling enum value crashes boot with "could not find BullQueue_x").
+  - **Skip-on-no-Redis** (load-bearing): `JobsModule.register()` reads `REDIS_HOST` at the same point app.module's `forRoot` does; without it, queues still register (inert) but `@Processor` workers are NOT (they'd throw "Worker requires a connection") and `JobsService.enqueue` no-ops + logs. App boots fine; schedulers fire harmlessly.
+  - **Live crons** — sessions: reminder_dispatch (5m), status_transition (5m), generate_recurring (daily), cleanup_stale_participants (hourly). workouts: auto_skip_past_workouts (02:00), auto_complete_assignments (02:30). payments: invoice_due_soon/overdue/dunning (06:00–06:30), card_expiring (07:00), refund_window_closing (07:30), dispute_deadline (08:00), earnings_summary (monthly 1st 08:00), balance_cache_refresh (hourly), reconcile_webhooks (30m). maintenance: cleanup_refresh_tokens/lockouts/invitations/client_requests (04:00–04:30). Reminder idempotency is via the `notification.fingerprint` dedup (remind-once or date-bucketed once-per-day), not DB flags.
+  - **Webhooks are async**: the Stripe webhook controller verifies + inserts the `webhook_event` row, then enqueues `payments.process_webhook` and acks fast (BullMQ owns retries; `reconcile_webhooks` cron sweeps ORPHANED rows). With no Redis it processes inline. See `webhook-handler.service.ts` (`handleIncomingEvent`/`processQueued`/`processEvent`/`reconcileOrphaned`).
+  - **Still pending** (see memory `project_jobs_module_pending.md`): push/SMS notification channels only. The `// TODO [jobs-module]:` markers elsewhere are resolved.
 - **Bull Board** — admin UI at `/admin/queues`, HTTP basic auth via `BULL_BOARD_USER` + `BULL_BOARD_PASSWORD` env vars (both required to mount; missing either → route 404s, the "default off" posture). Queues auto-register from `QueueName`, so new queues appear without code changes. Never expose it unauthenticated in prod. Redis prod config: `REDIS_HOST` (required in production), `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS` ("true" for managed/Redis Cloud).
 - **Notification system** — Phase 1 stub only (logs). See `NOTIFICATION_SYSTEM_PLAN.md`. Research notes for the upcoming jobs/workers system live under `docs/research/jobs-system/`.
 - **Session overflow waitlist** — still not implemented. Full sessions return "full" with no queue. (Note: the `waitlist` module that exists is for landing-page email capture, unrelated.)
@@ -203,7 +205,7 @@ Full schema in `src/config/env.validation.ts` (Joi, `abortEarly: false`).
 - **No batch invite** endpoint.
 - **Sessions ↔ venues** — `session.venue_id` exists at the DB level but the FE session create/edit form doesn't surface a venue picker yet.
 - **Incomplete modules**: `role` (service-only, no controller, empty `constants/` dir), `notification` (Phase 1 stub for delivery; in-app + email channels live, push/SMS not yet).
-- **Test coverage**: 66 suites / 781 tests. Includes jobs (MultiJobWorker, sessions/workouts workers + schedulers) and session services (reminder-dispatch, lifecycle transitions, booking cleanup, recurring generation) and workout sweeps. Notably still thin: blog, profile, venue, analytics, feedback, waitlist, search.
+- **Test coverage**: 74 suites / 836 tests. Includes the full jobs stack (notifications/sessions/workouts/payments/maintenance workers + schedulers), payment reminder/balance/dispute services, and async webhook processing + reconciliation. Notably still thin: blog, profile, venue, analytics, feedback, waitlist, search.
 
 ## Coding Conventions
 - File names: **kebab-case** (`create-user.dto.ts`)
