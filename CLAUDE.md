@@ -9,7 +9,7 @@ Fitness platform REST API built with NestJS. Manages instructors, clients, group
 - **Framework**: NestJS 11 (TypeScript, ES2023)
 - **ORM**: Sequelize 6 (sequelize-typescript) + PostgreSQL (Neon, driver: `pg`)
 - **Auth**: Passport JWT (@nestjs/jwt 11), bcrypt, Google/Facebook OAuth
-- **Queue**: BullMQ + @nestjs/bullmq + @nestjs/schedule (3 queues live: notifications, sessions, workouts — see "Jobs module" under Known Issues)
+- **Queue**: BullMQ + @nestjs/bullmq + @nestjs/schedule (5 queues live: notifications, sessions, workouts, payments, maintenance — see "Jobs module" under Known Issues)
 - **Email**: Resend
 - **Images**: Cloudinary
 - **Payments**: Stripe Connect Express (`stripe` 22.x)
@@ -197,13 +197,13 @@ Full schema in `src/config/env.validation.ts` (Joi, `abortEarly: false`).
   - **Still pending** (see memory `project_jobs_module_pending.md`): push/SMS notification channels only. The `// TODO [jobs-module]:` markers elsewhere are resolved.
 - **Bull Board** — admin UI at `/admin/queues`, HTTP basic auth via `BULL_BOARD_USER` + `BULL_BOARD_PASSWORD` env vars (both required to mount; missing either → route 404s, the "default off" posture). Queues auto-register from `QueueName`, so new queues appear without code changes. Never expose it unauthenticated in prod. Redis prod config: `REDIS_HOST` (required in production), `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS` ("true" for managed/Redis Cloud).
 - **Notification system** — Phase 1 stub only (logs). See `NOTIFICATION_SYSTEM_PLAN.md`. Research notes for the upcoming jobs/workers system live under `docs/research/jobs-system/`.
-- **Session overflow waitlist** — still not implemented. Full sessions return "full" with no queue. (Note: the `waitlist` module that exists is for landing-page email capture, unrelated.)
-- **APPROVAL join policy** — exists in enum, not implemented (dead code path).
+- **Session overflow waitlist** — fully live (BE: `SessionWaitlistService` + `WAITLISTED` participant status + auto-promote on confirmed cancel; FE: "Join waitlist" CTA on session-showcase, status surfaced in my-sessions tabs + booking-confirmed dialog). Toggled per-template via `waitlistEnabled`. (Note: the `waitlist` module is for landing-page email capture — different feature.)
+- **APPROVAL join policy** — fully live (BE + FE). Owners review pending requests on the group members tab; clients see request status on group preview / discover cards.
 - **OAuth account linking** — rejects unverified email/password accounts, but still auto-links OAuth to verified accounts without explicit user consent.
 - **Cascade deletes** — no cascade logic when a user is soft-deleted (orphaned groups, sessions, relationships). Venues do cascade from instructor_profile via FK.
 - **Group invitation acceptance** — requires a registered account (invitations can be sent to any email but recipient must sign up first).
 - **No batch invite** endpoint.
-- **Sessions ↔ venues** — `session.venue_id` exists at the DB level but the FE session create/edit form doesn't surface a venue picker yet.
+- **Sessions ↔ venues** — picker is live in session-form-dialog + quick-create-popover (conditional on `locationKind = IN_PERSON`). Minor polish gap: no inline "Create venue" CTA when the instructor has zero venues yet — they have to leave the dialog and use the Venues page first.
 - **Incomplete modules**: `role` (service-only, no controller, empty `constants/` dir), `notification` (Phase 1 stub for delivery; in-app + email channels live, push/SMS not yet).
 - **Test coverage**: 74 suites / 836 tests. Includes the full jobs stack (notifications/sessions/workouts/payments/maintenance workers + schedulers), payment reminder/balance/dispute services, and async webhook processing + reconciliation. Notably still thin: blog, profile, venue, analytics, feedback, waitlist, search.
 
