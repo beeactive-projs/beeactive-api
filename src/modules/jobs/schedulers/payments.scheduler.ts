@@ -73,4 +73,15 @@ export class PaymentsScheduler {
       { jobId: `payments.balance_cache_refresh:${runKey}` },
     );
   }
+
+  // Safety net for webhooks orphaned by an arrival-before-commit race.
+  @Cron(CronExpression.EVERY_30_MINUTES)
+  async reconcileWebhooks(): Promise<void> {
+    const runKey = bucketKey(30 * 60_000);
+    await this.jobs.enqueue(
+      'payments.reconcile_webhooks',
+      { runKey },
+      { jobId: `payments.reconcile_webhooks:${runKey}` },
+    );
+  }
 }

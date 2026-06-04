@@ -15,9 +15,14 @@ import { ConnectService } from './connect.service';
 import { InvoiceService } from './invoice.service';
 import { SubscriptionService } from './subscription.service';
 import { RefundService } from './refund.service';
+import { DisputeService } from './dispute.service';
 import { OrphanedWebhookError } from './webhook-errors';
 import { NotificationService } from '../../notification/notification.service';
 import { NotificationOutbox } from '../../notification/notification-outbox';
+import { JobsService } from '../../jobs/jobs.service';
+
+/** Orphaned rows older than this are abandoned (FAILED) by reconciliation. */
+const ORPHAN_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
 
 export interface WebhookProcessResult {
   eventId: string;
@@ -79,7 +84,9 @@ export class WebhookHandlerService {
     private readonly invoiceService: InvoiceService,
     private readonly subscriptionService: SubscriptionService,
     private readonly refundService: RefundService,
+    private readonly disputeService: DisputeService,
     private readonly notificationService: NotificationService,
+    private readonly jobs: JobsService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -170,14 +177,83 @@ export class WebhookHandlerService {
       };
     }
 
-    // Handler + audit-row status update share ONE transaction so a
-    // partial-write failure rolls back BOTH and Stripe retries cleanly.
-    // Handlers MUST pass `{ transaction: tx }` to every ORM call —
-    // skipping it commits to the default connection and rollback
-    // becomes a no-op.
+    // ─────────────────────────────────────────────────────────────
+    // 4. Hand off processing to the `payments` queue and ack fast.
     //
-    // Notifications go through the outbox: flushed on commit,
-    // discarded on rollback. See notification-outbox.ts.
+    //    The row is already persisted (idempotency checkpoint), so the
+    //    worker owns retries. When Redis isn't configured, `enqueue`
+    //    returns null — we fall back to processing inline so webhooks
+    //    still work in local dev (and the controller's 200/500 still
+    //    reflects the real outcome, preserving Stripe retries).
+    // ─────────────────────────────────────────────────────────────
+    const enqueued = await this.jobs.enqueue(
+      'payments.process_webhook',
+      {
+        webhookEventId: auditRow.id,
+        event: event as unknown as Record<string, unknown>,
+      },
+      { jobId: `webhook:${event.id}`, attempts: 5 },
+    );
+
+    if (enqueued) {
+      return {
+        eventId: event.id,
+        type: event.type,
+        duplicate: false,
+        status: WebhookEventStatus.PROCESSING,
+      };
+    }
+
+    // Inline fallback (no Redis): process synchronously. Lets the
+    // OrphanedWebhookError → 200 and FAILED → throw(500) semantics flow
+    // through to the controller exactly as before.
+    await this.processEvent(event, auditRow);
+    return {
+      eventId: event.id,
+      type: event.type,
+      duplicate: false,
+      status: auditRow.status,
+    };
+  }
+
+  /**
+   * Process a webhook the worker pulled off the queue. Loads the audit
+   * row, reconstructs nothing (the full event rides in the job payload),
+   * and runs `processEvent`. Idempotent: a row already PROCESSED is a
+   * no-op (covers BullMQ retries + Stripe redelivery races).
+   */
+  async processQueued(
+    webhookEventId: string,
+    event: Stripe.Event,
+  ): Promise<void> {
+    const auditRow = await this.webhookEventModel.findByPk(webhookEventId);
+    if (!auditRow) {
+      this.logger.warn(
+        `process_webhook: audit row ${webhookEventId} not found`,
+        'WebhookHandlerService',
+      );
+      return;
+    }
+    if (auditRow.status === WebhookEventStatus.PROCESSED) return;
+    await this.processEvent(event, auditRow);
+  }
+
+  /**
+   * The unit of work: dispatch inside a transaction, flush the outbox on
+   * commit, and stamp the audit row. Shared by the queue worker, the
+   * inline (no-Redis) fallback, and the reconciliation sweep.
+   *
+   * On `OrphanedWebhookError` the row is stamped ORPHANED and the method
+   * returns (no throw) — the job/worker treats this as success and the
+   * reconciliation sweep revisits. Any other error rethrows so BullMQ
+   * (or the controller, inline) retries.
+   */
+  private async processEvent(
+    event: Stripe.Event,
+    auditRow: WebhookEvent,
+  ): Promise<void> {
+    if (auditRow.status === WebhookEventStatus.PROCESSED) return;
+
     const outbox = new NotificationOutbox(
       this.notificationService,
       this.logger,
@@ -189,26 +265,9 @@ export class WebhookHandlerService {
         auditRow.processedAt = new Date();
         await auditRow.save({ transaction: tx });
       });
-      // Tx committed successfully — flush queued notifications. Errors
-      // here are logged but never thrown (the webhook has already
-      // committed; we don't want a flaky notification to trigger a
-      // Stripe retry of work that's already done).
       await outbox.flush();
-      return {
-        eventId: event.id,
-        type: event.type,
-        duplicate: false,
-        status: WebhookEventStatus.PROCESSED,
-      };
     } catch (err) {
-      // Tx rolled back — drop any queued notifications. Belt-and-
-      // suspenders: the outbox is request-scoped and will GC anyway,
-      // but explicit discard is safer if someone refactors later.
       outbox.discard();
-      // Orphan: webhook references a Stripe entity we have no local
-      // mirror for. Stamp 'orphaned' and return 200 — Stripe should NOT
-      // retry-spam us, the reconciliation worker (jobs sprint) sweeps
-      // these rows once the originating local row appears.
       if (err instanceof OrphanedWebhookError) {
         this.logger.warn(
           `Webhook orphaned: ${event.type} (${event.id}) — ${err.message}`,
@@ -217,29 +276,65 @@ export class WebhookHandlerService {
         auditRow.status = WebhookEventStatus.ORPHANED;
         auditRow.error = err.message;
         await auditRow.save();
-        return {
-          eventId: event.id,
-          type: event.type,
-          duplicate: false,
-          status: WebhookEventStatus.ORPHANED,
-        };
+        return;
       }
-
       const message = err instanceof Error ? err.message : String(err);
-      // Log id + type + error message only — NEVER log event.data.object.
       this.logger.error(
         `Webhook handler failed for ${event.type} (${event.id}): ${message}`,
         err instanceof Error ? err.stack : undefined,
         'WebhookHandlerService',
       );
-      // Write the failure status in a NEW (autocommitted) query so it
-      // persists even though the transaction above rolled back.
       auditRow.status = WebhookEventStatus.FAILED;
       auditRow.error = message;
       await auditRow.save();
-      // Rethrow so controller returns 500 and Stripe retries.
       throw err;
     }
+  }
+
+  /**
+   * Reconciliation sweep (`payments.reconcile_webhooks` cron): revisit
+   * ORPHANED rows. Those still within the window are re-processed (the
+   * originating local row may have since committed); rows older than
+   * `ORPHAN_MAX_AGE_MS` are abandoned as FAILED so they stop being swept.
+   */
+  async reconcileOrphaned(
+    now: Date,
+  ): Promise<{ resolved: number; agedOut: number; stillOrphaned: number }> {
+    const rows = await this.webhookEventModel.findAll({
+      where: { status: WebhookEventStatus.ORPHANED },
+    });
+
+    let resolved = 0;
+    let agedOut = 0;
+    let stillOrphaned = 0;
+    for (const row of rows) {
+      const age = now.getTime() - new Date(row.receivedAt).getTime();
+      if (age > ORPHAN_MAX_AGE_MS) {
+        row.status = WebhookEventStatus.FAILED;
+        row.error = 'Orphaned webhook aged out without a local row appearing.';
+        await row.save();
+        agedOut += 1;
+        continue;
+      }
+      // Reconstruct the minimal event from the stored payload. Orphan-prone
+      // handlers only read `event.data.object`, so this is sufficient.
+      const event = {
+        id: row.stripeEventId,
+        type: row.type,
+        data: { object: row.payload },
+      } as unknown as Stripe.Event;
+      await this.processEvent(event, row);
+      if (row.status === WebhookEventStatus.PROCESSED) resolved += 1;
+      else stillOrphaned += 1;
+    }
+
+    if (rows.length > 0) {
+      this.logger.log(
+        `Webhook reconciliation: resolved=${resolved} agedOut=${agedOut} stillOrphaned=${stillOrphaned}`,
+        'WebhookHandlerService',
+      );
+    }
+    return { resolved, agedOut, stillOrphaned };
   }
 
   /** Route an event to the right handler. */
@@ -305,6 +400,13 @@ export class WebhookHandlerService {
         break;
 
       case 'charge.dispute.created':
+        await this.disputeService.syncFromWebhook(
+          event.data.object,
+          tx,
+          outbox,
+        );
+        break;
+
       case 'payout.paid':
       case 'payout.failed':
         // Logged-only for now; no domain side effects.

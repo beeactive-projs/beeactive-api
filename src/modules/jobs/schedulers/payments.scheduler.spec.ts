@@ -23,6 +23,7 @@ describe('PaymentsScheduler', () => {
     ['disputeDeadline', 'payments.dispute_deadline'],
     ['earningsSummary', 'payments.earnings_summary'],
     ['balanceCacheRefresh', 'payments.balance_cache_refresh'],
+    ['reconcileWebhooks', 'payments.reconcile_webhooks'],
   ])('%s enqueues %s with a deterministic jobId', async (method, jobName) => {
     await (scheduler as unknown as Record<string, () => Promise<void>>)[
       method

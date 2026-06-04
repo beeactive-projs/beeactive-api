@@ -4,6 +4,7 @@ import { UnrecoverableError } from 'bullmq';
 import { PaymentsWorker } from './payments.worker';
 import { PaymentRemindersService } from '../../../payment/services/payment-reminders.service';
 import { BalanceCacheService } from '../../../payment/services/balance-cache.service';
+import { WebhookHandlerService } from '../../../payment/services/webhook-handler.service';
 import { makeSilentLogger } from '../../../../../test/helpers/sequelize-mocks';
 
 const fakeJob = (name: string) =>
@@ -29,6 +30,12 @@ describe('PaymentsWorker', () => {
   const balanceCache = {
     refreshAll: jest.fn().mockResolvedValue({ refreshed: 0, failed: 0 }),
   };
+  const webhooks = {
+    processQueued: jest.fn().mockResolvedValue(undefined),
+    reconcileOrphaned: jest
+      .fn()
+      .mockResolvedValue({ resolved: 0, agedOut: 0, stillOrphaned: 0 }),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -37,6 +44,7 @@ describe('PaymentsWorker', () => {
         PaymentsWorker,
         { provide: PaymentRemindersService, useValue: reminders },
         { provide: BalanceCacheService, useValue: balanceCache },
+        { provide: WebhookHandlerService, useValue: webhooks },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: makeSilentLogger() },
       ],
     }).compile();
@@ -59,6 +67,29 @@ describe('PaymentsWorker', () => {
   it('routes balance_cache_refresh to BalanceCacheService.refreshAll', async () => {
     await worker.process(fakeJob('balance_cache_refresh'));
     expect(balanceCache.refreshAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes process_webhook to WebhookHandlerService.processQueued with the payload', async () => {
+    const job = {
+      data: {
+        webhookEventId: 'we-1',
+        event: { id: 'evt_1', type: 'invoice.paid' },
+      },
+      queueName: 'payments',
+      name: 'process_webhook',
+      id: 'j',
+      attemptsMade: 0,
+    } as unknown as Parameters<PaymentsWorker['process']>[0];
+    await worker.process(job);
+    expect(webhooks.processQueued).toHaveBeenCalledWith(
+      'we-1',
+      expect.objectContaining({ id: 'evt_1' }),
+    );
+  });
+
+  it('routes reconcile_webhooks to WebhookHandlerService.reconcileOrphaned', async () => {
+    await worker.process(fakeJob('reconcile_webhooks'));
+    expect(webhooks.reconcileOrphaned).toHaveBeenCalledTimes(1);
   });
 
   it('unknown job name → UnrecoverableError', async () => {

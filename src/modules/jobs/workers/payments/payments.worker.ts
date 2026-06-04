@@ -2,11 +2,13 @@ import { Inject } from '@nestjs/common';
 import type { LoggerService } from '@nestjs/common';
 import { Processor } from '@nestjs/bullmq';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import type { Stripe } from 'stripe-types';
 import { PaymentRemindersService } from '../../../payment/services/payment-reminders.service';
 import { BalanceCacheService } from '../../../payment/services/balance-cache.service';
+import { WebhookHandlerService } from '../../../payment/services/webhook-handler.service';
 import { JobContext } from '../../common/job-context';
 import { JobHandler, MultiJobWorker } from '../../common/multi-job.worker';
-import { QueueName } from '../../job-registry';
+import { JobPayloads, QueueName } from '../../job-registry';
 
 /**
  * Processor for the `payments` queue. Reminder/cache sweeps (Bucket C);
@@ -21,6 +23,7 @@ export class PaymentsWorker extends MultiJobWorker {
     logger: LoggerService,
     private readonly reminders: PaymentRemindersService,
     private readonly balanceCache: BalanceCacheService,
+    private readonly webhooks: WebhookHandlerService,
   ) {
     super(logger);
   }
@@ -67,6 +70,20 @@ export class PaymentsWorker extends MultiJobWorker {
     balance_cache_refresh: async (_p, ctx) => {
       const r = await this.balanceCache.refreshAll();
       ctx.log.log(`balance-cache refreshed=${r.refreshed} failed=${r.failed}`);
+    },
+    process_webhook: async (p, ctx) => {
+      const payload = p as unknown as JobPayloads['payments.process_webhook'];
+      await this.webhooks.processQueued(
+        payload.webhookEventId,
+        payload.event as unknown as Stripe.Event,
+      );
+      ctx.log.log(`webhook processed event=${payload.webhookEventId}`);
+    },
+    reconcile_webhooks: async (_p, ctx) => {
+      const r = await this.webhooks.reconcileOrphaned(new Date());
+      ctx.log.log(
+        `reconcile resolved=${r.resolved} agedOut=${r.agedOut} stillOrphaned=${r.stillOrphaned}`,
+      );
     },
   };
 

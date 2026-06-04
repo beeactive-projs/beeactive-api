@@ -111,6 +111,16 @@ export interface JobPayloads {
   'payments.dispute_deadline': { runKey?: string };
   /** Refresh the cached Stripe balance on each connected account. */
   'payments.balance_cache_refresh': { runKey?: string };
+  /** Process a verified Stripe webhook event off the request path.
+   *  `event` carries the full verified Stripe.Event so account.* keep
+   *  their top-level `event.account`. */
+  'payments.process_webhook': {
+    webhookEventId: string;
+    event: Record<string, unknown>;
+  };
+  /** Re-process ORPHANED webhook rows whose local entity has since
+   *  appeared; age out the truly stuck ones. */
+  'payments.reconcile_webhooks': { runKey?: string };
 }
 
 /**
@@ -141,6 +151,8 @@ export const ALL_JOB_NAMES: ReadonlyArray<keyof JobPayloads> = [
   'payments.dunning',
   'payments.dispute_deadline',
   'payments.balance_cache_refresh',
+  'payments.process_webhook',
+  'payments.reconcile_webhooks',
 ] as const;
 
 /**
