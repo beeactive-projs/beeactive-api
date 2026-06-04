@@ -28,7 +28,7 @@ export class WorkoutsScheduler {
     await this.jobs.enqueue(
       'workouts.auto_skip_past_workouts',
       { runKey },
-      { jobId: `workouts.auto_skip_past_workouts:${runKey}` },
+      { jobId: `workouts.auto_skip_past_workouts-${runKey}` },
     );
   }
 
@@ -39,7 +39,7 @@ export class WorkoutsScheduler {
     await this.jobs.enqueue(
       'workouts.auto_complete_assignments',
       { runKey },
-      { jobId: `workouts.auto_complete_assignments:${runKey}` },
+      { jobId: `workouts.auto_complete_assignments-${runKey}` },
     );
   }
 }

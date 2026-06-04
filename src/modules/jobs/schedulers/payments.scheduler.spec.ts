@@ -32,7 +32,7 @@ describe('PaymentsScheduler', () => {
       jobName,
       expect.objectContaining({ runKey: expect.any(String) }),
       expect.objectContaining({
-        jobId: expect.stringContaining(`${jobName}:`) as string,
+        jobId: expect.stringContaining(`${jobName}-`) as string,
       }),
     );
   });

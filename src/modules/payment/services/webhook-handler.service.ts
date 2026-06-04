@@ -192,7 +192,7 @@ export class WebhookHandlerService {
         webhookEventId: auditRow.id,
         event: event as unknown as Record<string, unknown>,
       },
-      { jobId: `webhook:${event.id}`, attempts: 5 },
+      { jobId: `webhook-${event.id}`, attempts: 5 },
     );
 
     if (enqueued) {

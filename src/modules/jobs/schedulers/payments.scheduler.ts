@@ -21,7 +21,7 @@ export class PaymentsScheduler {
 
   private daily(name: Parameters<JobsService['enqueue']>[0]): Promise<unknown> {
     const runKey = bucketKey(24 * 60 * 60_000);
-    return this.jobs.enqueue(name, { runKey }, { jobId: `${name}:${runKey}` });
+    return this.jobs.enqueue(name, { runKey }, { jobId: `${name}-${runKey}` });
   }
 
   @Cron('0 0 6 * * *') // 06:00
@@ -60,7 +60,7 @@ export class PaymentsScheduler {
     await this.jobs.enqueue(
       'payments.earnings_summary',
       { runKey },
-      { jobId: `payments.earnings_summary:${runKey}` },
+      { jobId: `payments.earnings_summary-${runKey}` },
     );
   }
 
@@ -70,7 +70,7 @@ export class PaymentsScheduler {
     await this.jobs.enqueue(
       'payments.balance_cache_refresh',
       { runKey },
-      { jobId: `payments.balance_cache_refresh:${runKey}` },
+      { jobId: `payments.balance_cache_refresh-${runKey}` },
     );
   }
 
@@ -81,7 +81,7 @@ export class PaymentsScheduler {
     await this.jobs.enqueue(
       'payments.reconcile_webhooks',
       { runKey },
-      { jobId: `payments.reconcile_webhooks:${runKey}` },
+      { jobId: `payments.reconcile_webhooks-${runKey}` },
     );
   }
 }

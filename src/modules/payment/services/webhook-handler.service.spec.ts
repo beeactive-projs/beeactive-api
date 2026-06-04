@@ -563,7 +563,7 @@ describe('WebhookHandlerService', () => {
       expect(jobsMock.enqueue).toHaveBeenCalledWith(
         'payments.process_webhook',
         expect.objectContaining({ webhookEventId: 'we-1' }),
-        expect.objectContaining({ jobId: `webhook:${event.id}`, attempts: 5 }),
+        expect.objectContaining({ jobId: `webhook-${event.id}`, attempts: 5 }),
       );
       // No inline dispatch when queued.
       expect(sequelizeMock.transaction).not.toHaveBeenCalled();

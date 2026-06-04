@@ -34,7 +34,7 @@ export class SessionsScheduler {
     await this.jobs.enqueue(
       'sessions.reminder_dispatch',
       { runKey },
-      { jobId: `sessions.reminder_dispatch:${runKey}` },
+      { jobId: `sessions.reminder_dispatch-${runKey}` },
     );
   }
 
@@ -44,7 +44,7 @@ export class SessionsScheduler {
     await this.jobs.enqueue(
       'sessions.status_transition',
       { runKey },
-      { jobId: `sessions.status_transition:${runKey}` },
+      { jobId: `sessions.status_transition-${runKey}` },
     );
   }
 
@@ -54,7 +54,7 @@ export class SessionsScheduler {
     await this.jobs.enqueue(
       'sessions.generate_recurring',
       { runKey },
-      { jobId: `sessions.generate_recurring:${runKey}` },
+      { jobId: `sessions.generate_recurring-${runKey}` },
     );
   }
 
@@ -64,16 +64,17 @@ export class SessionsScheduler {
     await this.jobs.enqueue(
       'sessions.cleanup_stale_participants',
       { runKey },
-      { jobId: `sessions.cleanup_stale_participants:${runKey}` },
+      { jobId: `sessions.cleanup_stale_participants-${runKey}` },
     );
   }
 }
 
 /**
- * Round the current time down to the start of its `intervalMs` window
- * and return it as an ISO string — a stable per-tick dedup key.
+ * Stable per-tick dedup token: the current time floored to its
+ * `intervalMs` window, as a plain integer string. Must stay free of
+ * `:` (and other reserved chars) because it's embedded in BullMQ job
+ * ids, which reject `:`.
  */
 export function bucketKey(intervalMs: number): string {
-  const ms = Date.now();
-  return new Date(Math.floor(ms / intervalMs) * intervalMs).toISOString();
+  return String(Math.floor(Date.now() / intervalMs));
 }

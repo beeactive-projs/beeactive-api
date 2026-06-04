@@ -19,7 +19,7 @@ describe('WorkoutsScheduler', () => {
       expect.objectContaining({ runKey: expect.any(String) }),
       expect.objectContaining({
         jobId: expect.stringMatching(
-          /^workouts\.auto_skip_past_workouts:/,
+          /^workouts\.auto_skip_past_workouts-/,
         ) as string,
       }),
     );
@@ -32,7 +32,7 @@ describe('WorkoutsScheduler', () => {
       expect.any(Object),
       expect.objectContaining({
         jobId: expect.stringMatching(
-          /^workouts\.auto_complete_assignments:/,
+          /^workouts\.auto_complete_assignments-/,
         ) as string,
       }),
     );

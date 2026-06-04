@@ -18,7 +18,7 @@ describe('SessionsScheduler', () => {
       'sessions.reminder_dispatch',
       expect.objectContaining({ runKey: expect.any(String) }),
       expect.objectContaining({
-        jobId: expect.stringMatching(/^sessions\.reminder_dispatch:/) as string,
+        jobId: expect.stringMatching(/^sessions\.reminder_dispatch-/) as string,
       }),
     );
   });
@@ -29,7 +29,7 @@ describe('SessionsScheduler', () => {
       'sessions.status_transition',
       expect.any(Object),
       expect.objectContaining({
-        jobId: expect.stringMatching(/^sessions\.status_transition:/) as string,
+        jobId: expect.stringMatching(/^sessions\.status_transition-/) as string,
       }),
     );
   });
@@ -41,7 +41,7 @@ describe('SessionsScheduler', () => {
       expect.any(Object),
       expect.objectContaining({
         jobId: expect.stringMatching(
-          /^sessions\.generate_recurring:/,
+          /^sessions\.generate_recurring-/,
         ) as string,
       }),
     );
@@ -54,7 +54,7 @@ describe('SessionsScheduler', () => {
       expect.any(Object),
       expect.objectContaining({
         jobId: expect.stringMatching(
-          /^sessions\.cleanup_stale_participants:/,
+          /^sessions\.cleanup_stale_participants-/,
         ) as string,
       }),
     );
