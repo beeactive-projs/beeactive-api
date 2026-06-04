@@ -4,15 +4,18 @@ import { NotificationModule } from '../notification/notification.module';
 import { SessionModule } from '../session/session.module';
 import { WorkoutModule } from '../workout/workout.module';
 import { PaymentModule } from '../payment/payment.module';
+import { MaintenanceModule } from '../maintenance/maintenance.module';
 import { JobsService } from './jobs.service';
 import { QUEUE_DEFAULTS, QueueName } from './job-registry';
 import { EmailSendWorker } from './workers/notifications/email-send.worker';
 import { SessionsWorker } from './workers/sessions/sessions.worker';
 import { WorkoutsWorker } from './workers/workouts/workouts.worker';
 import { PaymentsWorker } from './workers/payments/payments.worker';
+import { MaintenanceWorker } from './workers/maintenance/maintenance.worker';
 import { SessionsScheduler } from './schedulers/sessions.scheduler';
 import { WorkoutsScheduler } from './schedulers/workouts.scheduler';
 import { PaymentsScheduler } from './schedulers/payments.scheduler';
+import { MaintenanceScheduler } from './schedulers/maintenance.scheduler';
 
 /**
  * JobsModule — the producer-facing API + queue workers.
@@ -57,7 +60,13 @@ export class JobsModule {
     const redisEnabled = !!process.env.REDIS_HOST;
 
     const workerProviders: Provider[] = redisEnabled
-      ? [EmailSendWorker, SessionsWorker, WorkoutsWorker, PaymentsWorker]
+      ? [
+          EmailSendWorker,
+          SessionsWorker,
+          WorkoutsWorker,
+          PaymentsWorker,
+          MaintenanceWorker,
+        ]
       : [];
 
     return {
@@ -87,6 +96,11 @@ export class JobsModule {
           defaultJobOptions:
             QUEUE_DEFAULTS[QueueName.Payments].defaultJobOptions,
         }),
+        BullModule.registerQueue({
+          name: QueueName.Maintenance,
+          defaultJobOptions:
+            QUEUE_DEFAULTS[QueueName.Maintenance].defaultJobOptions,
+        }),
         // NotificationModule for the receipt service used by EmailSendWorker.
         // Session/Workout/Payment modules export the services the workers
         // delegate to. One-way imports — JobsModule is @Global, so none
@@ -95,6 +109,7 @@ export class JobsModule {
         SessionModule,
         WorkoutModule,
         PaymentModule,
+        MaintenanceModule,
       ],
       providers: [
         JobsService,
@@ -102,6 +117,7 @@ export class JobsModule {
         SessionsScheduler,
         WorkoutsScheduler,
         PaymentsScheduler,
+        MaintenanceScheduler,
         // Workers need a Redis connection at construction — gated.
         ...workerProviders,
         // EmailService comes in via the @Global EmailModule in AppModule.

@@ -32,6 +32,7 @@ export enum QueueName {
   Sessions = 'sessions',
   Workouts = 'workouts',
   Payments = 'payments',
+  Maintenance = 'maintenance',
 }
 
 /**
@@ -121,6 +122,18 @@ export interface JobPayloads {
   /** Re-process ORPHANED webhook rows whose local entity has since
    *  appeared; age out the truly stuck ones. */
   'payments.reconcile_webhooks': { runKey?: string };
+
+  // ── Maintenance ─────────────────────────────────────────────────────
+  // Bulk housekeeping sweeps; silent + idempotent.
+
+  /** Delete expired refresh tokens. */
+  'maintenance.cleanup_refresh_tokens': { runKey?: string };
+  /** Reset account lockouts whose window has elapsed. */
+  'maintenance.cleanup_lockouts': { runKey?: string };
+  /** Decline still-pending invitations past their expiry. */
+  'maintenance.cleanup_invitations': { runKey?: string };
+  /** Decline PENDING client requests past their 30-day window. */
+  'maintenance.cleanup_client_requests': { runKey?: string };
 }
 
 /**
@@ -153,6 +166,10 @@ export const ALL_JOB_NAMES: ReadonlyArray<keyof JobPayloads> = [
   'payments.balance_cache_refresh',
   'payments.process_webhook',
   'payments.reconcile_webhooks',
+  'maintenance.cleanup_refresh_tokens',
+  'maintenance.cleanup_lockouts',
+  'maintenance.cleanup_invitations',
+  'maintenance.cleanup_client_requests',
 ] as const;
 
 /**
@@ -206,6 +223,14 @@ export const QUEUE_DEFAULTS = {
       backoff: { type: 'exponential' as const, delay: 5_000 },
       removeOnComplete: { age: 86_400, count: 1_000 },
       removeOnFail: { age: 7 * 86_400, count: 5_000 },
+    },
+  },
+  [QueueName.Maintenance]: {
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 5_000 },
+      removeOnComplete: { age: 86_400, count: 200 },
+      removeOnFail: { age: 7 * 86_400, count: 1_000 },
     },
   },
 } as const;
