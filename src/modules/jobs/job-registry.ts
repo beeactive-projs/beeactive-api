@@ -31,6 +31,7 @@ export enum QueueName {
   Notifications = 'notifications',
   Sessions = 'sessions',
   Workouts = 'workouts',
+  Payments = 'payments',
 }
 
 /**
@@ -89,6 +90,27 @@ export interface JobPayloads {
   'workouts.auto_skip_past_workouts': { runKey?: string };
   /** Complete assignments whose workouts are all COMPLETED or SKIPPED. */
   'workouts.auto_complete_assignments': { runKey?: string };
+
+  // ── Payments ────────────────────────────────────────────────────────
+  // System-wide reminder/maintenance sweeps; idempotent via notification
+  // fingerprints. `runKey` is the coarse time-bucket dedup tag.
+
+  /** Remind clients of OPEN invoices due within ~3 days. */
+  'payments.invoice_due_soon': { runKey?: string };
+  /** Escalate OPEN invoices past their due date (client + instructor). */
+  'payments.invoice_overdue': { runKey?: string };
+  /** Warn clients whose subscription card expires within ~30 days. */
+  'payments.card_expiring': { runKey?: string };
+  /** Email each instructor a summary of the previous month's earnings. */
+  'payments.earnings_summary': { runKey?: string };
+  /** Warn instructors when a payment's 14-day refund window is ~2 days out. */
+  'payments.refund_window_closing': { runKey?: string };
+  /** Nudge clients on OPEN invoices whose payment failed and remains unpaid. */
+  'payments.dunning': { runKey?: string };
+  /** Remind instructors of disputes whose evidence deadline is approaching. */
+  'payments.dispute_deadline': { runKey?: string };
+  /** Refresh the cached Stripe balance on each connected account. */
+  'payments.balance_cache_refresh': { runKey?: string };
 }
 
 /**
@@ -111,6 +133,14 @@ export const ALL_JOB_NAMES: ReadonlyArray<keyof JobPayloads> = [
   'sessions.cleanup_stale_participants',
   'workouts.auto_skip_past_workouts',
   'workouts.auto_complete_assignments',
+  'payments.invoice_due_soon',
+  'payments.invoice_overdue',
+  'payments.card_expiring',
+  'payments.earnings_summary',
+  'payments.refund_window_closing',
+  'payments.dunning',
+  'payments.dispute_deadline',
+  'payments.balance_cache_refresh',
 ] as const;
 
 /**
@@ -153,6 +183,17 @@ export const QUEUE_DEFAULTS = {
       backoff: { type: 'exponential' as const, delay: 5_000 },
       removeOnComplete: { age: 86_400, count: 500 },
       removeOnFail: { age: 7 * 86_400, count: 2_000 },
+    },
+  },
+  // Payments holds both idempotent reminder sweeps and webhook processing.
+  // Webhook jobs override `attempts` to 5 at enqueue time (more retries for
+  // event-driven work); the sweeps are happy with the default 3.
+  [QueueName.Payments]: {
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 5_000 },
+      removeOnComplete: { age: 86_400, count: 1_000 },
+      removeOnFail: { age: 7 * 86_400, count: 5_000 },
     },
   },
 } as const;

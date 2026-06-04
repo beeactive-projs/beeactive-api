@@ -300,6 +300,25 @@ export function refundWindowClosingForInstructor(
   };
 }
 
+/** Client — dunning nudge: an open invoice's payment failed and it's still
+ *  unpaid. Distinct from the one-shot webhook `invoicePaymentFailedForClient`
+ *  — `dayKey` (YYYY-MM-DD) scopes the fingerprint so it repeats at most once
+ *  per day until paid. */
+export function invoiceDunningForClient(
+  clientId: string,
+  invoiceId: string,
+  dayKey: string,
+): NotifyParams {
+  return {
+    userId: clientId,
+    type: NotificationType.PAYMENT_FAILED,
+    title: 'Action needed: payment failed',
+    body: 'Your invoice is still unpaid after a failed charge. Update your card and retry to keep your access.',
+    data: { screen: 'profile/invoices', entityId: invoiceId },
+    fingerprint: `dunning:${invoiceId}:${dayKey}`,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Disputes
 // ---------------------------------------------------------------------------

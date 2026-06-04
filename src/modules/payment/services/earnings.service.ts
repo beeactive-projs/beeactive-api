@@ -11,6 +11,10 @@ import { StripeAccount } from '../entities/stripe-account.entity';
 import { User } from '../../user/entities/user.entity';
 import { StripeService } from './stripe.service';
 import {
+  BALANCE_CACHE_TTL_MS,
+  extractBalanceCents,
+} from './balance-cache.service';
+import {
   buildPaginatedResponse,
   getOffset,
   PaginatedResponse,
@@ -57,7 +61,13 @@ export class EarningsService {
     const [account, user] = await Promise.all([
       this.stripeAccountModel.findOne({
         where: { userId: instructorId },
-        attributes: ['stripeAccountId', 'defaultCurrency'],
+        attributes: [
+          'stripeAccountId',
+          'defaultCurrency',
+          'cachedBalanceAvailableCents',
+          'cachedBalancePendingCents',
+          'balanceCachedAt',
+        ],
       }),
       this.userModel.findByPk(instructorId, {
         attributes: ['countryCode'],
@@ -164,63 +174,48 @@ export class EarningsService {
     let nextPayoutDate: string | null = null;
 
     if (account?.stripeAccountId) {
-      try {
-        const balance = await this.stripeService.stripe.balance.retrieve(
-          {},
-          { stripeAccount: account.stripeAccountId },
-        );
-        const lowerCurrency = currency.toLowerCase();
-        // Stripe surfaces three buckets that all matter to the
-        // instructor:
-        //   - available[]: standard payout-ready funds.
-        //   - instant_available[]: funds eligible for an instant
-        //     payout (separate Stripe rail). For RO card payments
-        //     today this is where new charges land first.
-        //   - pending[]: funds in Stripe's 2-7 day rolling hold.
-        // Stripe overlaps `instant_available` with `pending` for the
-        // same money — taking the instant payout consumes funds that
-        // would otherwise become standard-available later. So:
-        //   * "Available" we show = max(available, instant_available)
-        //     i.e. the largest amount the trainer could withdraw RIGHT
-        //     NOW, whether through standard or instant rails.
-        //   * "Pending" we show = pending - instant_available (clamped
-        //     to 0). This represents funds genuinely still held for
-        //     2-7 days that are NOT also offered as instant.
-        const sumByCurrency = (
-          buckets: { amount: number; currency: string }[] | undefined,
-        ): number =>
-          (buckets ?? [])
-            .filter((b) => b.currency === lowerCurrency)
-            .reduce((s, b) => s + b.amount, 0);
+      const cacheFresh =
+        account.balanceCachedAt != null &&
+        account.cachedBalanceAvailableCents != null &&
+        now.getTime() - new Date(account.balanceCachedAt).getTime() <
+          BALANCE_CACHE_TTL_MS;
 
-        const standardAvailable = sumByCurrency(balance.available);
-        const instantAvailable = sumByCurrency(
-          (
-            balance as unknown as {
-              instant_available?: typeof balance.available;
-            }
-          ).instant_available,
-        );
-        const stripePending = sumByCurrency(balance.pending);
+      if (cacheFresh) {
+        // Served from the hourly `payments.balance_cache_refresh` cron —
+        // no Stripe round-trip. nextPayoutDate isn't cached (only balances
+        // are), so it stays null on the cached path; the live path below
+        // populates it on a cache miss.
+        availableBalanceCents = account.cachedBalanceAvailableCents ?? 0;
+        pendingBalanceCents = account.cachedBalancePendingCents ?? 0;
+      } else {
+        try {
+          const balance = await this.stripeService.stripe.balance.retrieve(
+            {},
+            { stripeAccount: account.stripeAccountId },
+          );
+          const { availableCents, pendingCents } = extractBalanceCents(
+            balance,
+            currency.toLowerCase(),
+          );
+          availableBalanceCents = availableCents;
+          pendingBalanceCents = pendingCents;
 
-        availableBalanceCents = Math.max(standardAvailable, instantAvailable);
-        pendingBalanceCents = Math.max(0, stripePending - instantAvailable);
-
-        const payouts = await this.stripeService.stripe.payouts.list(
-          { limit: 1, status: 'pending' },
-          { stripeAccount: account.stripeAccountId },
-        );
-        const next = payouts.data[0];
-        if (next?.arrival_date) {
-          nextPayoutDate = new Date(next.arrival_date * 1000).toISOString();
+          const payouts = await this.stripeService.stripe.payouts.list(
+            { limit: 1, status: 'pending' },
+            { stripeAccount: account.stripeAccountId },
+          );
+          const next = payouts.data[0];
+          if (next?.arrival_date) {
+            nextPayoutDate = new Date(next.arrival_date * 1000).toISOString();
+          }
+        } catch (err) {
+          this.logger.warn?.(
+            `Failed to load Stripe balance for instructor ${instructorId}: ${
+              (err as Error).message
+            }`,
+            'EarningsService',
+          );
         }
-      } catch (err) {
-        this.logger.warn?.(
-          `Failed to load Stripe balance for instructor ${instructorId}: ${
-            (err as Error).message
-          }`,
-          'EarningsService',
-        );
       }
     }
 

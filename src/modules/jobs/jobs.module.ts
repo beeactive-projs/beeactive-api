@@ -3,13 +3,16 @@ import { BullModule } from '@nestjs/bullmq';
 import { NotificationModule } from '../notification/notification.module';
 import { SessionModule } from '../session/session.module';
 import { WorkoutModule } from '../workout/workout.module';
+import { PaymentModule } from '../payment/payment.module';
 import { JobsService } from './jobs.service';
 import { QUEUE_DEFAULTS, QueueName } from './job-registry';
 import { EmailSendWorker } from './workers/notifications/email-send.worker';
 import { SessionsWorker } from './workers/sessions/sessions.worker';
 import { WorkoutsWorker } from './workers/workouts/workouts.worker';
+import { PaymentsWorker } from './workers/payments/payments.worker';
 import { SessionsScheduler } from './schedulers/sessions.scheduler';
 import { WorkoutsScheduler } from './schedulers/workouts.scheduler';
+import { PaymentsScheduler } from './schedulers/payments.scheduler';
 
 /**
  * JobsModule — the producer-facing API + queue workers.
@@ -54,7 +57,7 @@ export class JobsModule {
     const redisEnabled = !!process.env.REDIS_HOST;
 
     const workerProviders: Provider[] = redisEnabled
-      ? [EmailSendWorker, SessionsWorker, WorkoutsWorker]
+      ? [EmailSendWorker, SessionsWorker, WorkoutsWorker, PaymentsWorker]
       : [];
 
     return {
@@ -79,19 +82,26 @@ export class JobsModule {
           defaultJobOptions:
             QUEUE_DEFAULTS[QueueName.Workouts].defaultJobOptions,
         }),
+        BullModule.registerQueue({
+          name: QueueName.Payments,
+          defaultJobOptions:
+            QUEUE_DEFAULTS[QueueName.Payments].defaultJobOptions,
+        }),
         // NotificationModule for the receipt service used by EmailSendWorker.
-        // SessionModule / WorkoutModule export the services the
-        // sessions/workouts workers delegate to. One-way imports —
-        // JobsModule is @Global, so none import it back (no cycle).
+        // Session/Workout/Payment modules export the services the workers
+        // delegate to. One-way imports — JobsModule is @Global, so none
+        // import it back (no cycle).
         NotificationModule,
         SessionModule,
         WorkoutModule,
+        PaymentModule,
       ],
       providers: [
         JobsService,
         // Schedulers only enqueue (no-op without Redis) — always on.
         SessionsScheduler,
         WorkoutsScheduler,
+        PaymentsScheduler,
         // Workers need a Redis connection at construction — gated.
         ...workerProviders,
         // EmailService comes in via the @Global EmailModule in AppModule.

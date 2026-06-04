@@ -26,6 +26,9 @@ import { CheckoutService } from './services/checkout.service';
 import { SubscriptionService } from './services/subscription.service';
 import { RefundService } from './services/refund.service';
 import { EarningsService } from './services/earnings.service';
+import { PaymentRemindersService } from './services/payment-reminders.service';
+import { BalanceCacheService } from './services/balance-cache.service';
+import { DisputeService } from './services/dispute.service';
 
 // Controllers
 import { PaymentWebhookController } from './payment-webhook.controller';
@@ -96,7 +99,17 @@ import { PaymentPublicController } from './payment-public.controller';
     SubscriptionService,
     RefundService,
     EarningsService,
+    PaymentRemindersService,
+    BalanceCacheService,
+    DisputeService,
   ],
-  exports: [StripeService, CustomerService],
+  exports: [
+    StripeService,
+    CustomerService,
+    PaymentRemindersService,
+    BalanceCacheService,
+    DisputeService,
+    WebhookHandlerService,
+  ],
 })
 export class PaymentModule {}
