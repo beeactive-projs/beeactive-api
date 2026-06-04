@@ -15,6 +15,10 @@ import {
   getOffset,
 } from '../../common/dto/pagination.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import {
+  InstructorClient,
+  InstructorClientStatus,
+} from '../client/entities/instructor-client.entity';
 import { Exercise } from '../exercise/entities/exercise.entity';
 import { AssignedExercise } from './entities/assigned-exercise.entity';
 import { AssignedSet } from './entities/assigned-set.entity';
@@ -62,6 +66,8 @@ export class WorkoutLogService {
     private readonly assignedSetModel: typeof AssignedSet,
     @InjectModel(OneRepMax) private readonly oneRepMaxModel: typeof OneRepMax,
     @InjectModel(Exercise) private readonly exerciseModel: typeof Exercise,
+    @InjectModel(InstructorClient)
+    private readonly instructorClientModel: typeof InstructorClient,
     private readonly sequelize: Sequelize,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
@@ -804,6 +810,57 @@ export class WorkoutLogService {
     };
     if (prs.length > 0) plain.personalRecords = prs;
     return plain;
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Coach read-only (instructor → client) surface
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * Asserts the caller is the ACTIVE instructor for clientId. 404 on
+   * any other state — including PENDING and ARCHIVED — so we don't
+   * leak the existence of a past or unconfirmed relationship.
+   */
+  private async _assertActiveCoachOf(
+    instructorId: string,
+    clientId: string,
+  ): Promise<void> {
+    const link = await this.instructorClientModel.findOne({
+      where: {
+        instructorId,
+        clientId,
+        status: InstructorClientStatus.ACTIVE,
+      },
+      attributes: ['id'],
+    });
+    if (!link) throw new NotFoundException('Client not found.');
+  }
+
+  /**
+   * Coach view of a client's workout history. Same shape as
+   * `listForUser` (PR-tagged plain rows). Gated by ACTIVE coach link.
+   */
+  async listForClientByInstructor(
+    instructorId: string,
+    clientId: string,
+    query: PaginationDto,
+  ) {
+    await this._assertActiveCoachOf(instructorId, clientId);
+    return this.listForUser(clientId, query);
+  }
+
+  /**
+   * Coach view of one log. 404 if the log isn't owned by an ACTIVE
+   * client of this instructor.
+   */
+  async findByIdForInstructor(
+    id: string,
+    instructorId: string,
+  ): Promise<WorkoutLog> {
+    const stub = await this.logModel.findByPk(id, { attributes: ['userId'] });
+    if (!stub) throw new NotFoundException('Workout log not found.');
+    await this._assertActiveCoachOf(instructorId, stub.userId);
+    return this.findById(id, stub.userId);
   }
 
   // ────────────────────────────────────────────────────────────────────

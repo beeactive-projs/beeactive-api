@@ -22,6 +22,7 @@ import { ProgramAssignmentController } from './program-assignment.controller';
 import { ProgramAssignmentService } from './program-assignment.service';
 import { ProgramController } from './program.controller';
 import { ProgramService } from './program.service';
+import { InstructorWorkoutLogController } from './instructor-workout-log.controller';
 import { WorkoutLogController } from './workout-log.controller';
 import { WorkoutLogService } from './workout-log.service';
 
@@ -56,6 +57,7 @@ import { WorkoutLogService } from './workout-log.service';
     ProgramController,
     ProgramAssignmentController,
     WorkoutLogController,
+    InstructorWorkoutLogController,
   ],
   providers: [ProgramService, ProgramAssignmentService, WorkoutLogService],
   exports: [
