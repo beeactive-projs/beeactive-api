@@ -13,6 +13,7 @@ import { Invoice } from './entities/invoice.entity';
 import { Payment } from './entities/payment.entity';
 import { WebhookEvent } from './entities/webhook-event.entity';
 import { PaymentConsent } from './entities/payment-consent.entity';
+import { Dispute } from './entities/dispute.entity';
 
 // Services
 import { StripeService } from './services/stripe.service';
@@ -73,6 +74,7 @@ import { PaymentPublicController } from './payment-public.controller';
       Payment,
       WebhookEvent,
       PaymentConsent,
+      Dispute,
       User,
     ]),
     RoleModule,

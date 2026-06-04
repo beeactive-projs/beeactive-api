@@ -124,7 +124,11 @@ export const TYPE_TO_CATEGORY: Record<NotificationType, NotificationCategory> =
     [NotificationType.SUBSCRIPTION_CANCELED]: NotificationCategory.Payments,
     [NotificationType.PAYOUT_SENT]: NotificationCategory.Payments,
     [NotificationType.DISPUTE_OPENED]: NotificationCategory.Payments,
+    [NotificationType.DISPUTE_EVIDENCE_DUE]: NotificationCategory.Payments,
     [NotificationType.REFUND_ISSUED]: NotificationCategory.Payments,
+    [NotificationType.REFUND_WINDOW_CLOSING]: NotificationCategory.Payments,
+    [NotificationType.CARD_EXPIRING_SOON]: NotificationCategory.Payments,
+    [NotificationType.EARNINGS_SUMMARY]: NotificationCategory.Payments,
 
     // Account & security — Stripe Connect status changes are higher-stakes
     // than regular payment events; they live in their own bucket so the

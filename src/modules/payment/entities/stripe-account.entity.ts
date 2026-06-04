@@ -162,6 +162,21 @@ export class StripeAccount extends Model {
   })
   declare disconnectedAt: Date | null;
 
+  /**
+   * Cached Stripe balance, refreshed by the `payments.balance_cache_refresh`
+   * cron (jobs module). `EarningsService.getSummary` reads these when
+   * `balanceCachedAt` is fresh, falling back to a live `balance.retrieve`
+   * otherwise — so the dashboard doesn't pay a Stripe round-trip per load.
+   */
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare cachedBalanceAvailableCents: number | null;
+
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare cachedBalancePendingCents: number | null;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare balanceCachedAt: Date | null;
+
   @CreatedAt
   declare createdAt: Date;
 
