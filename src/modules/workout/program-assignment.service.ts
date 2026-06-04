@@ -382,10 +382,144 @@ export class ProgramAssignmentService {
     return aw;
   }
 
-  private async _recomputeProgressForSkip(assignmentId: string): Promise<void> {
+  // ────────────────────────────────────────────────────────────────────
+  // System sweeps (jobs module)
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * Skip never-started assigned workouts whose scheduled date is in the
+   * past, for ACTIVE assignments only. Driven by the daily
+   * `workouts.auto_skip_past_workouts` cron — the system equivalent of
+   * `skipAssignedWorkoutAsClient`, reusing the same progress recompute.
+   *
+   * Only touches `status IS NULL` rows: an IN_PROGRESS log (client opened
+   * it but didn't finish) is left alone — auto-skip must never clobber
+   * real logged work. Per-assignment tx so the skip + recompute commit
+   * together; the `status = null` guard in the UPDATE keeps it idempotent
+   * across retries. Silent.
+   *
+   * @param today client-calendar date as `YYYY-MM-DD` (DATEONLY space).
+   */
+  async autoSkipPastWorkouts(
+    today: string,
+  ): Promise<{ skipped: number; assignmentsTouched: number }> {
+    const candidates = await this.assignedWorkoutModel.findAll({
+      where: { status: null, scheduledDate: { [Op.lt]: today } },
+      include: [
+        {
+          model: this.assignmentModel,
+          as: 'assignment',
+          required: true,
+          where: { status: ProgramAssignmentStatus.Active },
+          attributes: ['id'],
+        },
+      ],
+      attributes: ['id', 'programAssignmentId'],
+    });
+    if (candidates.length === 0) {
+      return { skipped: 0, assignmentsTouched: 0 };
+    }
+
+    const byAssignment = new Map<string, string[]>();
+    for (const c of candidates) {
+      const list = byAssignment.get(c.programAssignmentId) ?? [];
+      list.push(c.id);
+      byAssignment.set(c.programAssignmentId, list);
+    }
+
+    let skipped = 0;
+    for (const [assignmentId, workoutIds] of byAssignment) {
+      await this.sequelize.transaction(async (tx) => {
+        const [count] = await this.assignedWorkoutModel.update(
+          { status: WorkoutLogStatus.Skipped },
+          {
+            where: { id: { [Op.in]: workoutIds }, status: null },
+            transaction: tx,
+          },
+        );
+        skipped += count;
+        await this._recomputeProgressForSkip(assignmentId, tx);
+      });
+    }
+
+    if (skipped > 0) {
+      this.logger.log?.(
+        `Auto-skipped ${skipped} past workout(s) across ${byAssignment.size} assignment(s)`,
+        'ProgramAssignmentService',
+      );
+    }
+    return { skipped, assignmentsTouched: byAssignment.size };
+  }
+
+  /**
+   * Complete ACTIVE assignments whose every workout is now COMPLETED or
+   * SKIPPED. Driven by the daily `workouts.auto_complete_assignments`
+   * cron (scheduled after auto-skip so a same-day skip can finish the
+   * plan). Skeleton assignments (zero workouts) never auto-complete.
+   *
+   * Idempotent: the `status = ACTIVE` guard on the UPDATE means a re-run
+   * is a no-op. Silent — no new notification type in V1.
+   */
+  async autoCompleteAssignments(): Promise<{ completed: number }> {
+    const active = await this.assignmentModel.findAll({
+      where: { status: ProgramAssignmentStatus.Active },
+      attributes: ['id'],
+    });
+
+    let completed = 0;
+    for (const assignment of active) {
+      const [total, outstanding] = await Promise.all([
+        this.assignedWorkoutModel.count({
+          where: { programAssignmentId: assignment.id },
+        }),
+        this.assignedWorkoutModel.count({
+          where: {
+            programAssignmentId: assignment.id,
+            [Op.or]: [
+              { status: null },
+              {
+                status: {
+                  [Op.in]: [
+                    WorkoutLogStatus.InProgress,
+                    WorkoutLogStatus.Abandoned,
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+      ]);
+      if (total === 0 || outstanding > 0) continue;
+
+      const [n] = await this.assignmentModel.update(
+        { status: ProgramAssignmentStatus.Completed },
+        {
+          where: {
+            id: assignment.id,
+            status: ProgramAssignmentStatus.Active,
+          },
+        },
+      );
+      completed += n;
+    }
+
+    if (completed > 0) {
+      this.logger.log?.(
+        `Auto-completed ${completed} assignment(s)`,
+        'ProgramAssignmentService',
+      );
+    }
+    return { completed };
+  }
+
+  private async _recomputeProgressForSkip(
+    assignmentId: string,
+    tx?: Transaction,
+  ): Promise<void> {
     const [total, done] = await Promise.all([
       this.assignedWorkoutModel.count({
         where: { programAssignmentId: assignmentId },
+        transaction: tx,
       }),
       this.assignedWorkoutModel.count({
         where: {
@@ -394,12 +528,13 @@ export class ProgramAssignmentService {
             [Op.in]: [WorkoutLogStatus.Completed, WorkoutLogStatus.Skipped],
           },
         },
+        transaction: tx,
       }),
     ]);
     const percent = total === 0 ? 0 : Math.round((done / total) * 100);
     await this.assignmentModel.update(
       { completionPercent: percent },
-      { where: { id: assignmentId } },
+      { where: { id: assignmentId }, transaction: tx },
     );
   }
 
