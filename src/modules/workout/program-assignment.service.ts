@@ -491,8 +491,14 @@ export class ProgramAssignmentService {
       ]);
       if (total === 0 || outstanding > 0) continue;
 
+      // A COMPLETED assignment is 100% done by definition — pin the
+      // percent too so the state is self-consistent regardless of how
+      // the workouts reached done/skipped.
       const [n] = await this.assignmentModel.update(
-        { status: ProgramAssignmentStatus.Completed },
+        {
+          status: ProgramAssignmentStatus.Completed,
+          completionPercent: 100,
+        },
         {
           where: {
             id: assignment.id,

@@ -110,7 +110,7 @@ describe('ProgramAssignmentService — system sweeps', () => {
 
       expect(result).toEqual({ completed: 1 });
       expect(assignmentModel.update).toHaveBeenCalledWith(
-        { status: 'COMPLETED' },
+        { status: 'COMPLETED', completionPercent: 100 },
         expect.objectContaining({ where: { id: 'a1', status: 'ACTIVE' } }),
       );
     });
