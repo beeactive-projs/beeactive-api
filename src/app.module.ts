@@ -100,7 +100,7 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     ClientModule,
     BlogModule,
     NotificationModule,
-    JobsModule,
+    JobsModule.register(),
     AnalyticsModule,
     FeedbackModule,
     WaitlistModule,

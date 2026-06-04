@@ -83,6 +83,18 @@ export class JobsService {
     payload: JobPayload<K>,
     opts: EnqueueOptions = {},
   ): Promise<unknown> {
+    // Clean drop when Redis isn't configured. Queues are registered
+    // unconditionally (so their tokens exist) but have no live
+    // connection without `BullModule.forRoot`, so we must not call
+    // `queue.add`. Checked at call time, when `.env` is fully loaded.
+    if (!process.env.REDIS_HOST) {
+      this.logger.warn?.(
+        `[JobsService] Redis not configured — dropping ${String(name)}.`,
+        'JobsService',
+      );
+      return null;
+    }
+
     const queue = this.getQueue(parseJobKey(name).queue);
     if (!queue) {
       this.logger.warn?.(

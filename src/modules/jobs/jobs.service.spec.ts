@@ -14,8 +14,13 @@ describe('JobsService', () => {
   let service: JobsService;
   let queueMock: QueueMock;
   let moduleRefGet: jest.Mock;
+  let originalRedisHost: string | undefined;
 
   beforeEach(async () => {
+    // enqueue short-circuits when REDIS_HOST is unset — the queue-path
+    // tests need it present. The no-Redis path has its own test below.
+    originalRedisHost = process.env.REDIS_HOST;
+    process.env.REDIS_HOST = 'localhost';
     queueMock = { add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
     moduleRefGet = jest.fn();
 
@@ -31,6 +36,27 @@ describe('JobsService', () => {
     }).compile();
 
     service = ref.get(JobsService);
+  });
+
+  afterEach(() => {
+    if (originalRedisHost === undefined) delete process.env.REDIS_HOST;
+    else process.env.REDIS_HOST = originalRedisHost;
+  });
+
+  it('drops the job (returns null, no lookup) when REDIS_HOST is unset', async () => {
+    delete process.env.REDIS_HOST;
+    moduleRefGet.mockReturnValue(queueMock);
+
+    const result = await service.enqueue('notifications.email_send', {
+      receiptId: 'r-1',
+      to: 'u@example.com',
+      title: 't',
+      body: 'b',
+    });
+
+    expect(result).toBeNull();
+    expect(moduleRefGet).not.toHaveBeenCalled();
+    expect(queueMock.add).not.toHaveBeenCalled();
   });
 
   it('looks up the queue via ModuleRef and calls Queue.add with payload + jobId', async () => {
