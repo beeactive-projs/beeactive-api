@@ -81,4 +81,61 @@ export const AdminDocs = {
     auth: true,
     responses: [{ status: 200, description: 'Overview counts' }],
   },
+
+  // ── Operations: jobs ─────────────────────────────────────────────
+  jobsOverview: {
+    summary: 'Jobs/queues overview',
+    description:
+      'Per-queue live counts (waiting/active/completed/failed/delayed/paused), triggerable sweep catalog, and the Bull Board path. ADMIN+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Queues + triggerable jobs' }],
+  },
+  triggerJob: {
+    summary: 'Trigger a sweep job',
+    description:
+      'Manually enqueue an idempotent sweep (e.g. payments.reconcile_webhooks). SUPER_ADMIN only.',
+    auth: true,
+    responses: [{ status: 201, description: 'Enqueue result' }],
+  },
+
+  // ── Operations: payments oversight ───────────────────────────────
+  listAccounts: {
+    summary: 'Stripe accounts',
+    description:
+      'Cross-tenant Connect accounts; filter=incomplete|disabled. ADMIN+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated accounts' }],
+  },
+  listSubscriptions: {
+    summary: 'Subscriptions',
+    description: 'Cross-tenant subscriptions; optional status filter. ADMIN+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated subscriptions' }],
+  },
+  listInvoices: {
+    summary: 'Invoices',
+    description: 'Cross-tenant invoices; optional status filter. ADMIN+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated invoices' }],
+  },
+  listDisputes: {
+    summary: 'Disputes',
+    description: 'Cross-tenant disputes; optional status filter. ADMIN+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated disputes' }],
+  },
+  listWebhooks: {
+    summary: 'Webhook events',
+    description:
+      'Stripe webhook log (payload omitted); filter by status (failed/orphaned/processed). ADMIN+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated webhook events' }],
+  },
+  reprocessWebhook: {
+    summary: 'Reprocess webhook',
+    description:
+      'Re-run a failed/orphaned webhook from its stored payload (idempotent). SUPER_ADMIN only.',
+    auth: true,
+    responses: [{ status: 201, description: 'New webhook status' }],
+  },
 };

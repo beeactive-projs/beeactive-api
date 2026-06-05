@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { AuthModule } from '../auth/auth.module';
 import { RoleModule } from '../role/role.module';
+import { PaymentModule } from '../payment/payment.module';
+// NOTE: JobsService is provided by the @Global() JobsModule (registered
+// once in AppModule) — inject it directly; do NOT re-import JobsModule
+// here or its workers would double-register.
 import { AdminImpersonationLog } from './entities/admin-impersonation-log.entity';
 // Models read by the admin services (cross-tenant queries + db browser).
 import { User } from '../user/entities/user.entity';
@@ -29,11 +33,15 @@ import { AdminUsersController } from './controllers/admin-users.controller';
 import { AdminImpersonationController } from './controllers/admin-impersonation.controller';
 import { AdminDbController } from './controllers/admin-db.controller';
 import { AdminOverviewController } from './controllers/admin-overview.controller';
+import { AdminJobsController } from './controllers/admin-jobs.controller';
+import { AdminPaymentsController } from './controllers/admin-payments.controller';
 // Services
 import { AdminUsersService } from './services/admin-users.service';
 import { AdminImpersonationService } from './services/admin-impersonation.service';
 import { AdminDbService } from './services/admin-db.service';
 import { AdminOverviewService } from './services/admin-overview.service';
+import { AdminJobsService } from './services/admin-jobs.service';
+import { AdminPaymentsService } from './services/admin-payments.service';
 
 /**
  * Admin module — a separate operator surface (consumed by the `admin`
@@ -68,18 +76,23 @@ import { AdminOverviewService } from './services/admin-overview.service';
     ]),
     RoleModule,
     AuthModule,
+    PaymentModule,
   ],
   controllers: [
     AdminUsersController,
     AdminImpersonationController,
     AdminDbController,
     AdminOverviewController,
+    AdminJobsController,
+    AdminPaymentsController,
   ],
   providers: [
     AdminUsersService,
     AdminImpersonationService,
     AdminDbService,
     AdminOverviewService,
+    AdminJobsService,
+    AdminPaymentsService,
   ],
 })
 export class AdminModule {}

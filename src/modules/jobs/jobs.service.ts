@@ -9,7 +9,15 @@ import {
   JobPayloads,
   parseJobKey,
   QueueName,
+  type TriggerableJobName,
 } from './job-registry';
+
+/** Per-queue live counts for the admin Operations screen. */
+export interface QueueOverview {
+  name: QueueName;
+  available: boolean;
+  counts: Record<string, number> | null;
+}
 
 /**
  * Per-call options when enqueueing.
@@ -115,6 +123,54 @@ export class JobsService {
       delay,
       attempts: opts.attempts,
     });
+  }
+
+  /**
+   * Live per-queue job counts for the admin Operations screen. Keeps the
+   * BullMQ dependency inside this module (admin never imports bullmq).
+   * When Redis isn't configured, every queue reports available=false.
+   */
+  async getQueuesOverview(): Promise<{
+    redisEnabled: boolean;
+    queues: QueueOverview[];
+  }> {
+    const redisEnabled = !!process.env.REDIS_HOST;
+    const queues = await Promise.all(
+      Object.values(QueueName).map(async (qn): Promise<QueueOverview> => {
+        const queue = redisEnabled ? this.getQueue(qn) : null;
+        if (!queue) return { name: qn, available: false, counts: null };
+        try {
+          const counts = await queue.getJobCounts(
+            'waiting',
+            'active',
+            'completed',
+            'failed',
+            'delayed',
+            'paused',
+          );
+          return { name: qn, available: true, counts };
+        } catch {
+          return { name: qn, available: false, counts: null };
+        }
+      }),
+    );
+    return { redisEnabled, queues };
+  }
+
+  /**
+   * Manually fire an idempotent sweep job (admin "run now"). Only the
+   * sweeps in TRIGGERABLE_JOBS reach here (validated by the caller). All
+   * such jobs take a `{ runKey }` payload, so this is type-safe.
+   */
+  async triggerCron(
+    name: TriggerableJobName,
+  ): Promise<{ enqueued: boolean; jobId: string | null }> {
+    const job = await this.enqueue(name, { runKey: `manual-${Date.now()}` });
+    const jobId =
+      job && typeof job === 'object' && 'id' in job
+        ? String((job as { id?: string | number }).id ?? '')
+        : null;
+    return { enqueued: !!job, jobId: jobId || null };
   }
 
   /**

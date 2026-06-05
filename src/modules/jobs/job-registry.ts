@@ -173,6 +173,135 @@ export const ALL_JOB_NAMES: ReadonlyArray<keyof JobPayloads> = [
 ] as const;
 
 /**
+ * Jobs an operator may trigger on demand from the admin console. These
+ * are the idempotent system sweeps — every one takes a `{ runKey? }`
+ * payload and is safe to fire manually (a manual run just catches up
+ * whatever is outstanding). The two payload-carrying jobs
+ * (`notifications.email_send`, `payments.process_webhook`) are
+ * deliberately excluded — they need real per-event data, not a sweep.
+ */
+export type TriggerableJobName = Exclude<
+  keyof JobPayloads,
+  'notifications.email_send' | 'payments.process_webhook'
+>;
+
+/**
+ * Catalog of manually-triggerable sweeps with their normal cron cadence
+ * (for display in the admin Operations screen). The schedule strings are
+ * descriptive (sourced from the @Cron schedulers), not parsed.
+ */
+export const TRIGGERABLE_JOBS: ReadonlyArray<{
+  key: TriggerableJobName;
+  queue: QueueName;
+  schedule: string;
+}> = [
+  {
+    key: 'sessions.reminder_dispatch',
+    queue: QueueName.Sessions,
+    schedule: 'every 5m',
+  },
+  {
+    key: 'sessions.status_transition',
+    queue: QueueName.Sessions,
+    schedule: 'every 5m',
+  },
+  {
+    key: 'sessions.generate_recurring',
+    queue: QueueName.Sessions,
+    schedule: 'daily',
+  },
+  {
+    key: 'sessions.cleanup_stale_participants',
+    queue: QueueName.Sessions,
+    schedule: 'hourly',
+  },
+  {
+    key: 'workouts.auto_skip_past_workouts',
+    queue: QueueName.Workouts,
+    schedule: 'daily 02:00',
+  },
+  {
+    key: 'workouts.auto_complete_assignments',
+    queue: QueueName.Workouts,
+    schedule: 'daily 02:30',
+  },
+  {
+    key: 'payments.invoice_due_soon',
+    queue: QueueName.Payments,
+    schedule: 'daily 06:00',
+  },
+  {
+    key: 'payments.invoice_overdue',
+    queue: QueueName.Payments,
+    schedule: 'daily 06:15',
+  },
+  {
+    key: 'payments.dunning',
+    queue: QueueName.Payments,
+    schedule: 'daily 06:30',
+  },
+  {
+    key: 'payments.card_expiring',
+    queue: QueueName.Payments,
+    schedule: 'daily 07:00',
+  },
+  {
+    key: 'payments.refund_window_closing',
+    queue: QueueName.Payments,
+    schedule: 'daily 07:30',
+  },
+  {
+    key: 'payments.dispute_deadline',
+    queue: QueueName.Payments,
+    schedule: 'daily 08:00',
+  },
+  {
+    key: 'payments.earnings_summary',
+    queue: QueueName.Payments,
+    schedule: 'monthly 1st 08:00',
+  },
+  {
+    key: 'payments.balance_cache_refresh',
+    queue: QueueName.Payments,
+    schedule: 'hourly',
+  },
+  {
+    key: 'payments.reconcile_webhooks',
+    queue: QueueName.Payments,
+    schedule: 'every 30m',
+  },
+  {
+    key: 'maintenance.cleanup_refresh_tokens',
+    queue: QueueName.Maintenance,
+    schedule: 'daily 04:00',
+  },
+  {
+    key: 'maintenance.cleanup_lockouts',
+    queue: QueueName.Maintenance,
+    schedule: 'daily 04:10',
+  },
+  {
+    key: 'maintenance.cleanup_invitations',
+    queue: QueueName.Maintenance,
+    schedule: 'daily 04:20',
+  },
+  {
+    key: 'maintenance.cleanup_client_requests',
+    queue: QueueName.Maintenance,
+    schedule: 'daily 04:30',
+  },
+];
+
+const TRIGGERABLE_KEYS: ReadonlySet<string> = new Set(
+  TRIGGERABLE_JOBS.map((j) => j.key),
+);
+
+/** Runtime guard: is this string a manually-triggerable sweep? */
+export function isTriggerableJob(name: string): name is TriggerableJobName {
+  return TRIGGERABLE_KEYS.has(name);
+}
+
+/**
  * Per-queue defaults applied to every job in that queue unless
  * overridden at enqueue time. The numbers come from
  * docs/research/jobs-system/02-bullmq-architecture-patterns.md.
