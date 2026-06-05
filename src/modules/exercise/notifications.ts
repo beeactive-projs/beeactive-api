@@ -13,8 +13,9 @@ import { NotificationType } from '../notification/notification.service';
  *     (fork notifications can be high-volume for popular public
  *     exercises; email by default would create inbox noise)
  *
- * Click target: `/exercises/:exerciseId` — the FE detail route works
- * for both instructor and client surfaces (gated by role).
+ * Click target: `/coaching/exercises` — the exercise catalog. There is
+ * no per-exercise detail *route* on the FE (detail opens as a dialog),
+ * so we land on the catalog rather than a non-existent `/exercises/:id`.
  */
 
 /**
@@ -36,9 +37,9 @@ export function exerciseForkedForOwner(input: {
     type: NotificationType.EXERCISE_FORKED,
     title: 'Your exercise was forked',
     body: `${input.forkedByName} forked "${input.exerciseName}" into their library. ${input.newForkCount} ${input.newForkCount === 1 ? 'fork' : 'forks'} total.`,
+    // No entityId — the catalog has no per-exercise route to deep-link to.
     data: {
-      screen: 'exercises',
-      entityId: input.exerciseId,
+      screen: 'coaching/exercises',
     },
   };
 }

@@ -15,8 +15,9 @@ import { NotificationType } from '../notification/notification.service';
 /**
  * The client just had a program assigned by their instructor.
  *
- * Click target: `/my/program-assignments/:id` — the client's
- * "today's workout" surface, gated by USER role on the FE.
+ * Click target: `/my/plans/:assignmentId` — the client's plan detail
+ * (ClientPlanDetail), reached the same way the "My plans" list links to
+ * it. `screen` must match the live FE route, not a hypothetical one.
  */
 export function programAssignedForClient(input: {
   clientId: string;
@@ -31,7 +32,7 @@ export function programAssignedForClient(input: {
     title: 'New program assigned',
     body: `${input.instructorName} assigned you "${input.programName}", starting ${input.startDate}.`,
     data: {
-      screen: 'assignments',
+      screen: 'my/plans',
       entityId: input.assignmentId,
     },
   };
