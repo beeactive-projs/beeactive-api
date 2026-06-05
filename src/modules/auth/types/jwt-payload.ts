@@ -11,6 +11,13 @@ export interface JwtPayload {
   sub: string;
   /** User email — included so clients can display it without a user fetch. */
   email?: string;
+  /**
+   * Set ONLY on admin impersonation tokens: the id of the admin acting
+   * as this user (see `AuthService.mintImpersonationToken`). Absent on
+   * every normal access/refresh token, so reading it is purely additive
+   * — existing tokens validate exactly as before.
+   */
+  act_as?: string;
   /** Issued-at (unix seconds). */
   iat?: number;
   /** Expiry (unix seconds). */

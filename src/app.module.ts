@@ -36,6 +36,7 @@ import { SearchModule } from './modules/search/search.module';
 import { PostModule } from './modules/post/post.module';
 import { ReviewModule } from './modules/review/review.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { CamelCaseInterceptor } from './common/interceptors/camel-case.interceptor';
 
 @Module({
@@ -113,6 +114,7 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     PostModule,
     ReviewModule,
     MessagingModule,
+    AdminModule,
   ],
 
   controllers: [],
