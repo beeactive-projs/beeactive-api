@@ -20,4 +20,10 @@ export class AdminOverviewController {
   getOverview() {
     return this.overview.getOverview();
   }
+
+  @Get('insights')
+  @ApiEndpoint(AdminDocs.getInsights)
+  getInsights() {
+    return this.overview.getInsights();
+  }
 }

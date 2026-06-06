@@ -42,6 +42,16 @@ export class AdminDomainController {
     return this.domain.deleteGroup(req.user.id, id, req.ip ?? null);
   }
 
+  @Delete('exercises/:id')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint(AdminDocs.deleteExercise)
+  deleteExercise(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.domain.deleteExercise(req.user.id, id, req.ip ?? null);
+  }
+
   @Get('sessions')
   @ApiEndpoint(AdminDocs.listSessions)
   sessions(@Query() q: AdminListDto) {

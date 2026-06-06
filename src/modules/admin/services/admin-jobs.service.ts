@@ -2,8 +2,14 @@ import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import type { LoggerService } from '@nestjs/common';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { JobsService } from '../../jobs/jobs.service';
-import { TRIGGERABLE_JOBS, isTriggerableJob } from '../../jobs/job-registry';
+import {
+  QueueName,
+  TRIGGERABLE_JOBS,
+  isTriggerableJob,
+} from '../../jobs/job-registry';
 import { AdminAuditService } from './admin-audit.service';
+
+const QUEUE_NAMES: readonly string[] = Object.values(QueueName);
 
 /**
  * Admin Operations — jobs/queues. Thin wrapper over JobsService (which
@@ -48,5 +54,35 @@ export class AdminJobsService {
       'AdminJobsService',
     );
     return { name, ...res };
+  }
+
+  private assertQueue(queue: string): QueueName {
+    if (!QUEUE_NAMES.includes(queue)) {
+      throw new BadRequestException(`Unknown queue '${queue}'.`);
+    }
+    return queue as QueueName;
+  }
+
+  /** Recent jobs (across states) for one queue. */
+  async listJobs(queue: string, perState = 10) {
+    return this.jobs.getQueueJobs(this.assertQueue(queue), perState);
+  }
+
+  /** Retry a failed/completed job. */
+  async retry(adminId: string, queue: string, jobId: string) {
+    const q = this.assertQueue(queue);
+    const res = await this.jobs.retryJob(q, jobId);
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'jobs.retry',
+      targetType: 'job',
+      targetId: `${queue}:${jobId}`,
+      meta: { state: res.state },
+    });
+    this.logger.log(
+      `Admin ${adminId} retried job ${queue}:${jobId} -> ${res.state}`,
+      'AdminJobsService',
+    );
+    return res;
   }
 }

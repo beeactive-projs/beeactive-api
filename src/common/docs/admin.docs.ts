@@ -82,6 +82,14 @@ export const AdminDocs = {
     responses: [{ status: 200, description: 'Overview counts' }],
   },
 
+  getInsights: {
+    summary: 'Dashboard insights',
+    description:
+      'Engagement: signups (24h/7d/30d), active users (last-login proxy), 5 latest signups, and 7-day record-creation by domain. Efficient COUNTs. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Insights' }],
+  },
+
   // ── Operations: jobs ─────────────────────────────────────────────
   jobsOverview: {
     summary: 'Jobs/queues overview',
@@ -96,6 +104,19 @@ export const AdminDocs = {
       'Manually enqueue an idempotent sweep (e.g. payments.reconcile_webhooks). SUPER_ADMIN only.',
     auth: true,
     responses: [{ status: 201, description: 'Enqueue result' }],
+  },
+  listQueueJobs: {
+    summary: 'Recent jobs for a queue',
+    description:
+      'Up to perState jobs per state (active/waiting/delayed/failed/completed), newest first. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Jobs list' }],
+  },
+  retryJob: {
+    summary: 'Retry a job',
+    description: 'Re-run a failed/completed job by id. SUPER_ADMIN only.',
+    auth: true,
+    responses: [{ status: 201, description: 'New job state' }],
   },
 
   // ── Operations: payments oversight ───────────────────────────────
@@ -176,6 +197,13 @@ export const AdminDocs = {
   deleteGroup: {
     summary: 'Delete group',
     description: 'Soft-delete a group (spam moderation). ADMIN+ (audited).',
+    auth: true,
+    responses: [{ status: 200, description: 'Deleted' }],
+  },
+  deleteExercise: {
+    summary: 'Delete exercise',
+    description:
+      'Soft-delete an exercise (e.g. a bad seeded/system entry). ADMIN+ (audited).',
     auth: true,
     responses: [{ status: 200, description: 'Deleted' }],
   },

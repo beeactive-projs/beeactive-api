@@ -71,6 +71,25 @@ export class AdminDomainService {
     return { id, deleted: true };
   }
 
+  async deleteExercise(adminId: string, id: string, ip: string | null) {
+    const exercise = await this.exerciseModel.findByPk(id);
+    if (!exercise) throw new NotFoundException('Exercise not found');
+    await exercise.destroy();
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'domain.exercise.delete',
+      targetType: 'exercise',
+      targetId: id,
+      meta: { name: exercise.name, source: exercise.source },
+      ip,
+    });
+    this.logger.log(
+      `Admin ${adminId} soft-deleted exercise ${id} (${exercise.source})`,
+      'AdminDomainService',
+    );
+    return { id, deleted: true };
+  }
+
   async listSessions(dto: AdminListDto) {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;

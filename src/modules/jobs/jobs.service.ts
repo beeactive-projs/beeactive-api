@@ -3,7 +3,7 @@ import type { LoggerService } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { ModuleRef } from '@nestjs/core';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { Queue } from 'bullmq';
+import { Queue, type JobType } from 'bullmq';
 import {
   JobPayload,
   JobPayloads,
@@ -17,6 +17,19 @@ export interface QueueOverview {
   name: QueueName;
   available: boolean;
   counts: Record<string, number> | null;
+}
+
+/** A single job's snapshot for the admin Operations jobs list. */
+export interface QueueJob {
+  id: string;
+  queue: QueueName;
+  name: string;
+  state: string;
+  attemptsMade: number;
+  timestamp: number | null;
+  processedOn: number | null;
+  finishedOn: number | null;
+  failedReason: string | null;
 }
 
 /**
@@ -155,6 +168,70 @@ export class JobsService {
       }),
     );
     return { redisEnabled, queues };
+  }
+
+  /**
+   * Recent jobs across the key states for one queue (admin Operations
+   * jobs list). Returns up to `perState` jobs per state, newest first.
+   * Empty + available:false when Redis isn't configured.
+   */
+  async getQueueJobs(
+    queueName: QueueName,
+    perState = 10,
+  ): Promise<{ available: boolean; jobs: QueueJob[] }> {
+    const queue = process.env.REDIS_HOST ? this.getQueue(queueName) : null;
+    if (!queue) return { available: false, jobs: [] };
+
+    const states: JobType[] = [
+      'active',
+      'waiting',
+      'delayed',
+      'failed',
+      'completed',
+    ];
+    const out: QueueJob[] = [];
+    for (const state of states) {
+      const list = await queue.getJobs([state], 0, perState - 1, false);
+      for (const j of list) {
+        if (!j) continue;
+        out.push({
+          id: String(j.id),
+          queue: queueName,
+          name: j.name,
+          state,
+          attemptsMade: j.attemptsMade ?? 0,
+          timestamp: j.timestamp ?? null,
+          processedOn: j.processedOn ?? null,
+          finishedOn: j.finishedOn ?? null,
+          failedReason: state === 'failed' ? (j.failedReason ?? null) : null,
+        });
+      }
+    }
+    out.sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+    return { available: true, jobs: out };
+  }
+
+  /**
+   * Re-run a finished job by id. Only `failed` or `completed` jobs can be
+   * retried (in-flight ones can't). Returns the resulting state.
+   */
+  async retryJob(
+    queueName: QueueName,
+    jobId: string,
+  ): Promise<{ id: string; state: string }> {
+    const queue = this.getQueue(queueName);
+    if (!queue) {
+      return { id: jobId, state: 'unavailable' };
+    }
+    const job = await queue.getJob(jobId);
+    if (!job) {
+      return { id: jobId, state: 'not_found' };
+    }
+    const state = await job.getState();
+    if (state === 'failed') await job.retry('failed');
+    else if (state === 'completed') await job.retry('completed');
+    else return { id: jobId, state }; // in-flight — nothing to retry
+    return { id: jobId, state: await job.getState() };
   }
 
   /**
