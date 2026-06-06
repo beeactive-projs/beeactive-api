@@ -80,8 +80,8 @@ describe('SearchService (smoke — not exhaustive)', () => {
 
   // ─── builds tsquery + trigram SQL (NOT raw LIKE) ──────────────────
 
-  describe('runQuery — uses tsvector + similarity (the index path)', () => {
-    it('builds a websearch_to_tsquery + similarity() SQL — never LIKE', async () => {
+  describe('runQuery — uses prefix tsvector + similarity (the index path)', () => {
+    it('builds a prefix to_tsquery + similarity() SQL — never LIKE', async () => {
       sequelize.query.mockResolvedValueOnce([]);
 
       await service.search({
@@ -96,18 +96,59 @@ describe('SearchService (smoke — not exhaustive)', () => {
 
       // Reads from the dedicated index — not the source tables.
       expect(sql).toContain('FROM search_doc');
-      // Trigram + full-text path (migration 029 contract).
-      expect(sql).toContain('websearch_to_tsquery');
+      // Prefix full-text path (typeahead) + trigram fuzzy fallback.
+      expect(sql).toContain('to_tsquery');
+      expect(sql).not.toContain('websearch_to_tsquery');
       expect(sql).toContain('similarity(search_text');
       // CRITICAL: no raw LIKE / iLike — that would bypass the GIN
       // indexes. CLAUDE.md spells this out for Postgres.
       expect(sql).not.toMatch(/\bLIKE\b/i);
       expect(sql).not.toMatch(/\biLike\b/i);
 
-      // Parametrised — never string-interpolated.
+      // Parametrised — never string-interpolated. The tsquery is a
+      // prefix query so partial words match incrementally.
       expect(opts.type).toBe(QueryTypes.SELECT);
       expect(opts.replacements.q).toBe('yoga');
+      expect(opts.replacements.tsQuery).toBe('yoga:*');
       expect(opts.replacements.viewerId).toBe('viewer-1');
+    });
+
+    it('builds a multi-term prefix query (AND-ed, each :*)', async () => {
+      sequelize.query.mockResolvedValueOnce([]);
+      await service.search({
+        query: 'yoga coach',
+        type: 'all',
+        limit: 5,
+        viewerId: null,
+      });
+      expect(sequelize.query.mock.calls[0][1].replacements.tsQuery).toBe(
+        'yoga:* & coach:*',
+      );
+    });
+
+    it('strips tsquery operators so they cannot break parsing', async () => {
+      sequelize.query.mockResolvedValueOnce([]);
+      await service.search({
+        query: "yo'ga & (coach):*",
+        type: 'all',
+        limit: 5,
+        viewerId: null,
+      });
+      // Operators stripped from each term, prefix re-applied.
+      expect(sequelize.query.mock.calls[0][1].replacements.tsQuery).toBe(
+        'yoga:* & coach:*',
+      );
+    });
+
+    it('short-circuits (no DB hit) when the query is only punctuation', async () => {
+      const out = await service.search({
+        query: '!@#$%',
+        type: 'all',
+        limit: 5,
+        viewerId: null,
+      });
+      expect(sequelize.query).not.toHaveBeenCalled();
+      expect(out.byCategory.instructors.items).toEqual([]);
     });
   });
 

@@ -98,7 +98,20 @@ export class SearchService {
     const wantedTypes = this._typesFor(opts.type);
     const limit = Math.max(1, Math.min(20, opts.limit ?? 5));
 
-    const rows = await this._runQuery(q, wantedTypes, opts.viewerId, limit);
+    // Prefix tsquery for typeahead: 'mot' -> 'mot:*' matches 'motionhive'.
+    // If the query is nothing but punctuation, there's nothing to match.
+    const tsQuery = this._buildPrefixTsQuery(q);
+    if (!tsQuery) {
+      return this._emptyResponse(q, Date.now() - t0);
+    }
+
+    const rows = await this._runQuery(
+      q,
+      tsQuery,
+      wantedTypes,
+      opts.viewerId,
+      limit,
+    );
 
     return {
       query: q,
@@ -109,15 +122,47 @@ export class SearchService {
 
   // ─────────────────────────────────────────────────────────────────
 
+  /**
+   * Build a prefix tsquery for typeahead. Each whitespace-separated term
+   * is stripped of tsquery operators, suffixed with `:*` (lexeme prefix
+   * match), and AND-ed together:
+   *
+   *   'mot'        -> 'mot:*'             (matches 'motionhive')
+   *   'tes'        -> 'tes:*'             (matches 'test')
+   *   'yoga coach' -> 'yoga:* & coach:*'
+   *
+   * This is the fix for incremental typing: `websearch_to_tsquery` only
+   * matched whole lexemes, so a partial word returned nothing until the
+   * word was complete. Returns '' when the query has no usable terms
+   * (e.g. all punctuation) — the caller short-circuits to empty.
+   */
+  private _buildPrefixTsQuery(q: string): string {
+    return (
+      q
+        .split(/\s+/)
+        // Allowlist: keep only Unicode letters/digits per term (drops
+        // tsquery operators &|!():*'" AND any other punctuation so
+        // `to_tsquery` can never choke or have an operator smuggled in).
+        // Accent-aware via \p{L} so 'București' survives.
+        .map((term) => term.replace(/[^\p{L}\p{N}]+/gu, ''))
+        .filter((term) => term.length > 0)
+        .map((term) => `${term}:*`)
+        .join(' & ')
+    );
+  }
+
   private async _runQuery(
     q: string,
+    tsQuery: string,
     types: string[],
     viewerId: string | null,
     perCategoryLimit: number,
   ): Promise<SearchQueryRow[]> {
     // Two SQL fragments OR'd:
-    //   1. tsvector @@ websearch_to_tsquery — precise match
-    //   2. similarity(search_text, q) > 0.25 — fuzzy fallback for typos
+    //   1. tsvector @@ to_tsquery('<term>:*') — prefix/full-text match
+    //      (carries typeahead; partial words match by lexeme prefix)
+    //   2. similarity(search_text, q) > 0.3 — fuzzy fallback for typos
+    //      ('yga' -> 'yoga'); threshold kept tight to cut weak noise
     // and a single composite score that combines both signals.
 
     // Sequelize's `:name` replacement does NOT auto-expand arrays into
@@ -141,7 +186,7 @@ export class SearchService {
           subtitle,
           avatar_url,
           (
-            COALESCE(ts_rank_cd(search_vector, websearch_to_tsquery('simple', :q)), 0) * 1.0
+            COALESCE(ts_rank_cd(search_vector, to_tsquery('simple', :tsQuery)), 0) * 1.0
             + similarity(search_text, :q) * 0.4
           ) * (
             CASE entity_type
@@ -156,15 +201,15 @@ export class SearchService {
           ROW_NUMBER() OVER (
             PARTITION BY entity_type
             ORDER BY (
-              COALESCE(ts_rank_cd(search_vector, websearch_to_tsquery('simple', :q)), 0)
+              COALESCE(ts_rank_cd(search_vector, to_tsquery('simple', :tsQuery)), 0)
               + similarity(search_text, :q) * 0.4
             ) DESC
           ) AS rn
         FROM search_doc
         WHERE entity_type IN (${typePlaceholders})
           AND (
-            search_vector @@ websearch_to_tsquery('simple', :q)
-            OR similarity(search_text, :q) > 0.25
+            search_vector @@ to_tsquery('simple', :tsQuery)
+            OR similarity(search_text, :q) > 0.3
           )
           AND (
             is_public = TRUE
@@ -180,6 +225,7 @@ export class SearchService {
     const rows = await this._sequelize.query<SearchQueryRow>(sql, {
       replacements: {
         q,
+        tsQuery,
         viewerId,
         perCategoryLimit,
         ...typeReplacements,

@@ -460,13 +460,20 @@ export class SearchIndexService {
     instructors: number;
     groups: number;
     sessions: number;
+    orphansPurged: number;
   }> {
     this.logger.log(
       'reindexAll: starting full search-index rebuild',
       'SearchIndexService',
     );
 
-    const result = { users: 0, instructors: 0, groups: 0, sessions: 0 };
+    const result = {
+      users: 0,
+      instructors: 0,
+      groups: 0,
+      sessions: 0,
+      orphansPurged: 0,
+    };
 
     // Users — only those active and non-deleted
     const users = await this._sequelize.query<{ id: string }>(
@@ -510,11 +517,51 @@ export class SearchIndexService {
       result.sessions += 1;
     }
 
+    // Purge orphans — index rows whose source entity no longer exists
+    // (deleted without a removeIfExists hook, or by raw SQL / migration).
+    // Without this, reindexAll only ADDS, so a "repair" run can't clean
+    // drift. Tag rows aren't generated here yet, so they're left alone.
+    result.orphansPurged = await this._purgeOrphans({
+      user: users.map((u) => u.id),
+      instructor: instructors.map((i) => i.user_id),
+      group: groups.map((g) => g.id),
+      session: templates.map((t) => t.id),
+    });
+
     this.logger.log(
-      `reindexAll: done — ${result.users} users, ${result.instructors} instructors, ${result.groups} groups, ${result.sessions} sessions`,
+      `reindexAll: done — ${result.users} users, ${result.instructors} instructors, ${result.groups} groups, ${result.sessions} sessions, ${result.orphansPurged} orphans purged`,
       'SearchIndexService',
     );
     return result;
+  }
+
+  /**
+   * Delete index rows whose source entity is no longer live. For each
+   * type, keep only rows whose `entity_id` is in the supplied live set;
+   * an empty live set purges every row of that type (nothing qualifies).
+   * Returns the number of rows removed.
+   */
+  private async _purgeOrphans(live: {
+    user: string[];
+    instructor: string[];
+    group: string[];
+    session: string[];
+  }): Promise<number> {
+    let purged = 0;
+    for (const [type, ids] of Object.entries(live)) {
+      const removed = await this._sequelize.query<{ id: string }>(
+        `DELETE FROM search_doc
+          WHERE entity_type = :type
+            AND NOT (entity_id = ANY(:ids::text[]))
+          RETURNING id`,
+        {
+          replacements: { type, ids },
+          type: QueryTypes.SELECT,
+        },
+      );
+      purged += removed.length;
+    }
+    return purged;
   }
 
   // ────── Internals ──────
