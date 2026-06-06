@@ -310,6 +310,10 @@ describe('SearchService (smoke — not exhaustive)', () => {
         subtitle: 'Pilates · 3 yrs',
         avatarUrl: 'a.jpg',
         score: 4.2,
+        // Enrichment fields default when absent from the mock row.
+        handle: null,
+        slug: null,
+        viewerIsMember: false,
       });
       expect(out.byCategory.instructors.total).toBe(1);
       // Cursor is always null in this slice — pagination is in the

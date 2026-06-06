@@ -17,6 +17,13 @@ export interface SearchQueryRow {
   subtitle: string | null;
   avatar_url: string | null;
   score: number;
+  // Enrichment for access-aware FE routing (joined at query time on the
+  // small result set; the ranking still runs on search_doc alone).
+  // Optional on the raw row so test fixtures can omit them; the mapping
+  // coalesces to null/false.
+  handle?: string | null; // user/instructor handle, or a session's instructor handle
+  slug?: string | null; // session template slug (for the public-by-slug lookup)
+  viewer_is_member?: boolean; // group rows: is the viewer an active member?
 }
 
 export interface SearchResultItem {
@@ -26,6 +33,12 @@ export interface SearchResultItem {
   subtitle: string | null;
   avatarUrl: string | null;
   score: number;
+  /** `/@handle` target for user/instructor; instructor handle for sessions. */
+  handle?: string | null;
+  /** Session template slug — with `handle`, resolves the public showcase. */
+  slug?: string | null;
+  /** Group rows only: the viewer is an active member → route them inside. */
+  viewerIsMember?: boolean;
 }
 
 export interface SearchCategoryResult {
@@ -216,10 +229,26 @@ export class SearchService {
             OR (:viewerId::text IS NOT NULL AND owner_id = :viewerId)
           )
       )
-      SELECT entity_type, entity_id, title, subtitle, avatar_url, score
-      FROM ranked
-      WHERE rn <= :perCategoryLimit
-      ORDER BY score DESC
+      SELECT
+        r.entity_type, r.entity_id, r.title, r.subtitle, r.avatar_url, r.score,
+        -- handle: instructor/user own handle, or a session's instructor handle
+        CASE WHEN r.entity_type = 'session' THEN su.handle ELSE u.handle END AS handle,
+        st.slug AS slug,
+        -- group rows: is the viewer an active member (route them inside)?
+        CASE WHEN r.entity_type = 'group' THEN EXISTS (
+          SELECT 1 FROM group_member gm
+          WHERE gm.group_id = r.entity_id
+            AND gm.user_id = :viewerId
+            AND gm.left_at IS NULL
+        ) ELSE FALSE END AS viewer_is_member
+      FROM ranked r
+      LEFT JOIN "user" u
+        ON u.id = r.entity_id AND r.entity_type IN ('user', 'instructor')
+      LEFT JOIN session_template st
+        ON st.id = r.entity_id AND r.entity_type = 'session'
+      LEFT JOIN "user" su ON su.id = st.instructor_id
+      WHERE r.rn <= :perCategoryLimit
+      ORDER BY r.score DESC
     `;
 
     const rows = await this._sequelize.query<SearchQueryRow>(sql, {
@@ -293,6 +322,9 @@ export class SearchService {
         subtitle: r.subtitle,
         avatarUrl: r.avatar_url,
         score: Number(r.score) || 0,
+        handle: r.handle ?? null,
+        slug: r.slug ?? null,
+        viewerIsMember: r.viewer_is_member ?? false,
       }));
       result[bucket] = {
         items,
