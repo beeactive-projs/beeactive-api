@@ -3,6 +3,7 @@ import type { LoggerService } from '@nestjs/common';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { JobsService } from '../../jobs/jobs.service';
 import { TRIGGERABLE_JOBS, isTriggerableJob } from '../../jobs/job-registry';
+import { AdminAuditService } from './admin-audit.service';
 
 /**
  * Admin Operations — jobs/queues. Thin wrapper over JobsService (which
@@ -14,6 +15,7 @@ import { TRIGGERABLE_JOBS, isTriggerableJob } from '../../jobs/job-registry';
 export class AdminJobsService {
   constructor(
     private readonly jobs: JobsService,
+    private readonly audit: AdminAuditService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -34,6 +36,13 @@ export class AdminJobsService {
       throw new BadRequestException(`Job '${name}' is not triggerable.`);
     }
     const res = await this.jobs.triggerCron(name);
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'jobs.trigger',
+      targetType: 'job',
+      targetId: name,
+      meta: { enqueued: res.enqueued, jobId: res.jobId },
+    });
     this.logger.log(
       `Admin ${adminId} triggered job ${name} (enqueued=${res.enqueued})`,
       'AdminJobsService',

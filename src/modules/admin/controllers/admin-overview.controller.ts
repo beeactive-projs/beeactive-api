@@ -11,7 +11,7 @@ import { AdminOverviewService } from '../services/admin-overview.service';
 @ApiTags('Admin — Overview')
 @Controller('admin/overview')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@Roles('ADMIN', 'SUPER_ADMIN')
+@Roles('ADMIN', 'SUPER_ADMIN', 'SUPPORT')
 export class AdminOverviewController {
   constructor(private readonly overview: AdminOverviewService) {}
 

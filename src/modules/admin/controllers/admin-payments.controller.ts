@@ -22,7 +22,7 @@ import { PaymentsListDto } from '../dto/payments-list.dto';
 @ApiTags('Admin — Payments')
 @Controller('admin/payments')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@Roles('ADMIN', 'SUPER_ADMIN')
+@Roles('ADMIN', 'SUPER_ADMIN', 'SUPPORT')
 export class AdminPaymentsController {
   constructor(private readonly payments: AdminPaymentsService) {}
 

@@ -7,8 +7,12 @@ import { PaymentModule } from '../payment/payment.module';
 // once in AppModule) — inject it directly; do NOT re-import JobsModule
 // here or its workers would double-register.
 import { AdminImpersonationLog } from './entities/admin-impersonation-log.entity';
+import { AdminActionLog } from './entities/admin-action-log.entity';
 // Models read by the admin services (cross-tenant queries + db browser).
 import { User } from '../user/entities/user.entity';
+import { Post } from '../post/entities/post.entity';
+import { Review } from '../review/entities/review.entity';
+import { Exercise } from '../exercise/entities/exercise.entity';
 import { Role } from '../role/entities/role.entity';
 import { UserRole } from '../role/entities/user-role.entity';
 import { InstructorProfile } from '../profile/entities/instructor-profile.entity';
@@ -35,6 +39,9 @@ import { AdminDbController } from './controllers/admin-db.controller';
 import { AdminOverviewController } from './controllers/admin-overview.controller';
 import { AdminJobsController } from './controllers/admin-jobs.controller';
 import { AdminPaymentsController } from './controllers/admin-payments.controller';
+import { AdminContentController } from './controllers/admin-content.controller';
+import { AdminDomainController } from './controllers/admin-domain.controller';
+import { AdminAuditController } from './controllers/admin-audit.controller';
 // Services
 import { AdminUsersService } from './services/admin-users.service';
 import { AdminImpersonationService } from './services/admin-impersonation.service';
@@ -42,6 +49,9 @@ import { AdminDbService } from './services/admin-db.service';
 import { AdminOverviewService } from './services/admin-overview.service';
 import { AdminJobsService } from './services/admin-jobs.service';
 import { AdminPaymentsService } from './services/admin-payments.service';
+import { AdminContentService } from './services/admin-content.service';
+import { AdminDomainService } from './services/admin-domain.service';
+import { AdminAuditService } from './services/admin-audit.service';
 
 /**
  * Admin module — a separate operator surface (consumed by the `admin`
@@ -53,6 +63,7 @@ import { AdminPaymentsService } from './services/admin-payments.service';
   imports: [
     SequelizeModule.forFeature([
       AdminImpersonationLog,
+      AdminActionLog,
       User,
       Role,
       UserRole,
@@ -73,6 +84,9 @@ import { AdminPaymentsService } from './services/admin-payments.service';
       Waitlist,
       Invoice,
       Payment,
+      Post,
+      Review,
+      Exercise,
     ]),
     RoleModule,
     AuthModule,
@@ -85,6 +99,9 @@ import { AdminPaymentsService } from './services/admin-payments.service';
     AdminOverviewController,
     AdminJobsController,
     AdminPaymentsController,
+    AdminContentController,
+    AdminDomainController,
+    AdminAuditController,
   ],
   providers: [
     AdminUsersService,
@@ -93,6 +110,9 @@ import { AdminPaymentsService } from './services/admin-payments.service';
     AdminOverviewService,
     AdminJobsService,
     AdminPaymentsService,
+    AdminContentService,
+    AdminDomainService,
+    AdminAuditService,
   ],
 })
 export class AdminModule {}

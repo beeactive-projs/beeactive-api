@@ -26,6 +26,7 @@ import { RefreshToken } from '../../auth/entities/refresh-token.entity';
 import { ListUsersDto } from '../dto/list-users.dto';
 import { UpdateUserStatusDto } from '../dto/update-user-status.dto';
 import { PRIVILEGED_ROLE_NAMES } from '../admin.constants';
+import { AdminAuditService } from './admin-audit.service';
 
 /**
  * Admin-safe user columns. Like USER_SAFE_ATTRIBUTES but adds the
@@ -75,6 +76,7 @@ export class AdminUsersService {
     @InjectModel(RefreshToken)
     private readonly refreshTokenModel: typeof RefreshToken,
     private readonly roleService: RoleService,
+    private readonly audit: AdminAuditService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -219,7 +221,12 @@ export class AdminUsersService {
     };
   }
 
-  async updateStatus(adminId: string, id: string, dto: UpdateUserStatusDto) {
+  async updateStatus(
+    adminId: string,
+    id: string,
+    dto: UpdateUserStatusDto,
+    ip: string | null = null,
+  ) {
     const user = await this.userModel.findByPk(id, { paranoid: false });
     if (!user) throw new NotFoundException('User not found');
 
@@ -235,6 +242,14 @@ export class AdminUsersService {
     }
 
     await user.save();
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'user.status.update',
+      targetType: 'user',
+      targetId: id,
+      meta: { ...dto },
+      ip,
+    });
     this.logger.log(
       `Admin ${adminId} updated status of user ${id}: ${JSON.stringify(dto)}`,
       'AdminUsersService',
@@ -247,6 +262,13 @@ export class AdminUsersService {
     if (!user) throw new NotFoundException('User not found');
 
     await this.roleService.assignRoleToUserByName(id, role);
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'user.role.assign',
+      targetType: 'user',
+      targetId: id,
+      meta: { role },
+    });
     this.logger.log(
       `Admin ${adminId} assigned role ${role} to user ${id}`,
       'AdminUsersService',
@@ -273,6 +295,13 @@ export class AdminUsersService {
     }
 
     await this.roleService.removeRoleFromUser(id, roleRow.id);
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'user.role.revoke',
+      targetType: 'user',
+      targetId: id,
+      meta: { role },
+    });
     this.logger.log(
       `Admin ${adminId} revoked role ${role} from user ${id}`,
       'AdminUsersService',
@@ -290,6 +319,12 @@ export class AdminUsersService {
     }
 
     await user.restore();
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'user.restore',
+      targetType: 'user',
+      targetId: id,
+    });
     this.logger.log(
       `Admin ${adminId} restored soft-deleted user ${id}`,
       'AdminUsersService',

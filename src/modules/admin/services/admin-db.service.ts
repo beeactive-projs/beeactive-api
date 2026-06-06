@@ -66,7 +66,14 @@ export class AdminDbService {
     const out: Record<string, unknown> = { ...row };
     for (const key of Object.keys(out)) {
       const perTable = entry.redact.includes(key);
-      const globalHit = GLOBAL_REDACT_PATTERNS.some((re) => re.test(key));
+      // raw:true rows are keyed by camelCase attribute names; the global
+      // secret patterns are snake_case-anchored. Test BOTH the raw key
+      // and its snake_case form so a `*Token`/`*Secret`/`*Hash` column is
+      // caught regardless of casing.
+      const snake = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+      const globalHit = GLOBAL_REDACT_PATTERNS.some(
+        (re) => re.test(key) || re.test(snake),
+      );
       if (perTable || globalHit) out[key] = REDACTED;
     }
     return out;

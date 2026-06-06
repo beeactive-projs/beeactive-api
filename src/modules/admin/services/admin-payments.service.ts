@@ -23,6 +23,7 @@ import {
 } from '../../payment/entities/webhook-event.entity';
 import { WebhookHandlerService } from '../../payment/services/webhook-handler.service';
 import { PaymentsListDto } from '../dto/payments-list.dto';
+import { AdminAuditService } from './admin-audit.service';
 
 const USER_BRIEF = ['id', 'email', 'firstName', 'lastName'];
 
@@ -43,6 +44,7 @@ export class AdminPaymentsService {
     @InjectModel(WebhookEvent)
     private readonly webhookEventModel: typeof WebhookEvent,
     private readonly webhookHandler: WebhookHandlerService,
+    private readonly audit: AdminAuditService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -153,6 +155,13 @@ export class AdminPaymentsService {
     }
     const event = row.payload as unknown as Stripe.Event;
     await this.webhookHandler.processQueued(id, event);
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'payments.webhook.reprocess',
+      targetType: 'webhook_event',
+      targetId: id,
+      meta: { type: row.type },
+    });
     this.logger.log(
       `Admin ${adminId} reprocessed webhook ${id} (${row.type})`,
       'AdminPaymentsService',

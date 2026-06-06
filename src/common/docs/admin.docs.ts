@@ -138,4 +138,74 @@ export const AdminDocs = {
     auth: true,
     responses: [{ status: 201, description: 'New webhook status' }],
   },
+
+  // ── Moderation: content ──────────────────────────────────────────
+  listPosts: {
+    summary: 'List posts',
+    description: 'Cross-tenant posts with author brief. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated posts' }],
+  },
+  deletePost: {
+    summary: 'Delete post',
+    description: 'Soft-delete (hide) a post. ADMIN+ (audited).',
+    auth: true,
+    responses: [{ status: 200, description: 'Deleted' }],
+  },
+  listReviews: {
+    summary: 'List reviews',
+    description:
+      'Cross-tenant instructor reviews with author brief. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated reviews' }],
+  },
+  deleteReview: {
+    summary: 'Delete review',
+    description: 'Soft-delete a review. ADMIN+ (audited).',
+    auth: true,
+    responses: [{ status: 200, description: 'Deleted' }],
+  },
+
+  // ── Curated domains ──────────────────────────────────────────────
+  listGroups: {
+    summary: 'List groups',
+    description: 'Cross-tenant groups with owner brief. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated groups' }],
+  },
+  deleteGroup: {
+    summary: 'Delete group',
+    description: 'Soft-delete a group (spam moderation). ADMIN+ (audited).',
+    auth: true,
+    responses: [{ status: 200, description: 'Deleted' }],
+  },
+  listSessions: {
+    summary: 'List sessions',
+    description:
+      'Cross-tenant session instances; status filter. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated sessions' }],
+  },
+  listVenues: {
+    summary: 'List venues',
+    description: 'Cross-tenant venues. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated venues' }],
+  },
+  listExercises: {
+    summary: 'List exercises',
+    description:
+      'Cross-tenant exercise catalog; status=source filter. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated exercises' }],
+  },
+
+  // ── Audit log ────────────────────────────────────────────────────
+  listAuditLog: {
+    summary: 'Admin action audit log',
+    description:
+      'Append-only log of admin mutations; optional action filter. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated audit rows' }],
+  },
 };

@@ -20,7 +20,7 @@ import { TriggerJobDto } from '../dto/trigger-job.dto';
 @ApiTags('Admin — Jobs')
 @Controller('admin/jobs')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@Roles('ADMIN', 'SUPER_ADMIN')
+@Roles('ADMIN', 'SUPER_ADMIN', 'SUPPORT')
 export class AdminJobsController {
   constructor(private readonly jobs: AdminJobsService) {}
 

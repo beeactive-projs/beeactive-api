@@ -30,7 +30,7 @@ import { AssignRoleDto } from '../dto/assign-role.dto';
 @ApiTags('Admin — Users')
 @Controller('admin/users')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@Roles('ADMIN', 'SUPER_ADMIN')
+@Roles('ADMIN', 'SUPER_ADMIN', 'SUPPORT')
 export class AdminUsersController {
   constructor(private readonly users: AdminUsersService) {}
 
@@ -47,13 +47,14 @@ export class AdminUsersController {
   }
 
   @Patch(':id/status')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint(AdminDocs.updateUserStatus)
   updateStatus(
     @Request() req: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserStatusDto,
   ) {
-    return this.users.updateStatus(req.user.id, id, dto);
+    return this.users.updateStatus(req.user.id, id, dto, req.ip ?? null);
   }
 
   @Post(':id/roles')
