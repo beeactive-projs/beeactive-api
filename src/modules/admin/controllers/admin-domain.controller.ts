@@ -1,9 +1,11 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Query,
   Request,
   UseGuards,
@@ -17,6 +19,7 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import type { AuthenticatedRequest } from '../../../common/types/authenticated-request';
 import { AdminDomainService } from '../services/admin-domain.service';
 import { AdminListDto } from '../dto/admin-list.dto';
+import { AdminUpdateExerciseDto } from '../dto/admin-update-exercise.dto';
 
 /** Curated domain browsers. Read ADMIN/SUPPORT+; group delete ADMIN+. */
 @ApiTags('Admin — Domains')
@@ -40,6 +43,28 @@ export class AdminDomainController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.domain.deleteGroup(req.user.id, id, req.ip ?? null);
+  }
+
+  @Get('exercises/:id')
+  @ApiEndpoint(AdminDocs.getExercise)
+  getExercise(@Param('id', ParseUUIDPipe) id: string) {
+    return this.domain.getExercise(id);
+  }
+
+  @Patch('exercises/:id')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint(AdminDocs.updateExercise)
+  updateExercise(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AdminUpdateExerciseDto,
+  ) {
+    return this.domain.updateExercise(
+      req.user.id,
+      id,
+      { ...dto },
+      req.ip ?? null,
+    );
   }
 
   @Delete('exercises/:id')

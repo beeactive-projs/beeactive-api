@@ -23,6 +23,12 @@ import { SessionInstance } from '../../session/entities/session-instance.entity'
 import { InstructorClient } from '../../client/entities/instructor-client.entity';
 import { StripeAccount } from '../../payment/entities/stripe-account.entity';
 import { RefreshToken } from '../../auth/entities/refresh-token.entity';
+import { WorkoutLog } from '../../workout/entities/workout-log.entity';
+import { SessionParticipant } from '../../session/entities/session-participant.entity';
+import { Message } from '../../messaging/entities/message.entity';
+import { ProgramAssignment } from '../../workout/entities/program-assignment.entity';
+import { Routine } from '../../routine/entities/routine.entity';
+import { Post } from '../../post/entities/post.entity';
 import { ListUsersDto } from '../dto/list-users.dto';
 import { UpdateUserStatusDto } from '../dto/update-user-status.dto';
 import { PRIVILEGED_ROLE_NAMES } from '../admin.constants';
@@ -75,6 +81,15 @@ export class AdminUsersService {
     private readonly stripeAccountModel: typeof StripeAccount,
     @InjectModel(RefreshToken)
     private readonly refreshTokenModel: typeof RefreshToken,
+    @InjectModel(WorkoutLog)
+    private readonly workoutLogModel: typeof WorkoutLog,
+    @InjectModel(SessionParticipant)
+    private readonly sessionParticipantModel: typeof SessionParticipant,
+    @InjectModel(Message) private readonly messageModel: typeof Message,
+    @InjectModel(ProgramAssignment)
+    private readonly programAssignmentModel: typeof ProgramAssignment,
+    @InjectModel(Routine) private readonly routineModel: typeof Routine,
+    @InjectModel(Post) private readonly postModel: typeof Post,
     private readonly roleService: RoleService,
     private readonly audit: AdminAuditService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
@@ -218,6 +233,60 @@ export class AdminUsersService {
             ipAddress: latestRefresh.ipAddress,
           }
         : null,
+    };
+  }
+
+  /**
+   * GDPR-safe engagement snapshot for one user: COUNTS + metadata only,
+   * never message/post content. Reading actual messages stays on the
+   * audited messaging-moderation path. Cheap parallel counts by FK.
+   */
+  async getUserActivity(id: string) {
+    const user = await this.userModel.findByPk(id, {
+      paranoid: false,
+      attributes: ['id', 'lastLoginAt'],
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const [
+      workoutsLogged,
+      bookings,
+      posts,
+      messagesSent,
+      programsAssigned,
+      routines,
+      sessionsTotal,
+      sessionsActive,
+    ] = await Promise.all([
+      this.workoutLogModel.count({ where: { userId: id } }),
+      this.sessionParticipantModel.count({ where: { userId: id } }),
+      this.postModel.count({ where: { authorId: id } }),
+      this.messageModel.count({ where: { senderId: id } }),
+      this.programAssignmentModel.count({ where: { clientId: id } }),
+      this.routineModel.count({ where: { userId: id } }),
+      this.refreshTokenModel.count({ where: { userId: id } }),
+      this.refreshTokenModel.count({
+        where: {
+          userId: id,
+          revokedAt: null,
+          expiresAt: { [Op.gt]: new Date() },
+        },
+      }),
+    ]);
+
+    return {
+      lastLoginAt: user.lastLoginAt ?? null,
+      counts: {
+        workoutsLogged,
+        bookings,
+        posts,
+        messagesSent,
+        programsAssigned,
+        routines,
+      },
+      // login-event tracking doesn't exist yet — refresh tokens are the
+      // best available proxy for "active sessions / devices".
+      sessions: { total: sessionsTotal, active: sessionsActive },
     };
   }
 

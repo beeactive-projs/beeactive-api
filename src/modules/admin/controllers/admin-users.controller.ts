@@ -46,6 +46,12 @@ export class AdminUsersController {
     return this.users.getUserDetail(id);
   }
 
+  @Get(':id/activity')
+  @ApiEndpoint(AdminDocs.getUserActivity)
+  getActivity(@Param('id', ParseUUIDPipe) id: string) {
+    return this.users.getUserActivity(id);
+  }
+
   @Patch(':id/status')
   @Roles('ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint(AdminDocs.updateUserStatus)

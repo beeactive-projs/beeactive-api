@@ -71,6 +71,42 @@ export class AdminDomainService {
     return { id, deleted: true };
   }
 
+  async getExercise(id: string) {
+    const exercise = await this.exerciseModel.findByPk(id, { paranoid: false });
+    if (!exercise) throw new NotFoundException('Exercise not found');
+    return exercise;
+  }
+
+  async updateExercise(
+    adminId: string,
+    id: string,
+    patch: Record<string, unknown>,
+    ip: string | null,
+  ) {
+    const exercise = await this.exerciseModel.findByPk(id);
+    if (!exercise) throw new NotFoundException('Exercise not found');
+    // Apply only the provided scalar fields — strip undefined so we never
+    // null out a NOT NULL column the caller didn't touch.
+    const clean = Object.fromEntries(
+      Object.entries(patch).filter(([, v]) => v !== undefined),
+    );
+    exercise.set(clean);
+    await exercise.save();
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'domain.exercise.update',
+      targetType: 'exercise',
+      targetId: id,
+      meta: { fields: Object.keys(clean) },
+      ip,
+    });
+    this.logger.log(
+      `Admin ${adminId} updated exercise ${id} (${Object.keys(patch).join(',')})`,
+      'AdminDomainService',
+    );
+    return exercise;
+  }
+
   async deleteExercise(adminId: string, id: string, ip: string | null) {
     const exercise = await this.exerciseModel.findByPk(id);
     if (!exercise) throw new NotFoundException('Exercise not found');

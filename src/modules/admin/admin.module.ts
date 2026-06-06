@@ -13,6 +13,11 @@ import { User } from '../user/entities/user.entity';
 import { Post } from '../post/entities/post.entity';
 import { Review } from '../review/entities/review.entity';
 import { Exercise } from '../exercise/entities/exercise.entity';
+import { WorkoutLog } from '../workout/entities/workout-log.entity';
+import { SessionParticipant } from '../session/entities/session-participant.entity';
+import { Message } from '../messaging/entities/message.entity';
+import { ProgramAssignment } from '../workout/entities/program-assignment.entity';
+import { Routine } from '../routine/entities/routine.entity';
 import { Role } from '../role/entities/role.entity';
 import { UserRole } from '../role/entities/user-role.entity';
 import { InstructorProfile } from '../profile/entities/instructor-profile.entity';
@@ -87,6 +92,11 @@ import { AdminAuditService } from './services/admin-audit.service';
       Post,
       Review,
       Exercise,
+      WorkoutLog,
+      SessionParticipant,
+      Message,
+      ProgramAssignment,
+      Routine,
     ]),
     RoleModule,
     AuthModule,

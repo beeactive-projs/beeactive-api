@@ -19,6 +19,13 @@ export const AdminDocs = {
     auth: true,
     responses: [{ status: 200, description: 'User detail' }],
   },
+  getUserActivity: {
+    summary: 'User activity (GDPR-safe)',
+    description:
+      'Engagement COUNTS only (workouts, bookings, posts, messages sent, programs, routines) + last login + session counts. No content. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Activity counts' }],
+  },
   updateUserStatus: {
     summary: 'Update user status',
     description:
@@ -199,6 +206,19 @@ export const AdminDocs = {
     description: 'Soft-delete a group (spam moderation). ADMIN+ (audited).',
     auth: true,
     responses: [{ status: 200, description: 'Deleted' }],
+  },
+  getExercise: {
+    summary: 'Exercise detail',
+    description: 'Full exercise row for the admin edit form. ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Exercise' }],
+  },
+  updateExercise: {
+    summary: 'Edit exercise',
+    description:
+      'Update scalar fields of an exercise (seeded/system included). Relations out of scope. ADMIN+ (audited).',
+    auth: true,
+    responses: [{ status: 200, description: 'Updated exercise' }],
   },
   deleteExercise: {
     summary: 'Delete exercise',
