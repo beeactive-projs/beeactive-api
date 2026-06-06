@@ -43,10 +43,13 @@ export class AdminJobsController {
   @ApiEndpoint(AdminDocs.listQueueJobs)
   listJobs(
     @Param('queue') queue: string,
-    @Query('perState') perState?: string,
+    @Query('state') state?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    const n = Math.min(50, Math.max(1, Number(perState) || 10));
-    return this.jobs.listJobs(queue, n);
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(100, Math.max(1, Number(limit) || 20));
+    return this.jobs.listJobs(queue, state ?? 'failed', p, l);
   }
 
   @Post('queues/:queue/jobs/:jobId/retry')

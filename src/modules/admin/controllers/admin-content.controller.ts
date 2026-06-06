@@ -48,6 +48,18 @@ export class AdminContentController {
     return this.content.listReviews(q);
   }
 
+  @Get('feedback')
+  @ApiEndpoint(AdminDocs.listFeedback)
+  feedback(@Query() q: AdminListDto) {
+    return this.content.listFeedback(q);
+  }
+
+  @Get('waitlist')
+  @ApiEndpoint(AdminDocs.listWaitlist)
+  waitlist(@Query() q: AdminListDto) {
+    return this.content.listWaitlist(q);
+  }
+
   @Delete('reviews/:id')
   @Roles('ADMIN', 'SUPER_ADMIN')
   @ApiEndpoint(AdminDocs.deleteReview)

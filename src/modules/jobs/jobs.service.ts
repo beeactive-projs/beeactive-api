@@ -171,44 +171,52 @@ export class JobsService {
   }
 
   /**
-   * Recent jobs across the key states for one queue (admin Operations
-   * jobs list). Returns up to `perState` jobs per state, newest first.
-   * Empty + available:false when Redis isn't configured.
+   * Paginated jobs for one queue, scoped to a single state (admin
+   * Operations jobs list). `total` is that state's live count, so the UI
+   * can paginate properly. Empty + available:false when Redis is off.
    */
   async getQueueJobs(
     queueName: QueueName,
-    perState = 10,
-  ): Promise<{ available: boolean; jobs: QueueJob[] }> {
+    state: JobType,
+    page = 1,
+    limit = 20,
+  ): Promise<{
+    available: boolean;
+    items: QueueJob[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
     const queue = process.env.REDIS_HOST ? this.getQueue(queueName) : null;
-    if (!queue) return { available: false, jobs: [] };
-
-    const states: JobType[] = [
-      'active',
-      'waiting',
-      'delayed',
-      'failed',
-      'completed',
-    ];
-    const out: QueueJob[] = [];
-    for (const state of states) {
-      const list = await queue.getJobs([state], 0, perState - 1, false);
-      for (const j of list) {
-        if (!j) continue;
-        out.push({
-          id: String(j.id),
-          queue: queueName,
-          name: j.name,
-          state,
-          attemptsMade: j.attemptsMade ?? 0,
-          timestamp: j.timestamp ?? null,
-          processedOn: j.processedOn ?? null,
-          finishedOn: j.finishedOn ?? null,
-          failedReason: state === 'failed' ? (j.failedReason ?? null) : null,
-        });
-      }
+    if (!queue) {
+      return { available: false, items: [], total: 0, page, pageSize: limit };
     }
-    out.sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
-    return { available: true, jobs: out };
+    const start = (page - 1) * limit;
+    const end = start + limit - 1;
+    const [list, counts] = await Promise.all([
+      queue.getJobs([state], start, end, false),
+      queue.getJobCounts(state),
+    ]);
+    const items: QueueJob[] = list
+      .filter((j): j is NonNullable<typeof j> => !!j)
+      .map((j) => ({
+        id: String(j.id),
+        queue: queueName,
+        name: j.name,
+        state,
+        attemptsMade: j.attemptsMade ?? 0,
+        timestamp: j.timestamp ?? null,
+        processedOn: j.processedOn ?? null,
+        finishedOn: j.finishedOn ?? null,
+        failedReason: j.failedReason ?? null,
+      }));
+    return {
+      available: true,
+      items,
+      total: counts[state] ?? 0,
+      page,
+      pageSize: limit,
+    };
   }
 
   /**

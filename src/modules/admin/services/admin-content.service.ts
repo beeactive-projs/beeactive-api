@@ -6,8 +6,11 @@ import {
   buildPaginatedResponse,
   getOffset,
 } from '../../../common/dto/pagination.dto';
+import { Op, type WhereOptions } from 'sequelize';
 import { Post } from '../../post/entities/post.entity';
 import { Review } from '../../review/entities/review.entity';
+import { Feedback } from '../../feedback/entities/feedback.entity';
+import { Waitlist } from '../../waitlist/entities/waitlist.entity';
 import { AdminListDto } from '../dto/admin-list.dto';
 import { AdminAuditService } from './admin-audit.service';
 
@@ -23,6 +26,8 @@ export class AdminContentService {
   constructor(
     @InjectModel(Post) private readonly postModel: typeof Post,
     @InjectModel(Review) private readonly reviewModel: typeof Review,
+    @InjectModel(Feedback) private readonly feedbackModel: typeof Feedback,
+    @InjectModel(Waitlist) private readonly waitlistModel: typeof Waitlist,
     private readonly audit: AdminAuditService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
@@ -57,6 +62,48 @@ export class AdminContentService {
       'AdminContentService',
     );
     return { id, deleted: true };
+  }
+
+  async listFeedback(dto: AdminListDto) {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? 20;
+    const where: WhereOptions<Feedback> = dto.q?.trim()
+      ? ({
+          [Op.or]: [
+            { title: { [Op.iLike]: `%${dto.q.trim()}%` } },
+            { email: { [Op.iLike]: `%${dto.q.trim()}%` } },
+            { type: { [Op.iLike]: `%${dto.q.trim()}%` } },
+          ],
+        } as WhereOptions<Feedback>)
+      : {};
+    const { rows, count } = await this.feedbackModel.findAndCountAll({
+      where,
+      limit,
+      offset: getOffset(page, limit),
+      order: [['createdAt', 'DESC']],
+    });
+    return buildPaginatedResponse(rows, count, page, limit);
+  }
+
+  async listWaitlist(dto: AdminListDto) {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? 20;
+    const where: WhereOptions<Waitlist> = dto.q?.trim()
+      ? ({
+          [Op.or]: [
+            { email: { [Op.iLike]: `%${dto.q.trim()}%` } },
+            { name: { [Op.iLike]: `%${dto.q.trim()}%` } },
+            { source: { [Op.iLike]: `%${dto.q.trim()}%` } },
+          ],
+        } as WhereOptions<Waitlist>)
+      : {};
+    const { rows, count } = await this.waitlistModel.findAndCountAll({
+      where,
+      limit,
+      offset: getOffset(page, limit),
+      order: [['createdAt', 'DESC']],
+    });
+    return buildPaginatedResponse(rows, count, page, limit);
   }
 
   async listReviews(dto: AdminListDto) {

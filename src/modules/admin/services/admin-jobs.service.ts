@@ -63,9 +63,24 @@ export class AdminJobsService {
     return queue as QueueName;
   }
 
-  /** Recent jobs (across states) for one queue. */
-  async listJobs(queue: string, perState = 10) {
-    return this.jobs.getQueueJobs(this.assertQueue(queue), perState);
+  private static readonly JOB_STATES = [
+    'active',
+    'waiting',
+    'delayed',
+    'failed',
+    'completed',
+  ];
+
+  /** Paginated jobs for one queue, scoped to a state. */
+  async listJobs(queue: string, state: string, page: number, limit: number) {
+    const q = this.assertQueue(queue);
+    const s = AdminJobsService.JOB_STATES.includes(state) ? state : 'failed';
+    return this.jobs.getQueueJobs(
+      q,
+      s as Parameters<typeof this.jobs.getQueueJobs>[1],
+      page,
+      limit,
+    );
   }
 
   /** Retry a failed/completed job. */

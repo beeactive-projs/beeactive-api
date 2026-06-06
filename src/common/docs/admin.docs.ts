@@ -194,6 +194,21 @@ export const AdminDocs = {
     responses: [{ status: 200, description: 'Deleted' }],
   },
 
+  listFeedback: {
+    summary: 'List feedback',
+    description:
+      'Paginated feedback with optional search (title/email/type). ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated feedback' }],
+  },
+  listWaitlist: {
+    summary: 'List waitlist',
+    description:
+      'Paginated waitlist with optional search (email/name/source). ADMIN/SUPPORT+.',
+    auth: true,
+    responses: [{ status: 200, description: 'Paginated waitlist' }],
+  },
+
   // ── Curated domains ──────────────────────────────────────────────
   listGroups: {
     summary: 'List groups',
