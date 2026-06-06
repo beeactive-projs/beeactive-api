@@ -228,6 +228,19 @@ export class SearchService {
             is_public = TRUE
             OR (:viewerId::text IS NOT NULL AND owner_id = :viewerId)
           )
+          -- Don't surface sessions that aren't bookable anymore: a session
+          -- (template) only shows if it still has an upcoming SCHEDULED
+          -- instance. Filtered live so a series that just ran out drops out
+          -- without waiting for a reindex. (Matches findNextUpcoming.)
+          AND (
+            entity_type <> 'session'
+            OR EXISTS (
+              SELECT 1 FROM session_instance si
+              WHERE si.template_id = search_doc.entity_id
+                AND si.status = 'SCHEDULED'
+                AND si.start_at >= NOW()
+            )
+          )
       )
       SELECT
         r.entity_type, r.entity_id, r.title, r.subtitle, r.avatar_url, r.score,
