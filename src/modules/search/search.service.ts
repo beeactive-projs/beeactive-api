@@ -241,6 +241,28 @@ export class SearchService {
                 AND si.start_at >= NOW()
             )
           )
+          -- Don't surface groups that aren't viewable anymore: re-check the
+          -- LIVE group (search_doc.is_public can be stale). It must exist,
+          -- be active and not deleted, and be public OR one the viewer is a
+          -- member of — matching what the preview / detail can actually open.
+          AND (
+            entity_type <> 'group'
+            OR EXISTS (
+              SELECT 1 FROM "group" g
+              WHERE g.id = search_doc.entity_id
+                AND g.deleted_at IS NULL
+                AND g.is_active = TRUE
+                AND (
+                  g.is_public = TRUE
+                  OR EXISTS (
+                    SELECT 1 FROM group_member gm
+                    WHERE gm.group_id = g.id
+                      AND gm.user_id = :viewerId
+                      AND gm.left_at IS NULL
+                  )
+                )
+            )
+          )
       )
       SELECT
         r.entity_type, r.entity_id, r.title, r.subtitle, r.avatar_url, r.score,
