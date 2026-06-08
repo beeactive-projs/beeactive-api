@@ -100,7 +100,7 @@ export function bookingDeclinedForUser(
     type: NotificationType.SESSION_STATUS_CHANGED,
     title: 'Booking declined',
     body: `Your booking for "${session.title}" was not approved.${tail}`,
-    data: { screen: 'my/sessions' },
+    data: { screen: 'user/sessions' },
   };
 }
 
