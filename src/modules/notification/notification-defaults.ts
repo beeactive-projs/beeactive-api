@@ -110,7 +110,15 @@ export const NOTIFICATION_DEFAULTS: Record<
   [NotificationType.STRIPE_ACCOUNT_RESTRICTED]: ON_EVERYTHING_BUT_SMS,
   // Disputes / refunds — instructor must respond on a deadline.
   [NotificationType.DISPUTE_OPENED]: ON_EVERYTHING_BUT_SMS,
+  // Dispute evidence deadline approaching — high-urgency money event.
+  [NotificationType.DISPUTE_EVIDENCE_DUE]: ON_EVERYTHING_BUT_SMS,
   [NotificationType.REFUND_ISSUED]: IN_APP_AND_EMAIL,
+  // Refund window closing — instructor's last chance to refund; push it.
+  [NotificationType.REFUND_WINDOW_CLOSING]: ON_EVERYTHING_BUT_SMS,
+  // Card expiring soon — client should update before the next charge fails.
+  [NotificationType.CARD_EXPIRING_SOON]: IN_APP_AND_EMAIL,
+  // Monthly earnings summary — a written record the instructor wants.
+  [NotificationType.EARNINGS_SUMMARY]: IN_APP_AND_EMAIL,
 
   // ── Posts ────────────────────────────────────────────────
   [NotificationType.POST_NEW_COMMENT]: IN_APP_ONLY,
@@ -122,6 +130,14 @@ export const NOTIFICATION_DEFAULTS: Record<
   // In-app on every message; email is throttled at the call site
   // (one per recipient/conversation/hour). Push reserved for v2.
   [NotificationType.MESSAGE_RECEIVED]: IN_APP_AND_EMAIL,
+
+  // ── Workouts ─────────────────────────────────────────────
+  // Fork notifications are high-volume on popular public exercises;
+  // keep them in-app to avoid an inbox flood.
+  [NotificationType.EXERCISE_FORKED]: IN_APP_ONLY,
+  // Program assignment is a real coaching event — email so the
+  // client sees it even when they're not in the app.
+  [NotificationType.PROGRAM_ASSIGNED]: IN_APP_AND_EMAIL,
 };
 
 /**

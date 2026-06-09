@@ -10,7 +10,7 @@ import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { Sequelize } from 'sequelize-typescript';
-import { Transaction } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import { stripHtml } from '../../../common/utils/text.utils';
 import { User } from '../../user/entities/user.entity';
 import { NotificationService } from '../../notification/notification.service';
@@ -485,6 +485,82 @@ export class SessionBookingService {
 
     await outbox.flush();
     return { status: 'DECLINED' };
+  }
+
+  // ─── SYSTEM SWEEP (jobs module) ───────────────────────────────────
+
+  /**
+   * Decline PENDING_APPROVAL bookings whose session start has already
+   * passed — an instructor can't meaningfully approve someone into a
+   * session that's begun. Driven by the
+   * `sessions.cleanup_stale_participants` cron.
+   *
+   * Retry-safe + idempotent: each candidate is re-locked and its status
+   * re-checked inside its own tx, so a re-run (or a concurrent approve)
+   * never double-decrements the counter. Per-participant tx isolates
+   * one bad row from the batch. Silent — no notification on an expiry
+   * (these were never confirmed; in-app churn only).
+   */
+  async expireStalePendingApprovals(
+    now: Date,
+    limit = 500,
+  ): Promise<{ expired: number }> {
+    const candidates = await this.participantModel.findAll({
+      where: { status: SessionParticipantStatus.PendingApproval },
+      include: [
+        {
+          model: this.instanceModel,
+          as: 'instance',
+          required: true,
+          where: { startAt: { [Op.lte]: now } },
+          attributes: ['id'],
+        },
+      ],
+      attributes: ['id', 'instanceId'],
+      limit,
+    });
+
+    let expired = 0;
+    for (const candidate of candidates) {
+      const didExpire = await this.sequelize.transaction(async (tx) => {
+        const participant = await this.participantModel.findOne({
+          where: { id: candidate.id },
+          lock: tx.LOCK.UPDATE,
+          transaction: tx,
+        });
+        if (
+          !participant ||
+          participant.status !== SessionParticipantStatus.PendingApproval
+        ) {
+          return false; // approved/declined/cancelled since we listed it
+        }
+        await participant.update(
+          {
+            status: SessionParticipantStatus.Declined,
+            declinedAt: now,
+            cancelReason:
+              'Auto-declined: session start passed while pending approval.',
+          },
+          { transaction: tx },
+        );
+        await this.incCounter(
+          participant.instanceId,
+          SessionParticipantStatus.PendingApproval,
+          -1,
+          tx,
+        );
+        return true;
+      });
+      if (didExpire) expired += 1;
+    }
+
+    if (expired > 0) {
+      this.logger.log?.(
+        `Auto-declined ${expired} stale pending booking(s)`,
+        'SessionBookingService',
+      );
+    }
+    return { expired };
   }
 
   // ─── PATCH PARTICIPANT (attendance + private note, instructor) ────

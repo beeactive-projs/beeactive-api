@@ -2,10 +2,10 @@ import { Inject } from '@nestjs/common';
 import type { LoggerService } from '@nestjs/common';
 import { WorkerHost } from '@nestjs/bullmq';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { UnrecoverableError, type Job } from 'bullmq';
+import { type Job } from 'bullmq';
 import { JobPayload, JobPayloads } from '../job-registry';
 import { buildJobContext, JobContext } from './job-context';
-import { PermanentError, TemporaryError } from './errors';
+import { runHandler } from './run-handler';
 
 /**
  * Shared base class for every BullMQ worker.
@@ -52,39 +52,11 @@ export abstract class BaseWorker<
 
   /**
    * BullMQ entry point. Don't override in subclasses — extend
-   * `handle()` instead.
+   * `handle()` instead. The error→retry translation lives in the
+   * shared `runHandler` helper (also used by `MultiJobWorker`).
    */
   async process(job: Job<JobPayload<K>>): Promise<void> {
     const ctx = buildJobContext(job, this.logger);
-    ctx.log.log('starting');
-
-    try {
-      await this.handle(job.data, ctx);
-      ctx.log.log('done');
-    } catch (err) {
-      // Permanent → wrap so BullMQ skips remaining attempts and
-      // moves the job to the failed queue immediately. The cause
-      // chain is preserved on the wrapper so Bull Board / logs
-      // show the original message + stack.
-      if (err instanceof PermanentError) {
-        ctx.log.error(`permanent: ${err.message}`);
-        throw new UnrecoverableError(err.message);
-      }
-
-      // Temporary → bubble up. BullMQ schedules a retry per the
-      // queue's `attempts` config (5 by default for notifications,
-      // exponential backoff starting at 2s).
-      if (err instanceof TemporaryError) {
-        ctx.log.warn(`transient: ${err.message} — will retry`);
-        throw err;
-      }
-
-      // Anything else — unknown error, treat as transient. We err on
-      // the side of retry because permanent failures should always be
-      // explicitly classified by handlers, not assumed.
-      const message = err instanceof Error ? err.message : String(err);
-      ctx.log.error(`unclassified error: ${message} — will retry`);
-      throw err;
-    }
+    await runHandler(ctx, () => this.handle(job.data, ctx));
   }
 }

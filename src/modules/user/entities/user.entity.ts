@@ -232,6 +232,22 @@ export class User extends Model {
   })
   declare privacySettings: UserPrivacySettings;
 
+  /**
+   * Client-side exercise catalog browse gate (locked decision §19).
+   * Stores ONLY the explicit opt-in; effective access is computed at
+   * read time as `optIn OR has-any-non-cancelled-program-assignment`.
+   *
+   * Default FALSE — clients without a coaching relationship don't see
+   * the catalog browse surface unless they explicitly enable it.
+   * Added by migration 047.
+   */
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare exerciseCatalogOptIn: boolean;
+
   @CreatedAt
   declare createdAt: Date;
 

@@ -19,7 +19,7 @@ import { NotificationOutbox } from '../../notification/notification-outbox';
 import { refundIssuedForClient } from '../notifications';
 import { CreateRefundDto } from '../dto/create-refund.dto';
 
-const MAX_REFUND_WINDOW_DAYS = 14;
+export const MAX_REFUND_WINDOW_DAYS = 14;
 
 @Injectable()
 export class RefundService {

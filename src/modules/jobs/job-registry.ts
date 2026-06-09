@@ -29,6 +29,10 @@
  */
 export enum QueueName {
   Notifications = 'notifications',
+  Sessions = 'sessions',
+  Workouts = 'workouts',
+  Payments = 'payments',
+  Maintenance = 'maintenance',
 }
 
 /**
@@ -64,6 +68,72 @@ export interface JobPayloads {
     /** Button label shown next to the CTA URL. */
     ctaLabel?: string;
   };
+
+  // ── Sessions ────────────────────────────────────────────────────────
+  // System-wide sweeps. No per-call payload — the worker queries the DB
+  // for what's due at run time (resilient: a run catches up everything
+  // outstanding, not just one row). `runKey` is an optional dedup tag
+  // the scheduler stamps from a coarse time bucket so overlapping cron
+  // ticks collapse to one job.
+
+  /** Read due `session_reminder_schedule` rows and fan out reminders. */
+  'sessions.reminder_dispatch': { runKey?: string };
+  /** Flip SCHEDULED→IN_PROGRESS (start passed) and IN_PROGRESS→COMPLETED (end passed). */
+  'sessions.status_transition': { runKey?: string };
+  /** Top up future occurrences for recurring templates to the horizon. */
+  'sessions.generate_recurring': { runKey?: string };
+  /** Decline PENDING_APPROVAL bookings whose session start has passed. */
+  'sessions.cleanup_stale_participants': { runKey?: string };
+
+  // ── Workouts ────────────────────────────────────────────────────────
+
+  /** Skip never-started assigned workouts whose scheduled date is in the past. */
+  'workouts.auto_skip_past_workouts': { runKey?: string };
+  /** Complete assignments whose workouts are all COMPLETED or SKIPPED. */
+  'workouts.auto_complete_assignments': { runKey?: string };
+
+  // ── Payments ────────────────────────────────────────────────────────
+  // System-wide reminder/maintenance sweeps; idempotent via notification
+  // fingerprints. `runKey` is the coarse time-bucket dedup tag.
+
+  /** Remind clients of OPEN invoices due within ~3 days. */
+  'payments.invoice_due_soon': { runKey?: string };
+  /** Escalate OPEN invoices past their due date (client + instructor). */
+  'payments.invoice_overdue': { runKey?: string };
+  /** Warn clients whose subscription card expires within ~30 days. */
+  'payments.card_expiring': { runKey?: string };
+  /** Email each instructor a summary of the previous month's earnings. */
+  'payments.earnings_summary': { runKey?: string };
+  /** Warn instructors when a payment's 14-day refund window is ~2 days out. */
+  'payments.refund_window_closing': { runKey?: string };
+  /** Nudge clients on OPEN invoices whose payment failed and remains unpaid. */
+  'payments.dunning': { runKey?: string };
+  /** Remind instructors of disputes whose evidence deadline is approaching. */
+  'payments.dispute_deadline': { runKey?: string };
+  /** Refresh the cached Stripe balance on each connected account. */
+  'payments.balance_cache_refresh': { runKey?: string };
+  /** Process a verified Stripe webhook event off the request path.
+   *  `event` carries the full verified Stripe.Event so account.* keep
+   *  their top-level `event.account`. */
+  'payments.process_webhook': {
+    webhookEventId: string;
+    event: Record<string, unknown>;
+  };
+  /** Re-process ORPHANED webhook rows whose local entity has since
+   *  appeared; age out the truly stuck ones. */
+  'payments.reconcile_webhooks': { runKey?: string };
+
+  // ── Maintenance ─────────────────────────────────────────────────────
+  // Bulk housekeeping sweeps; silent + idempotent.
+
+  /** Delete expired refresh tokens. */
+  'maintenance.cleanup_refresh_tokens': { runKey?: string };
+  /** Reset account lockouts whose window has elapsed. */
+  'maintenance.cleanup_lockouts': { runKey?: string };
+  /** Decline still-pending invitations past their expiry. */
+  'maintenance.cleanup_invitations': { runKey?: string };
+  /** Decline PENDING client requests past their 30-day window. */
+  'maintenance.cleanup_client_requests': { runKey?: string };
 }
 
 /**
@@ -80,7 +150,156 @@ export type JobPayload<K extends keyof JobPayloads> = JobPayloads[K];
  */
 export const ALL_JOB_NAMES: ReadonlyArray<keyof JobPayloads> = [
   'notifications.email_send',
+  'sessions.reminder_dispatch',
+  'sessions.status_transition',
+  'sessions.generate_recurring',
+  'sessions.cleanup_stale_participants',
+  'workouts.auto_skip_past_workouts',
+  'workouts.auto_complete_assignments',
+  'payments.invoice_due_soon',
+  'payments.invoice_overdue',
+  'payments.card_expiring',
+  'payments.earnings_summary',
+  'payments.refund_window_closing',
+  'payments.dunning',
+  'payments.dispute_deadline',
+  'payments.balance_cache_refresh',
+  'payments.process_webhook',
+  'payments.reconcile_webhooks',
+  'maintenance.cleanup_refresh_tokens',
+  'maintenance.cleanup_lockouts',
+  'maintenance.cleanup_invitations',
+  'maintenance.cleanup_client_requests',
 ] as const;
+
+/**
+ * Jobs an operator may trigger on demand from the admin console. These
+ * are the idempotent system sweeps — every one takes a `{ runKey? }`
+ * payload and is safe to fire manually (a manual run just catches up
+ * whatever is outstanding). The two payload-carrying jobs
+ * (`notifications.email_send`, `payments.process_webhook`) are
+ * deliberately excluded — they need real per-event data, not a sweep.
+ */
+export type TriggerableJobName = Exclude<
+  keyof JobPayloads,
+  'notifications.email_send' | 'payments.process_webhook'
+>;
+
+/**
+ * Catalog of manually-triggerable sweeps with their normal cron cadence
+ * (for display in the admin Operations screen). The schedule strings are
+ * descriptive (sourced from the @Cron schedulers), not parsed.
+ */
+export const TRIGGERABLE_JOBS: ReadonlyArray<{
+  key: TriggerableJobName;
+  queue: QueueName;
+  schedule: string;
+}> = [
+  {
+    key: 'sessions.reminder_dispatch',
+    queue: QueueName.Sessions,
+    schedule: 'every 5m',
+  },
+  {
+    key: 'sessions.status_transition',
+    queue: QueueName.Sessions,
+    schedule: 'every 5m',
+  },
+  {
+    key: 'sessions.generate_recurring',
+    queue: QueueName.Sessions,
+    schedule: 'daily',
+  },
+  {
+    key: 'sessions.cleanup_stale_participants',
+    queue: QueueName.Sessions,
+    schedule: 'hourly',
+  },
+  {
+    key: 'workouts.auto_skip_past_workouts',
+    queue: QueueName.Workouts,
+    schedule: 'daily 02:00',
+  },
+  {
+    key: 'workouts.auto_complete_assignments',
+    queue: QueueName.Workouts,
+    schedule: 'daily 02:30',
+  },
+  {
+    key: 'payments.invoice_due_soon',
+    queue: QueueName.Payments,
+    schedule: 'daily 06:00',
+  },
+  {
+    key: 'payments.invoice_overdue',
+    queue: QueueName.Payments,
+    schedule: 'daily 06:15',
+  },
+  {
+    key: 'payments.dunning',
+    queue: QueueName.Payments,
+    schedule: 'daily 06:30',
+  },
+  {
+    key: 'payments.card_expiring',
+    queue: QueueName.Payments,
+    schedule: 'daily 07:00',
+  },
+  {
+    key: 'payments.refund_window_closing',
+    queue: QueueName.Payments,
+    schedule: 'daily 07:30',
+  },
+  {
+    key: 'payments.dispute_deadline',
+    queue: QueueName.Payments,
+    schedule: 'daily 08:00',
+  },
+  {
+    key: 'payments.earnings_summary',
+    queue: QueueName.Payments,
+    schedule: 'monthly 1st 08:00',
+  },
+  {
+    key: 'payments.balance_cache_refresh',
+    queue: QueueName.Payments,
+    schedule: 'hourly',
+  },
+  {
+    key: 'payments.reconcile_webhooks',
+    queue: QueueName.Payments,
+    schedule: 'every 30m',
+  },
+  {
+    key: 'maintenance.cleanup_refresh_tokens',
+    queue: QueueName.Maintenance,
+    schedule: 'daily 04:00',
+  },
+  {
+    key: 'maintenance.cleanup_lockouts',
+    queue: QueueName.Maintenance,
+    schedule: 'daily 04:10',
+  },
+  {
+    key: 'maintenance.cleanup_invitations',
+    queue: QueueName.Maintenance,
+    schedule: 'daily 04:20',
+  },
+  {
+    key: 'maintenance.cleanup_client_requests',
+    queue: QueueName.Maintenance,
+    schedule: 'daily 04:30',
+  },
+];
+
+const TRIGGERABLE_KEYS: ReadonlySet<string> = new Set(
+  TRIGGERABLE_JOBS.map((j) => j.key),
+);
+
+/** Runtime guard: is this string a manually-triggerable sweep? */
+export function isTriggerableJob(name: string): name is TriggerableJobName {
+  return TRIGGERABLE_KEYS.has(name);
+}
 
 /**
  * Per-queue defaults applied to every job in that queue unless
@@ -103,6 +322,44 @@ export const QUEUE_DEFAULTS = {
       backoff: { type: 'exponential' as const, delay: 2_000 },
       removeOnComplete: { age: 86_400, count: 1_000 }, // 1 day or 1k jobs
       removeOnFail: { age: 7 * 86_400, count: 5_000 }, // 7 days or 5k jobs
+    },
+  },
+  // Sessions/Workouts jobs are idempotent system sweeps — a failed run
+  // just re-runs on the next cron tick, so we keep the retry budget
+  // small (3 attempts) and never want a stuck job to pin the queue.
+  [QueueName.Sessions]: {
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 5_000 },
+      removeOnComplete: { age: 86_400, count: 500 },
+      removeOnFail: { age: 7 * 86_400, count: 2_000 },
+    },
+  },
+  [QueueName.Workouts]: {
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 5_000 },
+      removeOnComplete: { age: 86_400, count: 500 },
+      removeOnFail: { age: 7 * 86_400, count: 2_000 },
+    },
+  },
+  // Payments holds both idempotent reminder sweeps and webhook processing.
+  // Webhook jobs override `attempts` to 5 at enqueue time (more retries for
+  // event-driven work); the sweeps are happy with the default 3.
+  [QueueName.Payments]: {
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 5_000 },
+      removeOnComplete: { age: 86_400, count: 1_000 },
+      removeOnFail: { age: 7 * 86_400, count: 5_000 },
+    },
+  },
+  [QueueName.Maintenance]: {
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 5_000 },
+      removeOnComplete: { age: 86_400, count: 200 },
+      removeOnFail: { age: 7 * 86_400, count: 1_000 },
     },
   },
 } as const;

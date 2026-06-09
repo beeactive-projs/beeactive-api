@@ -1,0 +1,186 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import {
+  IsArray,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
+import {
+  ExerciseForce,
+  ExerciseKind,
+  ExerciseLevel,
+  ExerciseMechanic,
+  MovementPattern,
+} from '../entities/exercise.enums';
+
+/**
+ * Ownership tab on the catalog (design S1 / S6).
+ *
+ * - `all`           — system + my private + my public + other instructors' public
+ * - `system`        — only SYSTEM exercises
+ * - `mine`          — owned by the authenticated instructor (private + public)
+ * - `public-others` — PUBLIC exercises owned by someone else (not me)
+ *
+ * Default `all`. Clients with the browse-gate enabled see the same
+ * facet set (system + public-others); they do not get the `mine` /
+ * private slice — service enforces.
+ */
+export const ExerciseOwnershipFilter = {
+  All: 'all',
+  System: 'system',
+  Mine: 'mine',
+  PublicOthers: 'public-others',
+} as const;
+export type ExerciseOwnershipFilter =
+  (typeof ExerciseOwnershipFilter)[keyof typeof ExerciseOwnershipFilter];
+
+export const ExerciseSortKey = {
+  Name: 'name',
+  Newest: 'newest',
+  MostForked: 'most-forked',
+} as const;
+export type ExerciseSortKey =
+  (typeof ExerciseSortKey)[keyof typeof ExerciseSortKey];
+
+/**
+ * Comma-separated string → string[] coercion for query params.
+ * `?kind=STRENGTH,CARDIO` arrives as a string from the URL; the
+ * Transform splits it before class-validator sees it.
+ */
+function toStringArray(value: unknown): string[] | undefined {
+  if (value == null) return undefined;
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return undefined;
+}
+
+export class ListExercisesQueryDto extends PaginationDto {
+  @ApiPropertyOptional({
+    example: 'squat',
+    description:
+      'Free-text search across exercise name (V1: name only; aliases ' +
+      'and description-search are deferred).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string;
+
+  @ApiPropertyOptional({
+    enum: ExerciseKind,
+    isArray: true,
+    example: [ExerciseKind.Strength, ExerciseKind.Bodyweight],
+    description: 'Comma-separated list of kinds, e.g. ?kind=STRENGTH,CARDIO',
+  })
+  @IsOptional()
+  @Transform(({ value }) => toStringArray(value))
+  @IsArray()
+  @IsEnum(ExerciseKind, { each: true })
+  kind?: ExerciseKind[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Filter by primary muscle UUIDs (comma-separated).',
+  })
+  @IsOptional()
+  @Transform(({ value }) => toStringArray(value))
+  @IsArray()
+  @IsUUID('4', { each: true })
+  primaryMuscleId?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Filter by equipment UUIDs (comma-separated).',
+  })
+  @IsOptional()
+  @Transform(({ value }) => toStringArray(value))
+  @IsArray()
+  @IsUUID('4', { each: true })
+  equipmentId?: string[];
+
+  @ApiPropertyOptional({
+    enum: ExerciseLevel,
+    isArray: true,
+    example: [ExerciseLevel.Beginner, ExerciseLevel.Intermediate],
+  })
+  @IsOptional()
+  @Transform(({ value }) => toStringArray(value))
+  @IsArray()
+  @IsEnum(ExerciseLevel, { each: true })
+  level?: ExerciseLevel[];
+
+  @ApiPropertyOptional({
+    enum: MovementPattern,
+    isArray: true,
+    example: [MovementPattern.Squat],
+  })
+  @IsOptional()
+  @Transform(({ value }) => toStringArray(value))
+  @IsArray()
+  @IsEnum(MovementPattern, { each: true })
+  movementPattern?: MovementPattern[];
+
+  @ApiPropertyOptional({
+    enum: ExerciseMechanic,
+    isArray: true,
+    example: [ExerciseMechanic.Compound],
+  })
+  @IsOptional()
+  @Transform(({ value }) => toStringArray(value))
+  @IsArray()
+  @IsEnum(ExerciseMechanic, { each: true })
+  mechanic?: ExerciseMechanic[];
+
+  @ApiPropertyOptional({
+    enum: ExerciseForce,
+    isArray: true,
+    example: [ExerciseForce.Push],
+  })
+  @IsOptional()
+  @Transform(({ value }) => toStringArray(value))
+  @IsArray()
+  @IsEnum(ExerciseForce, { each: true })
+  force?: ExerciseForce[];
+
+  @ApiPropertyOptional({
+    enum: ExerciseOwnershipFilter,
+    example: ExerciseOwnershipFilter.All,
+    default: ExerciseOwnershipFilter.All,
+  })
+  @IsOptional()
+  @IsEnum(ExerciseOwnershipFilter)
+  ownership?: ExerciseOwnershipFilter;
+
+  @ApiPropertyOptional({
+    enum: ExerciseSortKey,
+    example: ExerciseSortKey.Name,
+    default: ExerciseSortKey.Name,
+  })
+  @IsOptional()
+  @IsEnum(ExerciseSortKey)
+  sort?: ExerciseSortKey;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    example: true,
+    description:
+      'When true, the response includes `facets` aggregates per ' +
+      '(kind, primaryMuscleId, equipmentId, level). Extra query work; ' +
+      'omit for picker / autocomplete contexts.',
+    default: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === true || value === 'true' || value === '1' ? true : false,
+  )
+  withFacets?: boolean;
+}

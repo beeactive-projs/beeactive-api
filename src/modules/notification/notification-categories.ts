@@ -19,6 +19,7 @@ export enum NotificationCategory {
   Account = 'ACCOUNT',
   Posts = 'POSTS',
   Messaging = 'MESSAGING',
+  Workouts = 'WORKOUTS',
 }
 
 /**
@@ -56,6 +57,12 @@ export const CATEGORY_META: Record<
   [NotificationCategory.Posts]: {
     label: 'Posts & comments',
     description: 'Comments on your posts, approvals, and moderation outcomes.',
+  },
+  [NotificationCategory.Workouts]: {
+    label: 'Workouts & exercises',
+    description:
+      'Fork notifications on your public exercises, program assignment ' +
+      'updates, and workout-completion alerts from your clients.',
   },
   [NotificationCategory.Messaging]: {
     label: 'Direct messages',
@@ -117,7 +124,11 @@ export const TYPE_TO_CATEGORY: Record<NotificationType, NotificationCategory> =
     [NotificationType.SUBSCRIPTION_CANCELED]: NotificationCategory.Payments,
     [NotificationType.PAYOUT_SENT]: NotificationCategory.Payments,
     [NotificationType.DISPUTE_OPENED]: NotificationCategory.Payments,
+    [NotificationType.DISPUTE_EVIDENCE_DUE]: NotificationCategory.Payments,
     [NotificationType.REFUND_ISSUED]: NotificationCategory.Payments,
+    [NotificationType.REFUND_WINDOW_CLOSING]: NotificationCategory.Payments,
+    [NotificationType.CARD_EXPIRING_SOON]: NotificationCategory.Payments,
+    [NotificationType.EARNINGS_SUMMARY]: NotificationCategory.Payments,
 
     // Account & security — Stripe Connect status changes are higher-stakes
     // than regular payment events; they live in their own bucket so the
@@ -134,6 +145,10 @@ export const TYPE_TO_CATEGORY: Record<NotificationType, NotificationCategory> =
 
     // Messaging
     [NotificationType.MESSAGE_RECEIVED]: NotificationCategory.Messaging,
+
+    // Workouts (exercises + programs)
+    [NotificationType.EXERCISE_FORKED]: NotificationCategory.Workouts,
+    [NotificationType.PROGRAM_ASSIGNED]: NotificationCategory.Workouts,
   };
 
 /**
@@ -157,6 +172,7 @@ export const CATEGORY_TO_TYPES: Record<
     [NotificationCategory.Account]: [],
     [NotificationCategory.Posts]: [],
     [NotificationCategory.Messaging]: [],
+    [NotificationCategory.Workouts]: [],
   } as Record<NotificationCategory, NotificationType[]>,
 );
 
@@ -171,6 +187,7 @@ export const CATEGORY_DISPLAY_ORDER: NotificationCategory[] = [
   NotificationCategory.Messaging,
   NotificationCategory.Sessions,
   NotificationCategory.Coaching,
+  NotificationCategory.Workouts,
   NotificationCategory.Groups,
   NotificationCategory.Payments,
   NotificationCategory.Posts,

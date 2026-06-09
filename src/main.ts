@@ -193,6 +193,8 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
       'https://app.motionhive.fit',
       'https://dev.motionhive.fit',
       'https://app-dev.motionhive.fit',
+      'https://admin.motionhive.fit',
+      'https://admin-dev.motionhive.fit',
       /\.vercel\.app$/,
       /\.railway\.app$/,
       /\.netlify\.app$/,
@@ -201,11 +203,13 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
 
   const developmentOrigins = [
     'http://localhost:4200',
+    'http://localhost:4203', // admin app
     'http://localhost:3000',
     'http://localhost:8100',
     'http://localhost:5173',
     'http://localhost:8080',
     'http://127.0.0.1:4200',
+    'http://127.0.0.1:4203', // admin app
     'http://127.0.0.1:3000',
     'http://127.0.0.1:8100',
   ];

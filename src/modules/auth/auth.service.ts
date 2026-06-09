@@ -389,6 +389,39 @@ export class AuthService {
   }
 
   /**
+   * Mint a short-lived ACCESS-ONLY token that acts as `targetUserId`,
+   * for admin impersonation ("log in as this user" support tool).
+   *
+   * Deliberately different from `generateAndStoreTokens`:
+   *  - Short TTL (30m) so an impersonation session expires on its own.
+   *  - NO refresh token is issued or persisted — an impersonation
+   *    session must not be silently renewable into a long-lived one.
+   *  - Carries an `act_as` claim (the impersonating admin's id) so the
+   *    token is self-describing and `JwtStrategy` can flag the request.
+   *
+   * The existing `generateAndStoreTokens` and all of its call sites are
+   * untouched; this is purely additive. Authorization (only SUPER_ADMIN,
+   * never impersonate another admin) is enforced by the caller in
+   * `AdminImpersonationService` before this is invoked.
+   */
+  mintImpersonationToken(
+    targetUserId: string,
+    targetEmail: string,
+    impersonatedByAdminId: string,
+  ): { accessToken: string; expiresIn: string } {
+    const expiresIn = '30m';
+    const payload = {
+      sub: targetUserId,
+      email: targetEmail,
+      act_as: impersonatedByAdminId,
+    };
+
+    const accessToken = this.jwtService.sign(payload, { expiresIn });
+
+    return { accessToken, expiresIn };
+  }
+
+  /**
    * Refresh access token
    *
    * Validates refresh token against DB (must exist, not revoked, not expired).

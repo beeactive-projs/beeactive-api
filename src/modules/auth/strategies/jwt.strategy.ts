@@ -61,6 +61,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       ...user.get({ plain: true }),
       roles: roleNames,
+      // Present only on admin impersonation tokens. Additive: normal
+      // tokens have no `act_as`, so `impersonatedBy` is simply absent.
+      ...(payload.act_as ? { impersonatedBy: payload.act_as } : {}),
     };
   }
 }

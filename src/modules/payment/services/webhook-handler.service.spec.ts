@@ -10,7 +10,9 @@ import { ConnectService } from './connect.service';
 import { InvoiceService } from './invoice.service';
 import { SubscriptionService } from './subscription.service';
 import { RefundService } from './refund.service';
+import { DisputeService } from './dispute.service';
 import { NotificationService } from '../../notification/notification.service';
+import { JobsService } from '../../jobs/jobs.service';
 import {
   WebhookEvent,
   WebhookEventStatus,
@@ -82,7 +84,9 @@ describe('WebhookHandlerService', () => {
   };
   let subscriptionMock: { syncFromWebhook: jest.Mock };
   let refundMock: { syncRefundFromWebhook: jest.Mock };
+  let disputeMock: { syncFromWebhook: jest.Mock };
   let notificationMock: { notify: jest.Mock };
+  let jobsMock: { enqueue: jest.Mock };
   let logger: ReturnType<typeof makeSilentLogger>;
 
   beforeEach(async () => {
@@ -107,7 +111,14 @@ describe('WebhookHandlerService', () => {
     refundMock = {
       syncRefundFromWebhook: jest.fn().mockResolvedValue(undefined),
     };
+    disputeMock = {
+      syncFromWebhook: jest.fn().mockResolvedValue(undefined),
+    };
     notificationMock = { notify: jest.fn().mockResolvedValue(undefined) };
+    // Default: no queue (Redis absent) → handleIncomingEvent processes
+    // inline, preserving the synchronous behaviour these tests assert.
+    // The enqueue path has its own dedicated tests below.
+    jobsMock = { enqueue: jest.fn().mockResolvedValue(null) };
     logger = makeSilentLogger();
 
     const moduleRef = await Test.createTestingModule({
@@ -120,7 +131,9 @@ describe('WebhookHandlerService', () => {
         { provide: InvoiceService, useValue: invoiceMock },
         { provide: SubscriptionService, useValue: subscriptionMock },
         { provide: RefundService, useValue: refundMock },
+        { provide: DisputeService, useValue: disputeMock },
         { provide: NotificationService, useValue: notificationMock },
+        { provide: JobsService, useValue: jobsMock },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: logger },
       ],
     }).compile();
@@ -529,6 +542,96 @@ describe('WebhookHandlerService', () => {
       expect(result.status).toBe(WebhookEventStatus.PROCESSED);
       expect(result.status).not.toBe(WebhookEventStatus.IGNORED);
       expect(sequelizeMock.transaction).toHaveBeenCalled();
+    });
+  });
+
+  // ── async processing (Bucket E) ──────────────────────────────────────
+  describe('async processing', () => {
+    it('enqueues process_webhook and returns PROCESSING when a queue is available', async () => {
+      const event = makeStripeEvent('invoice.paid');
+      stripeMock.verifyWebhookSignature.mockReturnValue(event);
+      const auditRow = makeAuditRow();
+      model.create.mockResolvedValue({ ...auditRow, id: 'we-1' });
+      jobsMock.enqueue.mockResolvedValue({ id: 'job-1' }); // queue present
+
+      const result = await service.handleIncomingEvent(
+        Buffer.from('raw'),
+        'sig',
+      );
+
+      expect(result.status).toBe(WebhookEventStatus.PROCESSING);
+      expect(jobsMock.enqueue).toHaveBeenCalledWith(
+        'payments.process_webhook',
+        expect.objectContaining({ webhookEventId: 'we-1' }),
+        expect.objectContaining({ jobId: `webhook-${event.id}`, attempts: 5 }),
+      );
+      // No inline dispatch when queued.
+      expect(sequelizeMock.transaction).not.toHaveBeenCalled();
+    });
+
+    it('charge.dispute.created routes to DisputeService.syncFromWebhook (inline)', async () => {
+      const event = makeStripeEvent('charge.dispute.created');
+      stripeMock.verifyWebhookSignature.mockReturnValue(event);
+      model.create.mockResolvedValue(makeAuditRow());
+
+      await service.handleIncomingEvent(Buffer.from('raw'), 'sig');
+
+      expect(disputeMock.syncFromWebhook).toHaveBeenCalledTimes(1);
+    });
+
+    it('processQueued runs the dispatcher and marks PROCESSED', async () => {
+      const auditRow = makeAuditRow();
+      model.findByPk.mockResolvedValue(auditRow);
+      const event = makeStripeEvent('invoice.paid');
+
+      await service.processQueued('we-1', event as never);
+
+      expect(sequelizeMock.transaction).toHaveBeenCalledTimes(1);
+      expect(auditRow.status).toBe(WebhookEventStatus.PROCESSED);
+    });
+
+    it('processQueued is a no-op when the row is already PROCESSED', async () => {
+      const auditRow = makeAuditRow();
+      auditRow.status = WebhookEventStatus.PROCESSED;
+      model.findByPk.mockResolvedValue(auditRow);
+
+      await service.processQueued(
+        'we-1',
+        makeStripeEvent('invoice.paid') as never,
+      );
+
+      expect(sequelizeMock.transaction).not.toHaveBeenCalled();
+    });
+
+    it('reconcileOrphaned re-processes recent rows and ages out old ones', async () => {
+      const now = new Date('2026-06-15T00:00:00Z');
+      const recent = {
+        status: WebhookEventStatus.ORPHANED,
+        receivedAt: new Date(now.getTime() - 60_000),
+        type: 'invoice.paid',
+        stripeEventId: 'evt_recent',
+        payload: {},
+        processedAt: null,
+        error: null,
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      const old = {
+        status: WebhookEventStatus.ORPHANED,
+        receivedAt: new Date(now.getTime() - 8 * 24 * 60 * 60_000),
+        type: 'invoice.paid',
+        stripeEventId: 'evt_old',
+        payload: {},
+        processedAt: null,
+        error: null,
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      model.findAll.mockResolvedValue([recent, old]);
+
+      const r = await service.reconcileOrphaned(now);
+
+      expect(r).toEqual({ resolved: 1, agedOut: 1, stillOrphaned: 0 });
+      expect(recent.status).toBe(WebhookEventStatus.PROCESSED);
+      expect(old.status).toBe(WebhookEventStatus.FAILED);
     });
   });
 });

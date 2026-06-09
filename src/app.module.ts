@@ -29,10 +29,14 @@ import { FeedbackModule } from './modules/feedback/feedback.module';
 import { WaitlistModule } from './modules/waitlist/waitlist.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { VenueModule } from './modules/venue/venue.module';
+import { ExerciseModule } from './modules/exercise/exercise.module';
+import { RoutineModule } from './modules/routine/routine.module';
+import { WorkoutModule } from './modules/workout/workout.module';
 import { SearchModule } from './modules/search/search.module';
 import { PostModule } from './modules/post/post.module';
 import { ReviewModule } from './modules/review/review.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { CamelCaseInterceptor } from './common/interceptors/camel-case.interceptor';
 
 @Module({
@@ -97,16 +101,20 @@ import { CamelCaseInterceptor } from './common/interceptors/camel-case.intercept
     ClientModule,
     BlogModule,
     NotificationModule,
-    JobsModule,
+    JobsModule.register(),
     AnalyticsModule,
     FeedbackModule,
     WaitlistModule,
     PaymentModule,
     VenueModule,
+    ExerciseModule,
+    WorkoutModule,
+    RoutineModule,
     SearchModule,
     PostModule,
     ReviewModule,
     MessagingModule,
+    AdminModule,
   ],
 
   controllers: [],

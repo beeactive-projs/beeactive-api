@@ -13,6 +13,7 @@ import { Invoice } from './entities/invoice.entity';
 import { Payment } from './entities/payment.entity';
 import { WebhookEvent } from './entities/webhook-event.entity';
 import { PaymentConsent } from './entities/payment-consent.entity';
+import { Dispute } from './entities/dispute.entity';
 
 // Services
 import { StripeService } from './services/stripe.service';
@@ -25,6 +26,9 @@ import { CheckoutService } from './services/checkout.service';
 import { SubscriptionService } from './services/subscription.service';
 import { RefundService } from './services/refund.service';
 import { EarningsService } from './services/earnings.service';
+import { PaymentRemindersService } from './services/payment-reminders.service';
+import { BalanceCacheService } from './services/balance-cache.service';
+import { DisputeService } from './services/dispute.service';
 
 // Controllers
 import { PaymentWebhookController } from './payment-webhook.controller';
@@ -73,6 +77,7 @@ import { PaymentPublicController } from './payment-public.controller';
       Payment,
       WebhookEvent,
       PaymentConsent,
+      Dispute,
       User,
     ]),
     RoleModule,
@@ -94,7 +99,17 @@ import { PaymentPublicController } from './payment-public.controller';
     SubscriptionService,
     RefundService,
     EarningsService,
+    PaymentRemindersService,
+    BalanceCacheService,
+    DisputeService,
   ],
-  exports: [StripeService, CustomerService],
+  exports: [
+    StripeService,
+    CustomerService,
+    PaymentRemindersService,
+    BalanceCacheService,
+    DisputeService,
+    WebhookHandlerService,
+  ],
 })
 export class PaymentModule {}

@@ -17,6 +17,13 @@ export interface SearchQueryRow {
   subtitle: string | null;
   avatar_url: string | null;
   score: number;
+  // Enrichment for access-aware FE routing (joined at query time on the
+  // small result set; the ranking still runs on search_doc alone).
+  // Optional on the raw row so test fixtures can omit them; the mapping
+  // coalesces to null/false.
+  handle?: string | null; // user/instructor handle, or a session's instructor handle
+  slug?: string | null; // session template slug (for the public-by-slug lookup)
+  viewer_is_member?: boolean; // group rows: is the viewer an active member?
 }
 
 export interface SearchResultItem {
@@ -26,6 +33,12 @@ export interface SearchResultItem {
   subtitle: string | null;
   avatarUrl: string | null;
   score: number;
+  /** `/@handle` target for user/instructor; instructor handle for sessions. */
+  handle?: string | null;
+  /** Session template slug — with `handle`, resolves the public showcase. */
+  slug?: string | null;
+  /** Group rows only: the viewer is an active member → route them inside. */
+  viewerIsMember?: boolean;
 }
 
 export interface SearchCategoryResult {
@@ -98,7 +111,20 @@ export class SearchService {
     const wantedTypes = this._typesFor(opts.type);
     const limit = Math.max(1, Math.min(20, opts.limit ?? 5));
 
-    const rows = await this._runQuery(q, wantedTypes, opts.viewerId, limit);
+    // Prefix tsquery for typeahead: 'mot' -> 'mot:*' matches 'motionhive'.
+    // If the query is nothing but punctuation, there's nothing to match.
+    const tsQuery = this._buildPrefixTsQuery(q);
+    if (!tsQuery) {
+      return this._emptyResponse(q, Date.now() - t0);
+    }
+
+    const rows = await this._runQuery(
+      q,
+      tsQuery,
+      wantedTypes,
+      opts.viewerId,
+      limit,
+    );
 
     return {
       query: q,
@@ -109,15 +135,47 @@ export class SearchService {
 
   // ─────────────────────────────────────────────────────────────────
 
+  /**
+   * Build a prefix tsquery for typeahead. Each whitespace-separated term
+   * is stripped of tsquery operators, suffixed with `:*` (lexeme prefix
+   * match), and AND-ed together:
+   *
+   *   'mot'        -> 'mot:*'             (matches 'motionhive')
+   *   'tes'        -> 'tes:*'             (matches 'test')
+   *   'yoga coach' -> 'yoga:* & coach:*'
+   *
+   * This is the fix for incremental typing: `websearch_to_tsquery` only
+   * matched whole lexemes, so a partial word returned nothing until the
+   * word was complete. Returns '' when the query has no usable terms
+   * (e.g. all punctuation) — the caller short-circuits to empty.
+   */
+  private _buildPrefixTsQuery(q: string): string {
+    return (
+      q
+        .split(/\s+/)
+        // Allowlist: keep only Unicode letters/digits per term (drops
+        // tsquery operators &|!():*'" AND any other punctuation so
+        // `to_tsquery` can never choke or have an operator smuggled in).
+        // Accent-aware via \p{L} so 'București' survives.
+        .map((term) => term.replace(/[^\p{L}\p{N}]+/gu, ''))
+        .filter((term) => term.length > 0)
+        .map((term) => `${term}:*`)
+        .join(' & ')
+    );
+  }
+
   private async _runQuery(
     q: string,
+    tsQuery: string,
     types: string[],
     viewerId: string | null,
     perCategoryLimit: number,
   ): Promise<SearchQueryRow[]> {
     // Two SQL fragments OR'd:
-    //   1. tsvector @@ websearch_to_tsquery — precise match
-    //   2. similarity(search_text, q) > 0.25 — fuzzy fallback for typos
+    //   1. tsvector @@ to_tsquery('<term>:*') — prefix/full-text match
+    //      (carries typeahead; partial words match by lexeme prefix)
+    //   2. similarity(search_text, q) > 0.3 — fuzzy fallback for typos
+    //      ('yga' -> 'yoga'); threshold kept tight to cut weak noise
     // and a single composite score that combines both signals.
 
     // Sequelize's `:name` replacement does NOT auto-expand arrays into
@@ -141,7 +199,7 @@ export class SearchService {
           subtitle,
           avatar_url,
           (
-            COALESCE(ts_rank_cd(search_vector, websearch_to_tsquery('simple', :q)), 0) * 1.0
+            COALESCE(ts_rank_cd(search_vector, to_tsquery('simple', :tsQuery)), 0) * 1.0
             + similarity(search_text, :q) * 0.4
           ) * (
             CASE entity_type
@@ -156,30 +214,82 @@ export class SearchService {
           ROW_NUMBER() OVER (
             PARTITION BY entity_type
             ORDER BY (
-              COALESCE(ts_rank_cd(search_vector, websearch_to_tsquery('simple', :q)), 0)
+              COALESCE(ts_rank_cd(search_vector, to_tsquery('simple', :tsQuery)), 0)
               + similarity(search_text, :q) * 0.4
             ) DESC
           ) AS rn
         FROM search_doc
         WHERE entity_type IN (${typePlaceholders})
           AND (
-            search_vector @@ websearch_to_tsquery('simple', :q)
-            OR similarity(search_text, :q) > 0.25
+            search_vector @@ to_tsquery('simple', :tsQuery)
+            OR similarity(search_text, :q) > 0.3
           )
           AND (
             is_public = TRUE
             OR (:viewerId::text IS NOT NULL AND owner_id = :viewerId)
           )
+          -- Don't surface sessions that aren't bookable anymore: a session
+          -- (template) only shows if it still has an upcoming SCHEDULED
+          -- instance. Filtered live so a series that just ran out drops out
+          -- without waiting for a reindex. (Matches findNextUpcoming.)
+          AND (
+            entity_type <> 'session'
+            OR EXISTS (
+              SELECT 1 FROM session_instance si
+              WHERE si.template_id = search_doc.entity_id
+                AND si.status = 'SCHEDULED'
+                AND si.start_at >= NOW()
+            )
+          )
+          -- Don't surface groups that aren't viewable anymore: re-check the
+          -- LIVE group (search_doc.is_public can be stale). It must exist,
+          -- be active and not deleted, and be public OR one the viewer is a
+          -- member of — matching what the preview / detail can actually open.
+          AND (
+            entity_type <> 'group'
+            OR EXISTS (
+              SELECT 1 FROM "group" g
+              WHERE g.id = search_doc.entity_id
+                AND g.deleted_at IS NULL
+                AND g.is_active = TRUE
+                AND (
+                  g.is_public = TRUE
+                  OR EXISTS (
+                    SELECT 1 FROM group_member gm
+                    WHERE gm.group_id = g.id
+                      AND gm.user_id = :viewerId
+                      AND gm.left_at IS NULL
+                  )
+                )
+            )
+          )
       )
-      SELECT entity_type, entity_id, title, subtitle, avatar_url, score
-      FROM ranked
-      WHERE rn <= :perCategoryLimit
-      ORDER BY score DESC
+      SELECT
+        r.entity_type, r.entity_id, r.title, r.subtitle, r.avatar_url, r.score,
+        -- handle: instructor/user own handle, or a session's instructor handle
+        CASE WHEN r.entity_type = 'session' THEN su.handle ELSE u.handle END AS handle,
+        st.slug AS slug,
+        -- group rows: is the viewer an active member (route them inside)?
+        CASE WHEN r.entity_type = 'group' THEN EXISTS (
+          SELECT 1 FROM group_member gm
+          WHERE gm.group_id = r.entity_id
+            AND gm.user_id = :viewerId
+            AND gm.left_at IS NULL
+        ) ELSE FALSE END AS viewer_is_member
+      FROM ranked r
+      LEFT JOIN "user" u
+        ON u.id = r.entity_id AND r.entity_type IN ('user', 'instructor')
+      LEFT JOIN session_template st
+        ON st.id = r.entity_id AND r.entity_type = 'session'
+      LEFT JOIN "user" su ON su.id = st.instructor_id
+      WHERE r.rn <= :perCategoryLimit
+      ORDER BY r.score DESC
     `;
 
     const rows = await this._sequelize.query<SearchQueryRow>(sql, {
       replacements: {
         q,
+        tsQuery,
         viewerId,
         perCategoryLimit,
         ...typeReplacements,
@@ -247,6 +357,9 @@ export class SearchService {
         subtitle: r.subtitle,
         avatarUrl: r.avatar_url,
         score: Number(r.score) || 0,
+        handle: r.handle ?? null,
+        slug: r.slug ?? null,
+        viewerIsMember: r.viewer_is_member ?? false,
       }));
       result[bucket] = {
         items,

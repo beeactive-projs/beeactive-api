@@ -350,6 +350,85 @@ export class SearchIndexService {
     );
   }
 
+  // ────── Exercise ──────
+
+  /**
+   * An exercise is indexed iff the row is alive (deleted_at IS NULL).
+   * Visibility (PRIVATE / PUBLIC) is enforced by the read-side WHERE
+   * on the viewer's owner_id; SYSTEM exercises are always public.
+   *
+   * `isPublic` here is the search-doc surface flag:
+   *   - SYSTEM         → true (always discoverable)
+   *   - PUBLIC custom  → true (any instructor can find)
+   *   - PRIVATE custom → false (only the owner reads it from search)
+   *
+   * Subtitle = primary muscle slug list — gives the search row a
+   * scannable "what is this for" hint without joining tables on read.
+   */
+  async upsertExercise(exerciseId: string, tx?: Transaction): Promise<void> {
+    const rows = await this._sequelize.query<{
+      id: string;
+      name: string;
+      description: string | null;
+      instructions: string | null;
+      source: string;
+      visibility: string;
+      owner_id: string | null;
+      thumbnail_url: string | null;
+      primary_muscles: string | null;
+    }>(
+      `SELECT e.id,
+              e.name,
+              e.description,
+              e.instructions,
+              e.source,
+              e.visibility,
+              e.owner_id,
+              e.thumbnail_url,
+              (
+                SELECT string_agg(m.common_name, ', ' ORDER BY m.display_order)
+                  FROM exercise_muscle em
+                  JOIN muscle m ON m.id = em.muscle_id
+                 WHERE em.exercise_id = e.id AND em.role = 'PRIMARY'
+              ) AS primary_muscles
+         FROM exercise e
+        WHERE e.id = :id AND e.deleted_at IS NULL`,
+      {
+        replacements: { id: exerciseId },
+        transaction: tx,
+        type: QueryTypes.SELECT,
+      },
+    );
+
+    const e = rows[0];
+    if (!e) {
+      await this.removeIfExists('exercise', exerciseId, tx);
+      return;
+    }
+
+    const isPublic = e.source === 'SYSTEM' || e.visibility === 'PUBLIC';
+    // Body fuses description + instructions so a single trigram search
+    // hits either form text.
+    const body =
+      [e.description, e.instructions].filter(Boolean).join('\n\n') || null;
+
+    await this._upsert(
+      {
+        entityType: 'exercise',
+        entityId: e.id,
+        title: e.name,
+        subtitle: e.primary_muscles,
+        body,
+        tags: [],
+        city: null,
+        isPublic,
+        ownerId: e.owner_id,
+        avatarUrl: e.thumbnail_url,
+      },
+      tx,
+    );
+  }
+
   // ────── Generic remove ──────
 
   async removeIfExists(
@@ -381,13 +460,20 @@ export class SearchIndexService {
     instructors: number;
     groups: number;
     sessions: number;
+    orphansPurged: number;
   }> {
     this.logger.log(
       'reindexAll: starting full search-index rebuild',
       'SearchIndexService',
     );
 
-    const result = { users: 0, instructors: 0, groups: 0, sessions: 0 };
+    const result = {
+      users: 0,
+      instructors: 0,
+      groups: 0,
+      sessions: 0,
+      orphansPurged: 0,
+    };
 
     // Users — only those active and non-deleted
     const users = await this._sequelize.query<{ id: string }>(
@@ -431,11 +517,51 @@ export class SearchIndexService {
       result.sessions += 1;
     }
 
+    // Purge orphans — index rows whose source entity no longer exists
+    // (deleted without a removeIfExists hook, or by raw SQL / migration).
+    // Without this, reindexAll only ADDS, so a "repair" run can't clean
+    // drift. Tag rows aren't generated here yet, so they're left alone.
+    result.orphansPurged = await this._purgeOrphans({
+      user: users.map((u) => u.id),
+      instructor: instructors.map((i) => i.user_id),
+      group: groups.map((g) => g.id),
+      session: templates.map((t) => t.id),
+    });
+
     this.logger.log(
-      `reindexAll: done — ${result.users} users, ${result.instructors} instructors, ${result.groups} groups, ${result.sessions} sessions`,
+      `reindexAll: done — ${result.users} users, ${result.instructors} instructors, ${result.groups} groups, ${result.sessions} sessions, ${result.orphansPurged} orphans purged`,
       'SearchIndexService',
     );
     return result;
+  }
+
+  /**
+   * Delete index rows whose source entity is no longer live. For each
+   * type, keep only rows whose `entity_id` is in the supplied live set;
+   * an empty live set purges every row of that type (nothing qualifies).
+   * Returns the number of rows removed.
+   */
+  private async _purgeOrphans(live: {
+    user: string[];
+    instructor: string[];
+    group: string[];
+    session: string[];
+  }): Promise<number> {
+    let purged = 0;
+    for (const [type, ids] of Object.entries(live)) {
+      const removed = await this._sequelize.query<{ id: string }>(
+        `DELETE FROM search_doc
+          WHERE entity_type = :type
+            AND NOT (entity_id = ANY(:ids::text[]))
+          RETURNING id`,
+        {
+          replacements: { type, ids },
+          type: QueryTypes.SELECT,
+        },
+      );
+      purged += removed.length;
+    }
+    return purged;
   }
 
   // ────── Internals ──────

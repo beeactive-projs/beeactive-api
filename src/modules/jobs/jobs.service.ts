@@ -3,13 +3,34 @@ import type { LoggerService } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { ModuleRef } from '@nestjs/core';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { Queue } from 'bullmq';
+import { Queue, type JobType } from 'bullmq';
 import {
   JobPayload,
   JobPayloads,
   parseJobKey,
   QueueName,
+  type TriggerableJobName,
 } from './job-registry';
+
+/** Per-queue live counts for the admin Operations screen. */
+export interface QueueOverview {
+  name: QueueName;
+  available: boolean;
+  counts: Record<string, number> | null;
+}
+
+/** A single job's snapshot for the admin Operations jobs list. */
+export interface QueueJob {
+  id: string;
+  queue: QueueName;
+  name: string;
+  state: string;
+  attemptsMade: number;
+  timestamp: number | null;
+  processedOn: number | null;
+  finishedOn: number | null;
+  failedReason: string | null;
+}
 
 /**
  * Per-call options when enqueueing.
@@ -83,6 +104,18 @@ export class JobsService {
     payload: JobPayload<K>,
     opts: EnqueueOptions = {},
   ): Promise<unknown> {
+    // Clean drop when Redis isn't configured. Queues are registered
+    // unconditionally (so their tokens exist) but have no live
+    // connection without `BullModule.forRoot`, so we must not call
+    // `queue.add`. Checked at call time, when `.env` is fully loaded.
+    if (!process.env.REDIS_HOST) {
+      this.logger.warn?.(
+        `[JobsService] Redis not configured — dropping ${String(name)}.`,
+        'JobsService',
+      );
+      return null;
+    }
+
     const queue = this.getQueue(parseJobKey(name).queue);
     if (!queue) {
       this.logger.warn?.(
@@ -103,6 +136,126 @@ export class JobsService {
       delay,
       attempts: opts.attempts,
     });
+  }
+
+  /**
+   * Live per-queue job counts for the admin Operations screen. Keeps the
+   * BullMQ dependency inside this module (admin never imports bullmq).
+   * When Redis isn't configured, every queue reports available=false.
+   */
+  async getQueuesOverview(): Promise<{
+    redisEnabled: boolean;
+    queues: QueueOverview[];
+  }> {
+    const redisEnabled = !!process.env.REDIS_HOST;
+    const queues = await Promise.all(
+      Object.values(QueueName).map(async (qn): Promise<QueueOverview> => {
+        const queue = redisEnabled ? this.getQueue(qn) : null;
+        if (!queue) return { name: qn, available: false, counts: null };
+        try {
+          const counts = await queue.getJobCounts(
+            'waiting',
+            'active',
+            'completed',
+            'failed',
+            'delayed',
+            'paused',
+          );
+          return { name: qn, available: true, counts };
+        } catch {
+          return { name: qn, available: false, counts: null };
+        }
+      }),
+    );
+    return { redisEnabled, queues };
+  }
+
+  /**
+   * Paginated jobs for one queue, scoped to a single state (admin
+   * Operations jobs list). `total` is that state's live count, so the UI
+   * can paginate properly. Empty + available:false when Redis is off.
+   */
+  async getQueueJobs(
+    queueName: QueueName,
+    state: JobType,
+    page = 1,
+    limit = 20,
+  ): Promise<{
+    available: boolean;
+    items: QueueJob[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
+    const queue = process.env.REDIS_HOST ? this.getQueue(queueName) : null;
+    if (!queue) {
+      return { available: false, items: [], total: 0, page, pageSize: limit };
+    }
+    const start = (page - 1) * limit;
+    const end = start + limit - 1;
+    const [list, counts] = await Promise.all([
+      queue.getJobs([state], start, end, false),
+      queue.getJobCounts(state),
+    ]);
+    const items: QueueJob[] = list
+      .filter((j): j is NonNullable<typeof j> => !!j)
+      .map((j) => ({
+        id: String(j.id),
+        queue: queueName,
+        name: j.name,
+        state,
+        attemptsMade: j.attemptsMade ?? 0,
+        timestamp: j.timestamp ?? null,
+        processedOn: j.processedOn ?? null,
+        finishedOn: j.finishedOn ?? null,
+        failedReason: j.failedReason ?? null,
+      }));
+    return {
+      available: true,
+      items,
+      total: counts[state] ?? 0,
+      page,
+      pageSize: limit,
+    };
+  }
+
+  /**
+   * Re-run a finished job by id. Only `failed` or `completed` jobs can be
+   * retried (in-flight ones can't). Returns the resulting state.
+   */
+  async retryJob(
+    queueName: QueueName,
+    jobId: string,
+  ): Promise<{ id: string; state: string }> {
+    const queue = this.getQueue(queueName);
+    if (!queue) {
+      return { id: jobId, state: 'unavailable' };
+    }
+    const job = await queue.getJob(jobId);
+    if (!job) {
+      return { id: jobId, state: 'not_found' };
+    }
+    const state = await job.getState();
+    if (state === 'failed') await job.retry('failed');
+    else if (state === 'completed') await job.retry('completed');
+    else return { id: jobId, state }; // in-flight — nothing to retry
+    return { id: jobId, state: await job.getState() };
+  }
+
+  /**
+   * Manually fire an idempotent sweep job (admin "run now"). Only the
+   * sweeps in TRIGGERABLE_JOBS reach here (validated by the caller). All
+   * such jobs take a `{ runKey }` payload, so this is type-safe.
+   */
+  async triggerCron(
+    name: TriggerableJobName,
+  ): Promise<{ enqueued: boolean; jobId: string | null }> {
+    const job = await this.enqueue(name, { runKey: `manual-${Date.now()}` });
+    const jobId =
+      job && typeof job === 'object' && 'id' in job
+        ? String((job as { id?: string | number }).id ?? '')
+        : null;
+    return { enqueued: !!job, jobId: jobId || null };
   }
 
   /**

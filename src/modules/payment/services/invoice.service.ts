@@ -885,35 +885,63 @@ export class InvoiceService {
 
     const stripeInvoiceId = this.requireStripeInvoiceId(invoice);
 
-    // Finalize first if still draft — Stripe requires it.
-    if (invoice.status === InvoiceStatus.DRAFT) {
-      await this.stripeService.stripe.invoices.finalizeInvoice(
-        stripeInvoiceId,
-        undefined,
-        {
-          idempotencyKey: this.stripeService.buildIdempotencyKey(
-            'invoice',
-            invoice.id,
-            'finalize',
-          ),
-        },
-      );
-    }
-    await this.stripeService.stripe.invoices.pay(
-      stripeInvoiceId,
-      { paid_out_of_band: true },
-      {
-        idempotencyKey: this.stripeService.buildIdempotencyKey(
-          'invoice',
-          invoice.id,
-          'pay_oob',
-        ),
-      },
-    );
+    // Reconcile drift before paying. The invoice may already be paid on
+    // Stripe while the local row still says OPEN — a prior mark-paid that
+    // committed on Stripe but failed locally, or a Checkout payment whose
+    // webhook we missed. Calling `pay` on an already-paid invoice throws
+    // (→ opaque 500), so check Stripe first and just sync the local row.
+    const stripeInvoice =
+      await this.stripeService.stripe.invoices.retrieve(stripeInvoiceId);
+    const alreadyPaidOnStripe = stripeInvoice.status === 'paid';
 
+    if (!alreadyPaidOnStripe) {
+      // Finalize first if still draft — Stripe requires it.
+      if (invoice.status === InvoiceStatus.DRAFT) {
+        await this.stripeService.stripe.invoices.finalizeInvoice(
+          stripeInvoiceId,
+          undefined,
+          {
+            idempotencyKey: this.stripeService.buildIdempotencyKey(
+              'invoice',
+              invoice.id,
+              'finalize',
+            ),
+          },
+        );
+      }
+      try {
+        await this.stripeService.stripe.invoices.pay(
+          stripeInvoiceId,
+          { paid_out_of_band: true },
+          {
+            idempotencyKey: this.stripeService.buildIdempotencyKey(
+              'invoice',
+              invoice.id,
+              'pay_oob',
+            ),
+          },
+        );
+      } catch (err) {
+        // Surface Stripe's reason as a 422 rather than an opaque 500.
+        throw new UnprocessableEntityException(
+          err instanceof Error
+            ? `Stripe could not mark this invoice paid: ${err.message}`
+            : 'Stripe could not mark this invoice paid.',
+        );
+      }
+    }
+
+    // When reconciling an already-paid Stripe invoice, trust Stripe for
+    // the OOB flag and paid-at; otherwise we just paid it out of band now.
+    const paidAtUnix = stripeInvoice.status_transitions?.paid_at;
     invoice.status = InvoiceStatus.PAID;
-    invoice.paidOutOfBand = true;
-    invoice.paidAt = new Date();
+    invoice.paidOutOfBand = alreadyPaidOnStripe
+      ? // `paid_out_of_band` is returned by the Stripe REST API but missing
+        // from this SDK version's Invoice type — read it defensively.
+        ((stripeInvoice as { paid_out_of_band?: boolean }).paid_out_of_band ??
+        false)
+      : true;
+    invoice.paidAt = paidAtUnix ? new Date(paidAtUnix * 1000) : new Date();
     invoice.amountPaidCents = invoice.amountDueCents;
     invoice.amountRemainingCents = 0;
     await invoice.save();

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MotionHive — Redis: connections, memory & how to fix the limit alert</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1d2740; --ink:#e7ecf5; --muted:#9fb0cd;
+    --accent:#5b8cff; --good:#34d399; --warn:#fbbf24; --bad:#f87171; --line:#2a3552;
+    --code:#0b1020;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:30px;margin:0 0 6px}
+  h2{font-size:22px;margin:40px 0 12px;padding-top:10px;border-top:1px solid var(--line)}
+  h3{font-size:17px;margin:24px 0 8px;color:#cdd9f2}
+  p,li{color:var(--ink)}
+  .sub{color:var(--muted);margin:0 0 18px}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;vertical-align:middle}
+  .pill.bad{background:rgba(248,113,113,.15);color:var(--bad);border:1px solid rgba(248,113,113,.4)}
+  .pill.warn{background:rgba(251,191,36,.13);color:var(--warn);border:1px solid rgba(251,191,36,.4)}
+  .pill.good{background:rgba(52,211,153,.13);color:var(--good);border:1px solid rgba(52,211,153,.4)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0}
+  .tldr{background:linear-gradient(180deg,var(--panel2),var(--panel));border-left:4px solid var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cdd9f2;font-weight:600}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:13px;color:#bcd2ff}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;color:#cfe0ff}
+  pre .c{color:#6f819f}
+  .bar{height:26px;border-radius:6px;background:var(--panel2);position:relative;overflow:hidden;border:1px solid var(--line)}
+  .bar>span{display:block;height:100%}
+  .legend{font-size:13px;color:var(--muted)}
+  ul.tight{margin:6px 0 6px 0;padding-left:20px}
+  .kbd{font-size:12px;color:var(--muted)}
+  .ok{color:var(--good)} .no{color:var(--bad)} .mid{color:var(--warn)}
+  .step{display:flex;gap:12px;margin:10px 0}
+  .step .n{flex:0 0 28px;height:28px;border-radius:50%;background:var(--accent);color:#06122e;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .foot{color:var(--muted);font-size:13px;margin-top:30px;border-top:1px solid var(--line);padding-top:14px}
+  .flowbox{border:1px dashed var(--line);border-radius:10px;padding:10px 12px;background:var(--code);font-family:ui-monospace,monospace;font-size:12.5px;color:#bcd2ff;white-space:pre;overflow:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Redis: connections, memory &amp; the limit alert <span class="pill bad">action needed</span></h1>
+  <p class="sub">MotionHive jobs system • Redis Cloud Essentials 30&nbsp;MB (free tier) • why <code>motionhive-dev</code> keeps hitting 103% and how to fix it.</p>
+
+  <div class="card tldr">
+    <h3 style="margin-top:0">TL;DR — read this first</h3>
+    <ul class="tight">
+      <li><b>The alert is about <span class="no">connections</span>, not memory.</b> The email says <i>"number of connections … reached 103.33% of the connections limit."</i> The 30&nbsp;MB is your <i>data</i> ceiling; the <b>30-connection</b> cap is a separate limit, and that's the one you're hitting.</li>
+      <li><b>BullMQ is connection-hungry.</b> Every queue and every worker opens its own Redis connection(s). With <b>5 queues + 5 workers</b> we use <b>~15 connections</b> per running app instance.</li>
+      <li><b>The spikes happen on deploy.</b> During a rolling restart, the <b>new</b> instance opens its ~15 connections <b>before</b> the old one finishes closing → momentarily ~30 → <b>over the free-tier cap</b>. That's your "some moments when this is over limit."</li>
+      <li><b>A second free subscription only helps if dev and prod currently share one Redis.</b> It does <u>not</u> raise a single app's 30-connection ceiling.</li>
+      <li><b>Durable fix:</b> share one Redis connection for queues + collapse 5 queues → 2, and/or move to a small paid tier (≈$5/mo → 256 connections). Details below.</li>
+    </ul>
+  </div>
+
+  <h2>1. How the workers &amp; queues are split</h2>
+  <p>The jobs system runs <b>in-process</b> (same Node app as the API). There are <b>5 BullMQ queues</b>, each owned by exactly one <b>worker</b> (a NestJS <code>@Processor</code> class), plus <b>cron schedulers</b> that only <i>enqueue</i> jobs — they don't touch Redis connections directly.</p>
+
+  <table>
+    <thead><tr><th>Queue</th><th>Worker (@Processor)</th><th>Jobs it runs</th><th>Trigger</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>notifications</code></td><td><code>EmailSendWorker</code></td>
+        <td><code>email_send</code></td>
+        <td>Enqueued live by <code>NotificationService</code> (every in-app/email notification)</td>
+      </tr>
+      <tr>
+        <td><code>sessions</code></td><td><code>SessionsWorker</code></td>
+        <td><code>reminder_dispatch</code>, <code>status_transition</code>, <code>generate_recurring</code>, <code>cleanup_stale_participants</code></td>
+        <td>Cron: 5m / 5m / daily / hourly</td>
+      </tr>
+      <tr>
+        <td><code>workouts</code></td><td><code>WorkoutsWorker</code></td>
+        <td><code>auto_skip_past_workouts</code>, <code>auto_complete_assignments</code></td>
+        <td>Cron: daily 02:00 / 02:30</td>
+      </tr>
+      <tr>
+        <td><code>payments</code></td><td><code>PaymentsWorker</code></td>
+        <td><code>invoice_due_soon</code>, <code>invoice_overdue</code>, <code>card_expiring</code>, <code>earnings_summary</code>, <code>refund_window_closing</code>, <code>dunning</code>, <code>dispute_deadline</code>, <code>balance_cache_refresh</code>, <code>process_webhook</code>, <code>reconcile_webhooks</code></td>
+        <td>Cron (06:00–08:00, hourly, 30m) + live (webhook processing)</td>
+      </tr>
+      <tr>
+        <td><code>maintenance</code></td><td><code>MaintenanceWorker</code></td>
+        <td><code>cleanup_refresh_tokens</code>, <code>cleanup_lockouts</code>, <code>cleanup_invitations</code>, <code>cleanup_client_requests</code></td>
+        <td>Cron: daily 04:00–04:30</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="legend">One <code>@Processor</code> class per queue; multi-job queues route by <code>job.name</code> internally (the <code>MultiJobWorker</code> pattern). Schedulers (<code>@Cron</code>) call <code>JobsService.enqueue()</code> — they reuse the queue connection, they don't open new ones.</p>
+
+  <h2>2. How Redis connections actually get used <span class="pill warn">root cause</span></h2>
+  <p>This is the important part. In BullMQ <b>each component opens its own TCP connection(s)</b> to Redis — and because our config passes a plain <i>options object</i> rather than a shared client, nothing is reused:</p>
+
+  <pre><span class="c">// src/app.module.ts — current config: a NEW connection per queue + per worker</span>
+BullModule.forRootAsync({
+  useFactory: (cfg) =&gt; ({
+    connection: { host, port, password, tls }   <span class="c">// ← plain object → not shared</span>
+  })
+})</pre>
+
+  <h3>Why a worker needs <i>more than one</i> connection</h3>
+  <p>A BullMQ <b>Worker</b> can't do everything on one socket: it holds one connection <b>blocked</b> on <code>BZPOPMIN</code> (waiting for the next job) and needs a <i>second</i> connection for normal commands (ack, move to completed, update counters). A <b>Queue</b> (the producer side) needs one. So:</p>
+
+  <table>
+    <thead><tr><th>Component</th><th class="num">Count</th><th class="num">Conns each</th><th class="num">Total</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Queues (producers)</td><td class="num">5</td><td class="num">~1</td><td class="num">~5</td><td>command connection for <code>enqueue</code> / Bull Board reads</td></tr>
+      <tr><td>Workers (consumers)</td><td class="num">5</td><td class="num">~2</td><td class="num">~10</td><td>1 blocking + 1 commands</td></tr>
+      <tr><td>Bull Board (when dashboard open)</td><td class="num">5</td><td class="num">~1</td><td class="num">+~5</td><td>a <code>QueueEvents</code> stream per queue for the live UI</td></tr>
+      <tr><td colspan="3"><b>Per app instance (baseline, dashboard closed)</b></td><td class="num"><b>~15</b></td><td></td></tr>
+      <tr><td colspan="3"><b>Per app instance (dashboard open)</b></td><td class="num"><b>~20</b></td><td></td></tr>
+    </tbody>
+  </table>
+  <p class="legend">Exact numbers depend on BullMQ internals and whether the dashboard is open; treat these as "~". The shape is what matters: <b>connections scale with (queues + 2×workers)</b>.</p>
+
+  <h3>Why it crosses 100% only "sometimes"</h3>
+  <p>One steady instance at ~15 is comfortably under 30. The problem is <b>overlap</b>:</p>
+  <div class="flowbox">DEPLOY / RESTART TIMELINE  (free-tier cap = 30 connections)
+
+old instance  ████████████████  ~15 ───────────┐ draining (app.close on SIGTERM)
+new instance                    ┌── ~15 starting up
+                                ▼
+combined                        ███████████████████████████████  ~30+   ← ALERT 103%
+                                └─ both alive for a few seconds during the rollover</div>
+  <p>Your graceful shutdown <i>is</i> wired (<code>SIGTERM → app.close()</code> closes the workers), so the old connections <i>do</i> release — but not instantly, and the new instance is already up. The same doubling happens if Railway ever runs <b>2 replicas</b>, or if <b>dev and prod both point at the same Redis</b>.</p>
+
+  <div class="card">
+    <b>👉 First thing to check:</b> does your <b>production</b> app use a <i>different</i> <code>REDIS_HOST</code> than <code>motionhive-dev</code>? If prod is pointed at the dev Redis, you have two apps × ~15 = ~30 connections <i>all the time</i>, and that alone explains it. They must be separate instances.
+  </div>
+
+  <h2>3. The memory side (the 30&nbsp;MB) — not the current alert, but the next wall</h2>
+  <p>Redis also stores the <b>job data</b>. Each job is a hash holding its payload + metadata, kept around per the retention caps in <code>job-registry.ts</code>:</p>
+  <table>
+    <thead><tr><th>Queue</th><th>removeOnComplete</th><th>removeOnFail</th></tr></thead>
+    <tbody>
+      <tr><td>notifications</td><td>1 day / 1,000</td><td>7 days / 5,000</td></tr>
+      <tr><td>payments</td><td>1 day / 1,000</td><td>7 days / 5,000</td></tr>
+      <tr><td>sessions / workouts</td><td>1 day / 500</td><td>7 days / 2,000</td></tr>
+      <tr><td>maintenance</td><td>1 day / 200</td><td>7 days / 1,000</td></tr>
+    </tbody>
+  </table>
+  <p>Most jobs are tiny (a few hundred bytes). The one to watch is <b><code>payments.process_webhook</code></b>: today its payload carries the <b>entire verified Stripe event</b> (2–10&nbsp;KB each) so account-level events keep their <code>event.account</code> field.</p>
+  <div class="bar" title="failed webhook retention vs 30MB"><span style="width:83%;background:linear-gradient(90deg,#fbbf24,#f87171)"></span></div>
+  <p class="legend">Worst case: 5,000 failed payment jobs × ~5&nbsp;KB ≈ <b>~25&nbsp;MB</b> of the 30&nbsp;MB budget — just from retained failed webhook jobs. Normally far less, but a burst of webhook failures could push you to the memory wall too.</p>
+
+  <h2>4. How to fix it — ranked</h2>
+
+  <h3><span class="pill good">Fix 1</span> Share one Redis connection for the queues <span class="kbd">~30 min · biggest easy win</span></h3>
+  <p>Pass a single shared <code>ioredis</code> client instead of an options object. Queues then reuse one connection (5 → 1). Workers still each need their own blocking connection, but the command side can share too. Expect to drop from <b>~15 → ~7–8</b> per instance.</p>
+  <pre><span class="c">// app.module.ts</span>
+import IORedis from 'ioredis';
+
+const sharedConnection = new IORedis(redisUrl, {
+  maxRetriesPerRequest: null,   <span class="c">// required by BullMQ</span>
+  enableReadyCheck: false,
+});
+
+BullModule.forRootAsync({
+  useFactory: () =&gt; ({ connection: sharedConnection }),  <span class="c">// ← shared instance</span>
+});</pre>
+
+  <h3><span class="pill good">Fix 2</span> Collapse 5 queues into 2 <span class="kbd">~half a day · biggest structural win</span></h3>
+  <p>Connections scale with the number of queues/workers, not the number of <i>jobs</i>. We don't need per-domain queues at this scale. Merge into:</p>
+  <ul class="tight">
+    <li><b><code>scheduled</code></b> — all cron sweeps (sessions, workouts, payments-reminders, maintenance). One worker, routes by job name.</li>
+    <li><b><code>events</code></b> — latency-sensitive live work (<code>email_send</code>, <code>process_webhook</code>).</li>
+  </ul>
+  <p>2 queues + 2 workers ≈ <b>~4–6 connections</b> total. Combined with Fix 1 you'd sit around <b>3–5</b> — miles under 30, with headroom for deploy overlap. (The <code>MultiJobWorker</code> we already use makes this a mechanical change: same handlers, fewer <code>@Processor</code> classes.)</p>
+
+  <h3><span class="pill warn">Fix 3</span> Don't let connections double on deploy <span class="kbd">config</span></h3>
+  <ul class="tight">
+    <li><b>Single replica + "recreate" (stop-then-start)</b> instead of rolling/overlap on the dev service, so the old instance is gone before the new one boots. (On Railway: 1 replica; ensure the old deploy is fully stopped — health-check based cutover keeps both alive briefly.)</li>
+    <li>Keep workers off extra web replicas later via a <code>WORKER_KIND</code> env flag (the hook is already noted in <code>jobs.module.ts</code>): run <code>@Processor</code>s only on one process; web replicas just enqueue.</li>
+  </ul>
+
+  <h3><span class="pill warn">Fix 4</span> Trim the memory hot-spot <span class="kbd">if/when memory becomes the wall</span></h3>
+  <ul class="tight">
+    <li>Store only <code>webhookEventId</code> in the <code>process_webhook</code> payload and reload the event from the <code>webhook_event</code> DB row in the worker (drop the full-event copy from Redis). Keep just <code>event.account</code> alongside the id for the <code>account.*</code> case.</li>
+    <li>Lower <code>removeOnFail</code> counts (e.g. payments 5,000 → 500). Failed-job history also lives in the <code>webhook_event</code> table, so Redis doesn't need to be the archive.</li>
+  </ul>
+
+  <h2>5. "Can I just create one more free subscription?" <span class="pill warn">honest answer</span></h2>
+  <div class="grid">
+    <div class="card">
+      <h3 style="margin-top:0">✅ When a 2nd free DB helps</h3>
+      <p>If <b>dev and prod currently share one Redis</b>, a second free subscription lets you give <b>prod its own 30&nbsp;MB / 30-connection budget</b>, separate from dev. Each app then has its own ceiling instead of fighting over one.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">❌ What it does <u>not</u> do</h3>
+      <p>It does <b>not</b> raise a single app's 30-connection limit. One MotionHive instance using ~15 connections is fine; but with deploy overlap (~30) you'll still spike. A second free DB doesn't change that for the <i>same</i> app.</p>
+    </div>
+  </div>
+  <p>So: a second free sub is a reasonable <b>band-aid to isolate dev from prod</b>, but the real fix is <b>Fix 1 + Fix 2</b> (fewer connections per app). If you'd rather not refactor, the cheapest durable option is a <b>paid Essentials tier (~$5/mo)</b> which raises the connection cap to <b>256</b> and memory to 100&nbsp;MB+ — that removes the ceiling entirely for our scale.</p>
+
+  <h2>6. Recommended plan</h2>
+  <div class="step"><div class="n">1</div><div><b>Verify isolation.</b> Confirm prod's <code>REDIS_HOST</code> ≠ <code>motionhive-dev</code>. If they share, point prod at its own Redis (or a 2nd free sub) <i>today</i> — that may be the whole problem.</div></div>
+  <div class="step"><div class="n">2</div><div><b>Apply Fix 1</b> (shared connection). Small, safe, ~halves connections. Ship to dev, watch the connections graph in the Redis Cloud dashboard for 24h.</div></div>
+  <div class="step"><div class="n">3</div><div><b>Apply Fix 3</b> (single replica / recreate deploys) so rollovers don't double the count.</div></div>
+  <div class="step"><div class="n">4</div><div><b>If still tight, do Fix 2</b> (5 → 2 queues). After this you're at ~3–5 connections and the free tier is comfortable.</div></div>
+  <div class="step"><div class="n">5</div><div><b>Keep an eye on memory.</b> If the 30&nbsp;MB starts filling, apply Fix 4 (trim the webhook payload + lower <code>removeOnFail</code>). Otherwise leave it.</div></div>
+  <div class="step"><div class="n">6</div><div><b>If you want zero ceiling worry:</b> ~$5/mo Essentials (256 connections / 100&nbsp;MB). Cheapest path that needs no code change.</div></div>
+
+  <div class="card">
+    <h3 style="margin-top:0">How to read the Redis Cloud dashboard</h3>
+    <p>Login → your subscription → <b>Metrics</b>. Watch two graphs:</p>
+    <ul class="tight">
+      <li><b>Connections</b> — should sit flat around your baseline (~15 now, ~5 after fixes). Spikes = deploys or a second app sharing the DB.</li>
+      <li><b>Used memory</b> — should stay well under 30&nbsp;MB. If it climbs and doesn't fall after a day, it's retained failed jobs (Fix 4).</li>
+    </ul>
+    <p class="kbd">You can also run <code>CLIENT LIST</code> / <code>INFO clients</code> from the Redis console to see exactly who's connected (each BullMQ connection shows its <code>name</code>).</p>
+  </div>
+
+  <div class="foot">
+    Generated for MotionHive · jobs system (BullMQ <code>5.76</code> / <code>@nestjs/bullmq</code> <code>11</code>) · Redis Cloud Essentials free (30&nbsp;MB, 30 connections).
+    Source of truth: <code>src/app.module.ts</code> (connection config), <code>src/modules/jobs/job-registry.ts</code> (queues + retention), <code>src/modules/jobs/workers/*</code> (the 5 workers), <code>src/main.ts</code> (graceful shutdown).
+  </div>
+
+</div>
+</body>
+</html>
