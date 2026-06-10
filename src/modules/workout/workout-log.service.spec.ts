@@ -643,6 +643,29 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
     });
   });
 
+  // ─── Most-recent in-progress (home resume tile) ──────────────────
+
+  describe('findInProgressForUser', () => {
+    it('returns null when the user has no IN_PROGRESS log', async () => {
+      logModel.findOne.mockResolvedValueOnce(null);
+      const out = await service.findInProgressForUser('me');
+      expect(out).toBeNull();
+      expect(logModel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'me', status: WorkoutLogStatus.InProgress },
+          order: [['startedAt', 'DESC']],
+        }),
+      );
+    });
+
+    it('returns the most-recent IN_PROGRESS log when one exists', async () => {
+      const row = { id: 'wl-9', name: 'Pull day', startedAt: new Date() };
+      logModel.findOne.mockResolvedValueOnce(row);
+      const out = await service.findInProgressForUser('me');
+      expect(out).toBe(row);
+    });
+  });
+
   // ─── Find log by assigned workout (plan-detail "View" CTA) ───────
 
   describe('findByAssignedWorkout', () => {

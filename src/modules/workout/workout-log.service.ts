@@ -864,6 +864,29 @@ export class WorkoutLogService {
   }
 
   /**
+   * Most-recent IN_PROGRESS log for the caller (or null if none).
+   *
+   * Powers the home page's "Resume workout" tile and any other "where
+   * did I leave off?" affordance. Stays cheap — only the fields the
+   * caller needs to render + navigate (no exercise tree). Returns null
+   * (not 404) because "you have nothing to resume" is a normal state,
+   * not a missing-resource error.
+   */
+  async findInProgressForUser(userId: string): Promise<WorkoutLog | null> {
+    return this.logModel.findOne({
+      where: { userId, status: WorkoutLogStatus.InProgress },
+      order: [['startedAt', 'DESC']],
+      attributes: [
+        'id',
+        'name',
+        'startedAt',
+        'assignedWorkoutId',
+        'programAssignmentId',
+      ],
+    });
+  }
+
+  /**
    * Look up the WorkoutLog created from a given assigned-workout.
    *
    * Used by the client plan-detail "View" CTA on a completed workout —

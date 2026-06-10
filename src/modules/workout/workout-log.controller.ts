@@ -128,6 +128,13 @@ export class WorkoutLogController {
     );
   }
 
+  /** Most-recent IN_PROGRESS log for the caller (or null). Powers the
+   *  home page resume-tile. Returns 200 with `null` body, not 404. */
+  @Get('workout-logs/in-progress')
+  async findInProgress(@Request() req: AuthenticatedRequest) {
+    return this.workoutLogService.findInProgressForUser(req.user.id);
+  }
+
   @Post('workout-logs/:id/complete')
   async complete(
     @Request() req: AuthenticatedRequest,
