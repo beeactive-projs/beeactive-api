@@ -34,6 +34,7 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
 
   const logModel = {
     findByPk: jest.fn(),
+    findOne: jest.fn(),
     findAndCountAll: jest.fn(),
     create: jest.fn(),
   };
@@ -639,6 +640,43 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
       const out = await service.findByIdForInstructor('wl-1', 'coach-1');
 
       expect(out).toBe(plainProjection);
+    });
+  });
+
+  // ─── Find log by assigned workout (plan-detail "View" CTA) ───────
+
+  describe('findByAssignedWorkout', () => {
+    it("404s when the assigned workout isn't owned by the caller", async () => {
+      assignedWorkoutModel.findOne.mockResolvedValueOnce(null);
+      await expect(service.findByAssignedWorkout('aw-x', 'me')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(logModel.findOne).not.toHaveBeenCalled();
+    });
+
+    it('404s when the workout was never started (no log row)', async () => {
+      assignedWorkoutModel.findOne.mockResolvedValueOnce({
+        assignment: { clientId: 'me' },
+      });
+      logModel.findOne.mockResolvedValueOnce(null);
+      await expect(service.findByAssignedWorkout('aw-1', 'me')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('returns the latest log when one exists', async () => {
+      assignedWorkoutModel.findOne.mockResolvedValueOnce({
+        assignment: { clientId: 'me' },
+      });
+      logModel.findOne.mockResolvedValueOnce({ id: 'wl-1' });
+      const out = await service.findByAssignedWorkout('aw-1', 'me');
+      expect(out).toEqual({ id: 'wl-1' });
+      expect(logModel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'me', assignedWorkoutId: 'aw-1' },
+          order: [['startedAt', 'DESC']],
+        }),
+      );
     });
   });
 

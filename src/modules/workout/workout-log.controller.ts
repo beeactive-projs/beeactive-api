@@ -114,6 +114,20 @@ export class WorkoutLogController {
     );
   }
 
+  /** Look up the log produced by a given assigned workout — used by
+   *  the plan-detail "View" CTA to find the replay target. 404 if the
+   *  workout was never started or isn't owned by the caller. */
+  @Get('workout-logs/by-assigned-workout/:assignedWorkoutId')
+  async findByAssignedWorkout(
+    @Request() req: AuthenticatedRequest,
+    @Param('assignedWorkoutId', ParseUUIDPipe) assignedWorkoutId: string,
+  ) {
+    return this.workoutLogService.findByAssignedWorkout(
+      assignedWorkoutId,
+      req.user.id,
+    );
+  }
+
   @Post('workout-logs/:id/complete')
   async complete(
     @Request() req: AuthenticatedRequest,
