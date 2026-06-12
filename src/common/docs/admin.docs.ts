@@ -33,6 +33,13 @@ export const AdminDocs = {
     auth: true,
     responses: [{ status: 200, description: 'Updated user detail' }],
   },
+  resendVerification: {
+    summary: 'Resend verification email',
+    description:
+      'Re-send the email-verification link to a user who is not yet verified. ADMIN+ (audited).',
+    auth: true,
+    responses: [{ status: 201, description: 'Sent' }],
+  },
   assignRole: {
     summary: 'Assign role',
     description: 'Grant a system role to a user. SUPER_ADMIN only.',

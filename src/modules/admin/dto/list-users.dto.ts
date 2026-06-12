@@ -10,8 +10,20 @@ import { Transform } from 'class-transformer';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { ADMIN_ROLE_NAMES } from '../admin.constants';
 
-const toBool = ({ value }: { value: unknown }) =>
-  value === 'true' || value === true;
+// Read the RAW query value (obj[key]) — the global ValidationPipe runs
+// with enableImplicitConversion, which would otherwise coerce the string
+// 'false' to boolean `true` before this transform sees it.
+const toBool = ({
+  obj,
+  key,
+}: {
+  obj: Record<string, unknown>;
+  key: string;
+}) => {
+  const v = obj?.[key];
+  if (v === undefined || v === null || v === '') return undefined;
+  return v === true || v === 'true';
+};
 
 /**
  * Cross-tenant user listing filter for the admin app. Every field is

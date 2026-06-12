@@ -3,8 +3,20 @@ import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 
-const toBool = ({ value }: { value: unknown }) =>
-  value === 'true' || value === true;
+// Read the RAW query value (obj[key]) — the global ValidationPipe runs
+// with enableImplicitConversion, which would otherwise coerce 'false' to
+// boolean `true` before this transform sees it.
+const toBool = ({
+  obj,
+  key,
+}: {
+  obj: Record<string, unknown>;
+  key: string;
+}) => {
+  const v = obj?.[key];
+  if (v === undefined || v === null || v === '') return undefined;
+  return v === true || v === 'true';
+};
 
 /**
  * Generic paginated list filter shared by the content-moderation and

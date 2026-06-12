@@ -25,6 +25,7 @@ import { Group } from '../group/entities/group.entity';
 import { SessionInstance } from '../session/entities/session-instance.entity';
 import { InstructorClient } from '../client/entities/instructor-client.entity';
 import { StripeAccount } from '../payment/entities/stripe-account.entity';
+import { StripeCustomer } from '../payment/entities/stripe-customer.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { Subscription } from '../payment/entities/subscription.entity';
 import { Dispute } from '../payment/entities/dispute.entity';
@@ -77,6 +78,7 @@ import { AdminAuditService } from './services/admin-audit.service';
       SessionInstance,
       InstructorClient,
       StripeAccount,
+      StripeCustomer,
       RefreshToken,
       Subscription,
       Dispute,
