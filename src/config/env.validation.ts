@@ -47,6 +47,12 @@ export const envValidationSchema = Joi.object({
   // Local Docker Redis runs without TLS so this defaults to false.
   REDIS_TLS: Joi.string().valid('true', 'false').default('false'),
 
+  // Job schedulers (@Cron). Default 'true'. Set to 'false' on
+  // environments that shouldn't run periodic work (e.g. dev), so the
+  // DB-querying crons don't keep Postgres awake. Workers still run; only
+  // the cron producers are skipped.
+  SCHEDULERS_ENABLED: Joi.string().valid('true', 'false').default('true'),
+
   // Bull Board admin UI — mounted at /admin/queues. Protected with
   // HTTP basic auth so we don't have to wire JWT into the Express
   // middleware that Bull Board ships with. Both vars must be set

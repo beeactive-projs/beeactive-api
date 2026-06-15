@@ -28,43 +28,34 @@ export class HealthController {
   ) {}
 
   /**
-   * Basic health check
+   * Liveness probe (what Railway hits, frequently).
    *
-   * Returns: { status: 'ok', info: {...}, error: {...}, details: {...} }
-   *
-   * Checks:
-   * - Database connection (can we query MySQL?)
-   * - Overall app status
-   *
-   * If ANY check fails, returns 503 Service Unavailable
-   * If ALL checks pass, returns 200 OK
+   * IMPORTANT: this must NOT touch the database. Railway polls this
+   * endpoint every ~15-30s; if it ran a `SELECT 1` each time, the
+   * Postgres compute (Neon) would never scale to zero and would burn
+   * the free compute allowance 24/7. Liveness only answers "is the
+   * Node process up?" — a dependency check belongs in readiness
+   * (`/health/db`), not liveness (a DB blip shouldn't restart the app).
    */
   @Get()
-  @HealthCheck()
-  @ApiOperation({ summary: 'Health check endpoint' })
-  @ApiResponse({
-    status: 200,
-    description: 'Application is healthy',
-    schema: {
-      example: {
-        status: 'ok',
-        info: {
-          database: {
-            status: 'up',
-          },
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 503,
-    description: 'Application is unhealthy',
-  })
+  @ApiOperation({ summary: 'Liveness probe (no DB — process up?)' })
+  @ApiResponse({ status: 200, description: 'Process is up' })
   check() {
-    return this.health.check([
-      // Check database connection
-      () => this.db.pingCheck('database'),
-    ]);
+    return { status: 'ok', uptime: Math.round(process.uptime()) };
+  }
+
+  /**
+   * Readiness / deep check — pings the database. Use this for manual
+   * troubleshooting or a low-frequency external monitor, NOT as the
+   * Railway liveness probe (see above). Returns 503 if the DB is down.
+   */
+  @Get('db')
+  @HealthCheck()
+  @ApiOperation({ summary: 'Readiness check (pings the database)' })
+  @ApiResponse({ status: 200, description: 'Database reachable' })
+  @ApiResponse({ status: 503, description: 'Database unreachable' })
+  checkDb() {
+    return this.health.check([() => this.db.pingCheck('database')]);
   }
 
   /**
