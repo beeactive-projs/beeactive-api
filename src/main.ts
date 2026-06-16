@@ -195,6 +195,7 @@ A comprehensive REST API for managing fitness training sessions, trainers, and c
       'https://app-dev.motionhive.fit',
       'https://admin.motionhive.fit',
       'https://admin-dev.motionhive.fit',
+      'https://dev.admin.motionhive.fit',
       /\.vercel\.app$/,
       /\.railway\.app$/,
       /\.netlify\.app$/,

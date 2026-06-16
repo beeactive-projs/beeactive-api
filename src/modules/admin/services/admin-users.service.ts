@@ -16,6 +16,7 @@ import {
 import { Role } from '../../role/entities/role.entity';
 import { UserRole } from '../../role/entities/user-role.entity';
 import { RoleService } from '../../role/role.service';
+import { AuthService } from '../../auth/auth.service';
 import { User } from '../../user/entities/user.entity';
 import { InstructorProfile } from '../../profile/entities/instructor-profile.entity';
 import { Group } from '../../group/entities/group.entity';
@@ -91,6 +92,7 @@ export class AdminUsersService {
     @InjectModel(Routine) private readonly routineModel: typeof Routine,
     @InjectModel(Post) private readonly postModel: typeof Post,
     private readonly roleService: RoleService,
+    private readonly authService: AuthService,
     private readonly audit: AdminAuditService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
@@ -378,6 +380,32 @@ export class AdminUsersService {
     return {
       roles: (await this.roleService.getUserRoles(id)).map((r) => r.name),
     };
+  }
+
+  async resendVerification(
+    adminId: string,
+    id: string,
+    ip: string | null = null,
+  ) {
+    const user = await this.userModel.findByPk(id);
+    if (!user) throw new NotFoundException('User not found');
+    if (user.isEmailVerified) {
+      throw new BadRequestException('User email is already verified.');
+    }
+    // Reuse the existing (token-gen + Resend) path.
+    await this.authService.resendVerification({ email: user.email });
+    await this.audit.record({
+      adminUserId: adminId,
+      action: 'user.resend_verification',
+      targetType: 'user',
+      targetId: id,
+      ip,
+    });
+    this.logger.log(
+      `Admin ${adminId} resent verification email to user ${id}`,
+      'AdminUsersService',
+    );
+    return { sent: true };
   }
 
   async restoreUser(adminId: string, id: string) {

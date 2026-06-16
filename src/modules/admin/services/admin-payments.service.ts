@@ -14,6 +14,7 @@ import {
   getOffset,
 } from '../../../common/dto/pagination.dto';
 import { StripeAccount } from '../../payment/entities/stripe-account.entity';
+import { StripeCustomer } from '../../payment/entities/stripe-customer.entity';
 import { Subscription } from '../../payment/entities/subscription.entity';
 import { Invoice } from '../../payment/entities/invoice.entity';
 import { Dispute } from '../../payment/entities/dispute.entity';
@@ -37,6 +38,8 @@ export class AdminPaymentsService {
   constructor(
     @InjectModel(StripeAccount)
     private readonly stripeAccountModel: typeof StripeAccount,
+    @InjectModel(StripeCustomer)
+    private readonly stripeCustomerModel: typeof StripeCustomer,
     @InjectModel(Subscription)
     private readonly subscriptionModel: typeof Subscription,
     @InjectModel(Invoice) private readonly invoiceModel: typeof Invoice,
@@ -82,7 +85,8 @@ export class AdminPaymentsService {
       offset: getOffset(page, limit),
       order: [['createdAt', 'DESC']],
     });
-    return buildPaginatedResponse(rows, count, page, limit);
+    const items = await this.attachCustomerEmail(rows);
+    return buildPaginatedResponse(items, count, page, limit);
   }
 
   async listInvoices(dto: PaymentsListDto) {
@@ -98,7 +102,38 @@ export class AdminPaymentsService {
       offset: getOffset(page, limit),
       order: [['createdAt', 'DESC']],
     });
-    return buildPaginatedResponse(rows, count, page, limit);
+    const items = await this.attachCustomerEmail(rows);
+    return buildPaginatedResponse(items, count, page, limit);
+  }
+
+  /**
+   * Add `customerEmail`/`customerName` to invoice/subscription rows from
+   * the linked stripe_customer — so guest billing (no registered client)
+   * still shows who was billed. One batched query (no N+1): collect the
+   * page's stripeCustomerIds and fetch them all at once.
+   */
+  private async attachCustomerEmail(
+    rows: Array<Invoice | Subscription>,
+  ): Promise<Record<string, unknown>[]> {
+    const ids = [
+      ...new Set(rows.map((r) => r.stripeCustomerId).filter(Boolean)),
+    ];
+    const customers = ids.length
+      ? await this.stripeCustomerModel.findAll({
+          where: { stripeCustomerId: { [Op.in]: ids } },
+          attributes: ['stripeCustomerId', 'email', 'name'],
+        })
+      : [];
+    const byId = new Map(customers.map((c) => [c.stripeCustomerId, c]));
+    return rows.map((r) => {
+      const plain = r.get({ plain: true }) as Record<string, unknown> & {
+        client?: { email?: string } | null;
+      };
+      const cust = byId.get(r.stripeCustomerId);
+      plain['customerEmail'] = plain.client?.email ?? cust?.email ?? null;
+      plain['customerName'] = cust?.name ?? null;
+      return plain;
+    });
   }
 
   async listDisputes(dto: PaymentsListDto) {

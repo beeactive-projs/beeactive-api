@@ -863,6 +863,57 @@ export class WorkoutLogService {
     return this.findById(id, stub.userId);
   }
 
+  /**
+   * Most-recent IN_PROGRESS log for the caller (or null if none).
+   *
+   * Powers the home page's "Resume workout" tile and any other "where
+   * did I leave off?" affordance. Stays cheap — only the fields the
+   * caller needs to render + navigate (no exercise tree). Returns null
+   * (not 404) because "you have nothing to resume" is a normal state,
+   * not a missing-resource error.
+   */
+  async findInProgressForUser(userId: string): Promise<WorkoutLog | null> {
+    return this.logModel.findOne({
+      where: { userId, status: WorkoutLogStatus.InProgress },
+      order: [['startedAt', 'DESC']],
+      attributes: [
+        'id',
+        'name',
+        'startedAt',
+        'assignedWorkoutId',
+        'programAssignmentId',
+      ],
+    });
+  }
+
+  /**
+   * Look up the WorkoutLog created from a given assigned-workout.
+   *
+   * Used by the client plan-detail "View" CTA on a completed workout —
+   * we need the log id to navigate to the replay screen. Returns the
+   * latest log if there's drift (e.g. multiple starts of the same
+   * assigned workout, which today shouldn't happen but might in the
+   * future). 404 on cross-tenant access.
+   */
+  async findByAssignedWorkout(
+    assignedWorkoutId: string,
+    userId: string,
+  ): Promise<WorkoutLog> {
+    const owned = await this.assignedWorkoutOwnedByClient(
+      assignedWorkoutId,
+      userId,
+    );
+    if (!owned) throw new NotFoundException('Workout log not found.');
+
+    const log = await this.logModel.findOne({
+      where: { userId, assignedWorkoutId },
+      order: [['startedAt', 'DESC']],
+      attributes: ['id'],
+    });
+    if (!log) throw new NotFoundException('Workout log not found.');
+    return log;
+  }
+
   // ────────────────────────────────────────────────────────────────────
   // Internals
   // ────────────────────────────────────────────────────────────────────

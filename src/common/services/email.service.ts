@@ -12,6 +12,7 @@ import {
   collaborationEndedTemplate,
   emailVerificationTemplate,
   feedbackConfirmationTemplate,
+  friendInviteTemplate,
   genericNotificationTemplate,
   groupJoinRequestDecidedTemplate,
   groupJoinRequestReceivedTemplate,
@@ -19,6 +20,7 @@ import {
   groupMemberRemovedTemplate,
   groupOwnershipTransferredTemplate,
   groupRoleChangedTemplate,
+  instructorSuggestionTemplate,
   invitationDeclinedTemplate,
   invitationAcceptedTemplate,
   invitationTemplate,
@@ -183,6 +185,49 @@ export class EmailService {
    * account. The signup link carries a token that auto-accepts the
    * invitation once registration completes.
    */
+  /**
+   * Friend-invite email (home-page "Invite a friend" dialog). Carries
+   * the inviter's user id as `?ref=` so the referrer chain can be
+   * picked up by the signup flow once BE attribution lands.
+   */
+  async sendFriendInviteEmail(
+    email: string,
+    inviterName: string,
+    inviterUserId: string,
+    personalMessage?: string,
+  ): Promise<void> {
+    const signUpLink = `${this.frontendUrl}/auth/signup?ref=${encodeURIComponent(inviterUserId)}`;
+    const subject = `${inviterName} invited you to MotionHive`;
+    const html = friendInviteTemplate({
+      inviterName,
+      signUpLink,
+      personalMessage,
+    });
+    await this.send(email, subject, html);
+  }
+
+  /**
+   * Instructor-suggestion email (home-page "Suggest an instructor"
+   * dialog, "Direct" tab). The CTA pre-selects the instructor signup
+   * flow via `?role=instructor`.
+   */
+  async sendInstructorSuggestionEmail(
+    email: string,
+    coachName: string,
+    recommenderName: string,
+    note?: string,
+  ): Promise<void> {
+    const signUpLink = `${this.frontendUrl}/auth/signup?role=instructor`;
+    const subject = `${recommenderName} suggested you join MotionHive`;
+    const html = instructorSuggestionTemplate({
+      coachName,
+      recommenderName,
+      signUpLink,
+      note,
+    });
+    await this.send(email, subject, html);
+  }
+
   async sendClientInvitationEmail(
     email: string,
     instructorName: string,

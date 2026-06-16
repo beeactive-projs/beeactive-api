@@ -122,3 +122,12 @@ export {
   genericNotificationTemplate,
   genericNotificationTemplateText,
 } from './notification/generic.template';
+
+export {
+  friendInviteTemplate,
+  friendInviteTemplateText,
+} from './social/friend-invite.template';
+export {
+  instructorSuggestionTemplate,
+  instructorSuggestionTemplateText,
+} from './social/instructor-suggestion.template';

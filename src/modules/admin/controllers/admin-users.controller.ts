@@ -63,6 +63,16 @@ export class AdminUsersController {
     return this.users.updateStatus(req.user.id, id, dto, req.ip ?? null);
   }
 
+  @Post(':id/resend-verification')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint(AdminDocs.resendVerification)
+  resendVerification(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.users.resendVerification(req.user.id, id, req.ip ?? null);
+  }
+
   @Post(':id/roles')
   @Roles('SUPER_ADMIN')
   @ApiEndpoint(AdminDocs.assignRole)

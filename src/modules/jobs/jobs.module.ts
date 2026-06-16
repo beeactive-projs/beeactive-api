@@ -59,6 +59,12 @@ export class JobsModule {
   static register(): DynamicModule {
     const redisEnabled = !!process.env.REDIS_HOST;
 
+    // Schedulers fire @Cron jobs that query Postgres. On environments
+    // that don't need periodic work (e.g. dev), set SCHEDULERS_ENABLED=
+    // 'false' so the DB can scale to zero and not burn compute. Default
+    // ON. Read here (call time) so it sees the loaded .env, like REDIS_HOST.
+    const schedulersEnabled = process.env.SCHEDULERS_ENABLED !== 'false';
+
     const workerProviders: Provider[] = redisEnabled
       ? [
           EmailSendWorker,
@@ -66,6 +72,15 @@ export class JobsModule {
           WorkoutsWorker,
           PaymentsWorker,
           MaintenanceWorker,
+        ]
+      : [];
+
+    const schedulerProviders: Provider[] = schedulersEnabled
+      ? [
+          SessionsScheduler,
+          WorkoutsScheduler,
+          PaymentsScheduler,
+          MaintenanceScheduler,
         ]
       : [];
 
@@ -113,11 +128,10 @@ export class JobsModule {
       ],
       providers: [
         JobsService,
-        // Schedulers only enqueue (no-op without Redis) — always on.
-        SessionsScheduler,
-        WorkoutsScheduler,
-        PaymentsScheduler,
-        MaintenanceScheduler,
+        // Schedulers only enqueue, but their @Cron-triggered jobs query
+        // the DB — gated by SCHEDULERS_ENABLED so dev can keep Postgres
+        // asleep. Default on (prod runs them).
+        ...schedulerProviders,
         // Workers need a Redis connection at construction — gated.
         ...workerProviders,
         // EmailService comes in via the @Global EmailModule in AppModule.

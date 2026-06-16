@@ -31,7 +31,12 @@ export class ListVelocityAlarmsDto extends PaginationDto {
     default: false,
   })
   @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
+  @Transform(({ obj }) => {
+    // Read the raw value — the global ValidationPipe's
+    // enableImplicitConversion would otherwise coerce 'false' → true.
+    const v = (obj as Record<string, unknown>)?.['includeReviewed'];
+    return v === true || v === 'true';
+  })
   @IsBoolean()
   includeReviewed?: boolean = false;
 }

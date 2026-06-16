@@ -114,6 +114,27 @@ export class WorkoutLogController {
     );
   }
 
+  /** Look up the log produced by a given assigned workout — used by
+   *  the plan-detail "View" CTA to find the replay target. 404 if the
+   *  workout was never started or isn't owned by the caller. */
+  @Get('workout-logs/by-assigned-workout/:assignedWorkoutId')
+  async findByAssignedWorkout(
+    @Request() req: AuthenticatedRequest,
+    @Param('assignedWorkoutId', ParseUUIDPipe) assignedWorkoutId: string,
+  ) {
+    return this.workoutLogService.findByAssignedWorkout(
+      assignedWorkoutId,
+      req.user.id,
+    );
+  }
+
+  /** Most-recent IN_PROGRESS log for the caller (or null). Powers the
+   *  home page resume-tile. Returns 200 with `null` body, not 404. */
+  @Get('workout-logs/in-progress')
+  async findInProgress(@Request() req: AuthenticatedRequest) {
+    return this.workoutLogService.findInProgressForUser(req.user.id);
+  }
+
   @Post('workout-logs/:id/complete')
   async complete(
     @Request() req: AuthenticatedRequest,
