@@ -28,12 +28,13 @@ export class SessionsScheduler {
     private readonly logger: LoggerService,
   ) {}
 
-  // Every 30 min (not 5): frequent crons keep the Postgres compute
-  // (Neon) from scaling to zero and burn the free CU-hour allowance.
-  // 30 min is plenty for 24h/1h reminders and start/end transitions.
-  @Cron(CronExpression.EVERY_30_MINUTES)
+  // Hourly: frequent crons keep the Postgres compute (Neon) from
+  // scaling to zero and burn the free CU-hour allowance. An hour is
+  // plenty for 24h/1h reminders (the worker sweeps a window, not an
+  // exact tick, and dedups via the notification fingerprint).
+  @Cron(CronExpression.EVERY_HOUR)
   async dispatchReminders(): Promise<void> {
-    const runKey = bucketKey(30 * 60_000);
+    const runKey = bucketKey(60 * 60_000);
     await this.jobs.enqueue(
       'sessions.reminder_dispatch',
       { runKey },
