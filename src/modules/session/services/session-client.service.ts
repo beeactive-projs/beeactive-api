@@ -108,6 +108,7 @@ export class SessionClientService {
                 'locationKind',
                 'meetingProvider',
                 'durationMinutes',
+                'capacity',
                 'timezone',
                 'priceAmountCents',
                 'priceCurrency',
