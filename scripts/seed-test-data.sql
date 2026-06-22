@@ -36,14 +36,19 @@
 BEGIN;
 
 -- ---------------------------------------------------------------------
--- 0. Helper: deterministic char(36) id from a readable key.
---    md5 -> 8-4-4-4-12 layout. id columns are CHAR(36) (not uuid type),
---    so any 36-char string is valid and stable across runs.
+-- 0. Helper: deterministic, RFC-4122-VALID v4 id from a readable key.
+--    md5 -> 8-4-4-4-12 layout, with the version nibble forced to '4'
+--    and the variant nibble forced to '8' (10xx). The DB columns are
+--    CHAR(36) so any 36-char string would store fine, but the API
+--    validates ids with class-validator `@IsUUID('4')` — a raw md5 in
+--    UUID shape has a random version/variant nibble and gets rejected
+--    ("programId must be a UUID"). Pinning those two nibbles makes every
+--    seeded id a genuine v4 UUID while staying fully deterministic.
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION pg_temp.seed_uuid(k text)
 RETURNS char(36) LANGUAGE sql IMMUTABLE AS $fn$
-  SELECT (substr(m,1,8)||'-'||substr(m,9,4)||'-'||substr(m,13,4)||'-'
-          ||substr(m,17,4)||'-'||substr(m,21,12))::char(36)
+  SELECT (substr(m,1,8)||'-'||substr(m,9,4)||'-4'||substr(m,14,3)||'-8'
+          ||substr(m,18,3)||'-'||substr(m,21,12))::char(36)
   FROM (SELECT md5(k) AS m) s;
 $fn$;
 
