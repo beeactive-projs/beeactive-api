@@ -75,9 +75,13 @@ export class PaymentsScheduler {
   }
 
   // Safety net for webhooks orphaned by an arrival-before-commit race.
-  @Cron(CronExpression.EVERY_30_MINUTES)
+  // Hourly (was 30m): this only catches the rare orphan the immediate
+  // BullMQ path missed, so up-to-an-hour recovery latency is acceptable,
+  // and it lets the Neon compute scale to zero between the top-of-hour
+  // sweeps instead of being pinged twice an hour.
+  @Cron(CronExpression.EVERY_HOUR)
   async reconcileWebhooks(): Promise<void> {
-    const runKey = bucketKey(30 * 60_000);
+    const runKey = bucketKey(60 * 60_000);
     await this.jobs.enqueue(
       'payments.reconcile_webhooks',
       { runKey },

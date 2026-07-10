@@ -52,6 +52,13 @@ export interface ConversationListItem {
    * For DIRECT conversations only: the *other* participant. null for groups.
    */
   otherUser: ParticipantSnapshot | null;
+  /**
+   * For DIRECT conversations only: the *other* participant's `lastReadAt`
+   * (ISO string), so the FE can render a read receipt on the caller's own
+   * messages without an extra round-trip. null for groups, or when the other
+   * side has never read the thread.
+   */
+  lastReadByOther: string | null;
 }
 
 export interface ParticipantSnapshot {
@@ -440,6 +447,7 @@ export class MessagingService {
           lastName: recipient.lastName,
           avatarUrl: recipient.avatarUrl ?? null,
         },
+        lastReadByOther: null,
       },
       delivered: false,
       threatFlags,
@@ -919,6 +927,7 @@ export class MessagingService {
     });
 
     let otherUser: ParticipantSnapshot | null = null;
+    let lastReadByOther: string | null = null;
     if (conversation.type === ConversationType.DIRECT) {
       const other = await this.participantModel.findOne({
         where: {
@@ -940,6 +949,9 @@ export class MessagingService {
           avatarUrl: other.user.avatarUrl ?? null,
         };
       }
+      lastReadByOther = other?.lastReadAt
+        ? other.lastReadAt.toISOString()
+        : null;
     }
 
     const mutedUntil = participant.mutedUntil;
@@ -955,6 +967,7 @@ export class MessagingService {
       unreadCount: unread,
       muted,
       otherUser,
+      lastReadByOther,
     };
   }
 
