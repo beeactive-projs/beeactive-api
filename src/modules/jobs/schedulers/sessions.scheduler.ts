@@ -42,9 +42,13 @@ export class SessionsScheduler {
     );
   }
 
-  @Cron(CronExpression.EVERY_30_MINUTES)
+  // Hourly (was 30m): keeps the wake cadence to one burst/hour so the
+  // Neon compute can scale to zero in between. Status is cosmetic —
+  // upcoming/past filtering uses `endAt` directly, not this field — so
+  // up-to-an-hour staleness on the transition is harmless.
+  @Cron(CronExpression.EVERY_HOUR)
   async runStatusTransitions(): Promise<void> {
-    const runKey = bucketKey(30 * 60_000);
+    const runKey = bucketKey(60 * 60_000);
     await this.jobs.enqueue(
       'sessions.status_transition',
       { runKey },

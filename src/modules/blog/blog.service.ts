@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
@@ -53,6 +54,15 @@ export interface BlogPostResponse {
    * back to the initials circle when this is null.
    */
   authorAvatarUrl: string | null;
+  /**
+   * URL handle of the registered author, when they have one. Null for
+   * guest-authored posts (no user join) and for registered authors who
+   * haven't been assigned a handle. The public website turns the byline
+   * into a link to the author's `/@<handle>` profile when this is set,
+   * and to the signup page otherwise (our own "MotionHive Editors"
+   * content has no handle).
+   */
+  authorHandle: string | null;
   readTime: number;
   tags: string[] | null;
   language: string;
@@ -64,6 +74,8 @@ export interface BlogPostResponse {
 
 @Injectable()
 export class BlogService {
+  private readonly logger = new Logger(BlogService.name);
+
   // Process-local sitemap cache. Regenerated at most once per hour.
   // Prevents an attacker from forcing a fresh 10k-row scan + XML build
   // on every request (the global 100 req/60s throttle alone allows
@@ -98,6 +110,7 @@ export class BlogService {
     authorName: string;
     authorInitials: string;
     authorAvatarUrl: string | null;
+    authorHandle: string | null;
   } {
     if (post.author) {
       const first = post.author.firstName?.trim() ?? '';
@@ -110,6 +123,7 @@ export class BlogService {
         authorName: name,
         authorInitials: initials,
         authorAvatarUrl: post.author.avatarUrl ?? null,
+        authorHandle: post.author.handle ?? null,
       };
     }
     const guest = post.guestAuthorName ?? 'Guest contributor';
@@ -121,6 +135,7 @@ export class BlogService {
       authorName: guest,
       authorInitials: initials || guest.slice(0, 2).toUpperCase(),
       authorAvatarUrl: null,
+      authorHandle: null,
     };
   }
 
@@ -131,7 +146,7 @@ export class BlogService {
    * underlying join.
    */
   private toResponse(post: BlogPost): BlogPostResponse {
-    const { authorName, authorInitials, authorAvatarUrl } =
+    const { authorName, authorInitials, authorAvatarUrl, authorHandle } =
       this.resolveByline(post);
     const json = post.toJSON();
     delete json.author;
@@ -139,11 +154,12 @@ export class BlogService {
     return {
       ...(json as Omit<
         BlogPostResponse,
-        'authorName' | 'authorInitials' | 'authorAvatarUrl'
+        'authorName' | 'authorInitials' | 'authorAvatarUrl' | 'authorHandle'
       >),
       authorName,
       authorInitials,
       authorAvatarUrl,
+      authorHandle,
     };
   }
 
@@ -193,6 +209,10 @@ export class BlogService {
     if (!reloaded) {
       // Should never happen — we just created it.
       throw new BadRequestException('Failed to load created post.');
+    }
+    // Prerendered site only shows published posts → rebuild on publish.
+    if (reloaded.isPublished) {
+      this.triggerWebsiteRebuild(`create ${reloaded.slug}`);
     }
     return this.toResponse(reloaded);
   }
@@ -355,6 +375,9 @@ export class BlogService {
     // Snapshot the previous cover so we can purge it from Cloudinary
     // after the DB write commits, if the writer replaces (or clears) it.
     const previousCover = post.coverImage;
+    // Snapshot publish state to decide whether the live (prerendered) site
+    // needs a rebuild after this edit.
+    const wasPublished = post.isPublished;
 
     const isAdmin = auth.roles.some((r) => ADMIN_ROLES.includes(r));
     const patch: Partial<BlogPost> = { ...dto };
@@ -401,16 +424,28 @@ export class BlogService {
 
     // Reload to pick up any author-relation change after attribution
     // edits.
-    return this.toResponse(await this.findEntityById(id));
+    const updated = await this.findEntityById(id);
+    // Rebuild the site if this edit touches the published set: a publish, an
+    // unpublish, or an edit to an already-live post. Draft-only edits skip it.
+    if (wasPublished || updated.isPublished) {
+      this.triggerWebsiteRebuild(`update ${updated.slug}`);
+    }
+    return this.toResponse(updated);
   }
 
   async delete(id: string, auth: AuthContext): Promise<void> {
     const post = await this.findEntityById(id);
     this.assertCanEdit(post, auth);
     const cover = post.coverImage;
+    const wasPublished = post.isPublished;
+    const slug = post.slug;
     await post.destroy();
     if (cover) {
       await this.cloudinaryService.deleteByUrl(cover);
+    }
+    // A published post was live on the site → rebuild to drop its page.
+    if (wasPublished) {
+      this.triggerWebsiteRebuild(`delete ${slug}`);
     }
   }
 
@@ -419,6 +454,41 @@ export class BlogService {
       resource: 'blog',
       userId: authorId,
     });
+  }
+
+  /**
+   * Ask the marketing site to rebuild so newly published / edited / removed
+   * articles get (re)prerendered.
+   *
+   * The site is a static (prerendered) build — article HTML is generated at
+   * deploy time from `GET /blog`, so a published post only appears after a
+   * rebuild. This fires a Vercel Deploy Hook to trigger one.
+   *
+   * Fire-and-forget and fully optional: with no `WEBSITE_DEPLOY_HOOK_URL` set
+   * it no-ops (e.g. local dev). Failures are logged, never thrown — a blog
+   * mutation must not fail because a deploy webhook was unreachable. Only call
+   * this for changes that affect the *published* set (not draft saves).
+   */
+  private triggerWebsiteRebuild(reason: string): void {
+    const url = this.configService.get<string>('WEBSITE_DEPLOY_HOOK_URL');
+    if (!url) return;
+    void fetch(url, { method: 'POST' })
+      .then((res) => {
+        if (res.ok) {
+          this.logger.log(`Triggered website rebuild (${reason}).`);
+        } else {
+          this.logger.warn(
+            `Website rebuild hook returned ${res.status} (${reason}).`,
+          );
+        }
+      })
+      .catch((err) => {
+        this.logger.warn(
+          `Failed to trigger website rebuild (${reason}): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
   }
 
   async getSitemapSlugs(): Promise<{ slug: string; updatedAt: Date }[]> {

@@ -73,6 +73,11 @@ export const envValidationSchema = Joi.object({
     otherwise: Joi.optional(),
   }),
 
+  // Vercel Deploy Hook for the marketing site. Optional: when set, publishing/
+  // editing/deleting a published blog post POSTs here to rebuild the
+  // prerendered site so the new article HTML is generated. Unset → no-op.
+  WEBSITE_DEPLOY_HOOK_URL: Joi.string().uri().optional(),
+
   // Bcrypt rounds (default: 12)
   BCRYPT_ROUNDS: Joi.number().min(10).max(15).default(12),
 
