@@ -196,6 +196,134 @@ describe('ProgramService (smoke — not exhaustive)', () => {
     });
   });
 
+  // ─── Workout reorder (atomic repositioning) ──────────────────────
+
+  describe('reorderWorkouts', () => {
+    /** Fake row whose update() mutates in place like a Sequelize instance. */
+    const makeWorkout = (
+      id: string,
+      weekIndex: number,
+      dayIndex: number,
+      sequenceNumber: number,
+    ) => {
+      const w = { id, weekIndex, dayIndex, sequenceNumber } as {
+        id: string;
+        weekIndex: number;
+        dayIndex: number;
+        sequenceNumber: number;
+        update: jest.Mock;
+      };
+      w.update = jest.fn((values: object) => {
+        Object.assign(w, values);
+        return Promise.resolve(w);
+      });
+      return w;
+    };
+
+    const setupProgram = () => {
+      programModel.findByPk.mockResolvedValueOnce({ id: 'p-1', ownerId: 'me' });
+    };
+
+    it('404s when an item references a workout outside the program', async () => {
+      setupProgram();
+      workoutModel.findAll.mockResolvedValueOnce([makeWorkout('w-1', 0, 0, 0)]);
+
+      await expect(
+        service.reorderWorkouts(
+          'p-1',
+          { items: [{ id: 'w-foreign', weekIndex: 0, dayIndex: 1 }] },
+          'me',
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects duplicate workout ids in items', async () => {
+      setupProgram();
+      workoutModel.findAll.mockResolvedValueOnce([makeWorkout('w-1', 0, 0, 0)]);
+
+      await expect(
+        service.reorderWorkouts(
+          'p-1',
+          {
+            items: [
+              { id: 'w-1', weekIndex: 0, dayIndex: 1 },
+              { id: 'w-1', weekIndex: 0, dayIndex: 2 },
+            ],
+          },
+          'me',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('409s when a target slot collides with an untouched workout', async () => {
+      setupProgram();
+      workoutModel.findAll.mockResolvedValueOnce([
+        makeWorkout('w-1', 0, 0, 0),
+        makeWorkout('w-2', 0, 2, 1), // stays put — occupies (0, 2)
+      ]);
+
+      await expect(
+        service.reorderWorkouts(
+          'p-1',
+          { items: [{ id: 'w-1', weekIndex: 0, dayIndex: 2 }] },
+          'me',
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('swaps two days via the parked week namespace and renumbers sequence', async () => {
+      setupProgram();
+      const w1 = makeWorkout('w-1', 0, 0, 0);
+      const w2 = makeWorkout('w-2', 0, 2, 1);
+      workoutModel.findAll
+        .mockResolvedValueOnce([w1, w2]) // load
+        .mockResolvedValueOnce([w2, w1]); // post-reorder return
+
+      await service.reorderWorkouts(
+        'p-1',
+        {
+          items: [
+            { id: 'w-1', weekIndex: 0, dayIndex: 2 },
+            { id: 'w-2', weekIndex: 0, dayIndex: 0 },
+          ],
+        },
+        'me',
+      );
+
+      // Phase 1 parks out of collision range before any final write.
+      expect(w1.update.mock.calls[0][0]).toEqual({ weekIndex: 10_000 });
+      expect(w2.update.mock.calls[0][0]).toEqual({ weekIndex: 10_000 });
+      // Phase 2 writes the validated final slots.
+      expect(w1.update.mock.calls[1][0]).toEqual({ weekIndex: 0, dayIndex: 2 });
+      expect(w2.update.mock.calls[1][0]).toEqual({ weekIndex: 0, dayIndex: 0 });
+      // sequenceNumber follows calendar order: w2 (day 0) then w1 (day 2).
+      expect(w2.update).toHaveBeenCalledWith(
+        { sequenceNumber: 0 },
+        expect.anything(),
+      );
+      expect(w1.update).toHaveBeenCalledWith(
+        { sequenceNumber: 1 },
+        expect.anything(),
+      );
+    });
+
+    it('skips the transaction entirely when nothing actually moves', async () => {
+      setupProgram();
+      const w1 = makeWorkout('w-1', 0, 0, 0);
+      workoutModel.findAll
+        .mockResolvedValueOnce([w1])
+        .mockResolvedValueOnce([w1]);
+
+      await service.reorderWorkouts(
+        'p-1',
+        { items: [{ id: 'w-1', weekIndex: 0, dayIndex: 0 }] },
+        'me',
+      );
+
+      expect(w1.update).not.toHaveBeenCalled();
+    });
+  });
+
   // ─── Exercise usability gate ─────────────────────────────────────
 
   describe('addExercise — exercise usability', () => {

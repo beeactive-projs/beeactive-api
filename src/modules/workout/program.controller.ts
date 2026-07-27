@@ -27,6 +27,7 @@ import { CreatePrescribedSetDto } from './dto/create-prescribed-set.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { CreateProgramWorkoutDto } from './dto/create-program-workout.dto';
 import { ListProgramsQueryDto } from './dto/list-programs.query.dto';
+import { ReorderProgramWorkoutsDto } from './dto/reorder-program-workouts.dto';
 import { UpdatePrescribedExerciseDto } from './dto/update-prescribed-exercise.dto';
 import { UpdatePrescribedSetDto } from './dto/update-prescribed-set.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
@@ -111,6 +112,22 @@ export class ProgramController {
     @Body() dto: CreateProgramWorkoutDto,
   ) {
     return this.programService.addWorkout(id, dto, req.user.id);
+  }
+
+  // NOTE: declared before ':id/workouts/:workoutId' so the literal
+  // 'reorder' segment isn't captured by the UUID-piped param route.
+  @Patch(':id/workouts/reorder')
+  @Throttle({ default: { limit: 200, ttl: 3_600_000 } })
+  @ApiEndpoint({
+    ...ProgramDocs.reorderWorkouts,
+    body: ReorderProgramWorkoutsDto,
+  })
+  async reorderWorkouts(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReorderProgramWorkoutsDto,
+  ) {
+    return this.programService.reorderWorkouts(id, dto, req.user.id);
   }
 
   @Patch(':id/workouts/:workoutId')
