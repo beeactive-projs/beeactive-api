@@ -32,10 +32,21 @@ import { CreatePrescribedSetDto } from './dto/create-prescribed-set.dto';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { CreateProgramWorkoutDto } from './dto/create-program-workout.dto';
 import { ListProgramsQueryDto } from './dto/list-programs.query.dto';
+import { ReorderProgramWorkoutsDto } from './dto/reorder-program-workouts.dto';
 import { UpdatePrescribedExerciseDto } from './dto/update-prescribed-exercise.dto';
 import { UpdatePrescribedSetDto } from './dto/update-prescribed-set.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { UpdateProgramWorkoutDto } from './dto/update-program-workout.dto';
+
+/**
+ * Temporary week namespace used while repositioning workouts. The
+ * unique (program_id, week_index, day_index) index is NOT deferrable,
+ * so swaps would collide mid-transaction if final slots were written
+ * directly. week_index has no upper CHECK (only >= 0, SMALLINT) and
+ * real weeks are DTO-capped at 103, so parking moved rows at
+ * `week + 10000` can never clash with a live slot.
+ */
+const WEEK_PARK_OFFSET = 10_000;
 
 /**
  * ProgramService — nested CRUD across the program-authoring tree
@@ -237,6 +248,94 @@ export class ProgramService {
       sequenceNumber: nextSeq,
       phase: dto.phase?.trim() || null,
       estimatedDurationMinutes: dto.estimatedDurationMinutes ?? null,
+    });
+  }
+
+  /**
+   * Atomic calendar repositioning — see ReorderProgramWorkoutsDto.
+   * Validates the combined target layout up front, then applies all
+   * moves in one transaction: phase 1 parks moved rows in the
+   * out-of-range week namespace, phase 2 writes final slots, and
+   * `sequenceNumber` is recomputed to calendar order program-wide.
+   */
+  async reorderWorkouts(
+    programId: string,
+    dto: ReorderProgramWorkoutsDto,
+    ownerId: string,
+  ): Promise<ProgramWorkout[]> {
+    await this._loadProgram(programId, ownerId);
+
+    const workouts = await this.workoutModel.findAll({ where: { programId } });
+    const byId = new Map(workouts.map((w) => [w.id, w]));
+
+    const seenIds = new Set<string>();
+    for (const item of dto.items) {
+      if (!byId.has(item.id)) {
+        throw new NotFoundException('Workout not found.');
+      }
+      if (seenIds.has(item.id)) {
+        throw new BadRequestException(
+          'Each workout may appear only once in items.',
+        );
+      }
+      seenIds.add(item.id);
+    }
+
+    // Combined layout = moved targets + untouched rows' current slots.
+    const targetById = new Map(dto.items.map((i) => [i.id, i]));
+    const slots = new Set<string>();
+    for (const w of workouts) {
+      const target = targetById.get(w.id);
+      const week = target?.weekIndex ?? w.weekIndex;
+      const day = target?.dayIndex ?? w.dayIndex;
+      const key = `${week}:${day}`;
+      if (slots.has(key)) {
+        throw new ConflictException(
+          `Two workouts would occupy week ${week + 1}, day ${day + 1}.`,
+        );
+      }
+      slots.add(key);
+    }
+
+    const moved = dto.items.filter((i) => {
+      const w = byId.get(i.id)!;
+      return w.weekIndex !== i.weekIndex || w.dayIndex !== i.dayIndex;
+    });
+
+    if (moved.length > 0) {
+      await this.sequelize.transaction(async (tx) => {
+        // Phase 1 — park (see WEEK_PARK_OFFSET). Parked slots stay
+        // mutually unique because the original (week, day) pairs were.
+        for (const item of moved) {
+          const w = byId.get(item.id)!;
+          await w.update(
+            { weekIndex: w.weekIndex + WEEK_PARK_OFFSET },
+            { transaction: tx },
+          );
+        }
+        // Phase 2 — final slots (validated collision-free above).
+        for (const item of moved) {
+          const w = byId.get(item.id)!;
+          await w.update(
+            { weekIndex: item.weekIndex, dayIndex: item.dayIndex },
+            { transaction: tx },
+          );
+        }
+        // Keep the linear index in calendar order program-wide.
+        const ordered = [...workouts].sort(
+          (a, b) => a.weekIndex - b.weekIndex || a.dayIndex - b.dayIndex,
+        );
+        for (let i = 0; i < ordered.length; i++) {
+          if (ordered[i].sequenceNumber !== i) {
+            await ordered[i].update({ sequenceNumber: i }, { transaction: tx });
+          }
+        }
+      });
+    }
+
+    return this.workoutModel.findAll({
+      where: { programId },
+      order: [['sequenceNumber', 'ASC']],
     });
   }
 

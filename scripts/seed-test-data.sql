@@ -114,40 +114,45 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- =====================================================================
--- 3. EXERCISE CATALOG  (table is empty — must exist before any workout)
+-- 3. EXERCISE CATALOG  (must exist before any workout)
 --    SYSTEM exercises, public, owner_id NULL.
+--    Slugs carry a 'seed-' prefix: SYSTEM exercises share ONE global slug
+--    namespace (idx_exercise_slug_per_owner) with the ~870 rows loaded by
+--    scripts/seed-exercises.ts, and an unprefixed slug that collides gets
+--    silently dropped by ON CONFLICT — breaking every FK reference to its
+--    seed_uuid('ex:…') id further down.
 -- =====================================================================
 INSERT INTO exercise (id, name, slug, kind, level, movement_pattern,
                       mechanic, force, source, owner_id, visibility, media_kind)
 VALUES
-  (pg_temp.seed_uuid('ex:back-squat'),'Back Squat','back-squat',
+  (pg_temp.seed_uuid('ex:back-squat'),'Back Squat','seed-back-squat',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'SQUAT'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PUSH'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:bench-press'),'Bench Press','bench-press',
+  (pg_temp.seed_uuid('ex:bench-press'),'Bench Press','seed-bench-press',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'PUSH_HORIZONTAL'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PUSH'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:deadlift'),'Deadlift','deadlift',
+  (pg_temp.seed_uuid('ex:deadlift'),'Deadlift','seed-deadlift',
      'STRENGTH'::exercise_kind,'ADVANCED'::exercise_level,'HINGE'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:overhead-press'),'Overhead Press','overhead-press',
+  (pg_temp.seed_uuid('ex:overhead-press'),'Overhead Press','seed-overhead-press',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'PUSH_VERTICAL'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PUSH'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:barbell-row'),'Barbell Row','barbell-row',
+  (pg_temp.seed_uuid('ex:barbell-row'),'Barbell Row','seed-barbell-row',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'PULL_HORIZONTAL'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:pull-up'),'Pull-up','pull-up',
+  (pg_temp.seed_uuid('ex:pull-up'),'Pull-up','seed-pull-up',
      'BODYWEIGHT'::exercise_kind,'INTERMEDIATE'::exercise_level,'PULL_VERTICAL'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:walking-lunge'),'Walking Lunge','walking-lunge',
+  (pg_temp.seed_uuid('ex:walking-lunge'),'Walking Lunge','seed-walking-lunge',
      'BODYWEIGHT'::exercise_kind,'BEGINNER'::exercise_level,'LUNGE'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PUSH'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:plank'),'Plank','plank',
+  (pg_temp.seed_uuid('ex:plank'),'Plank','seed-plank',
      'DURATION'::exercise_kind,'BEGINNER'::exercise_level,'ANTI_ROTATION'::movement_pattern,
      'ISOLATION'::exercise_mechanic,'STATIC'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:dumbbell-curl'),'Dumbbell Curl','dumbbell-curl',
+  (pg_temp.seed_uuid('ex:dumbbell-curl'),'Dumbbell Curl','seed-dumbbell-curl',
      'STRENGTH'::exercise_kind,'BEGINNER'::exercise_level,'ISOLATION'::movement_pattern,
      'ISOLATION'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:romanian-deadlift'),'Romanian Deadlift','romanian-deadlift',
+  (pg_temp.seed_uuid('ex:romanian-deadlift'),'Romanian Deadlift','seed-romanian-deadlift',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'HINGE'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind)
 ON CONFLICT DO NOTHING;

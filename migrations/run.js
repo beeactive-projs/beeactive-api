@@ -288,6 +288,12 @@ async function runMigrations() {
           }
         }
       } catch (err) {
+        // A failed statement inside an explicit BEGIN leaves the shared
+        // connection stuck in an aborted transaction — without this,
+        // every subsequent file fails with "current transaction is
+        // aborted, commands ignored until end of transaction block".
+        await client.query('ROLLBACK').catch(() => {});
+
         // In SAFE mode there are two flavours of "expected failure"
         // for which we record the migration as applied and move on:
         //
