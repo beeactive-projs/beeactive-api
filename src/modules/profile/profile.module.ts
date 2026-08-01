@@ -8,6 +8,7 @@ import { UserModule } from '../user/user.module';
 import { SearchModule } from '../search/search.module';
 import { ReviewModule } from '../review/review.module';
 import { GroupModule } from '../group/group.module';
+import { VenueModule } from '../venue/venue.module';
 
 /**
  * Profile Module
@@ -27,6 +28,7 @@ import { GroupModule } from '../group/group.module';
     SearchModule,
     ReviewModule,
     GroupModule,
+    VenueModule,
   ],
   controllers: [ProfileController],
   providers: [ProfileService],
