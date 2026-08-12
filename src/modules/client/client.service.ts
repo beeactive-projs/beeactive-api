@@ -64,6 +64,18 @@ export interface GroupMembershipSnapshot {
 }
 
 /**
+ * What a client gets back after ending a collaboration: enough to
+ * confirm which relationship closed, and nothing the coach wrote.
+ */
+export interface EndedCollaboration {
+  id: string;
+  instructorId: string;
+  clientId: string;
+  status: InstructorClientStatus;
+  startedAt: Date | null;
+}
+
+/**
  * Row returned by the instructor's client list. Includes group
  * memberships joined per row — the FE table renders both columns.
  */
@@ -590,6 +602,21 @@ export class ClientService {
         clientId: userId,
         status: InstructorClientStatus.ACTIVE,
       },
+      // Explicit column list, not `notes`-excluded: `notes` is the coach's
+      // private working note about this person, written in a UI labelled
+      // as theirs. Returning the whole row put it on the wire to the very
+      // person it describes. An allow-list also means a future column is
+      // private until someone decides otherwise.
+      attributes: [
+        'id',
+        'instructorId',
+        'clientId',
+        'status',
+        'initiatedBy',
+        'startedAt',
+        'createdAt',
+        'updatedAt',
+      ],
       include: [
         {
           model: User,
@@ -1399,6 +1426,37 @@ export class ClientService {
   // =====================================================
 
   /**
+   * One client of the authenticated instructor.
+   *
+   * Returns the same `ClientRow` shape as the list so a profile opened
+   * by URL renders identically to one opened from the table — the page
+   * needs no second code path for "arrived by link".
+   *
+   * Keyed on the client's user id, matching `updateClient`/`archiveClient`.
+   * 404 rather than 403 on someone else's client: whether a given user is
+   * coached by someone else is not ours to disclose.
+   */
+  async getClientForInstructor(
+    instructorId: string,
+    clientId: string,
+  ): Promise<ClientRow> {
+    const row = await this.instructorClientModel.findOne({
+      where: { instructorId, clientId },
+      include: [this.clientUserInclude()],
+    });
+
+    if (!row) {
+      throw new NotFoundException('Client relationship not found');
+    }
+
+    const [enriched] = await this.enrichWithGroupMemberships(instructorId, [
+      this.toClientRow(row),
+    ]);
+
+    return enriched;
+  }
+
+  /**
    * Update an instructor-client relationship
    *
    * Allows updating notes or archiving the relationship.
@@ -1484,7 +1542,7 @@ export class ClientService {
   async leaveInstructor(
     clientId: string,
     instructorId: string,
-  ): Promise<InstructorClient> {
+  ): Promise<EndedCollaboration> {
     // Eager-load both sides' User rows so we can send the emails after
     // the status change without a second round-trip.
     const relationship = await this.instructorClientModel.findOne({
@@ -1541,7 +1599,16 @@ export class ClientService {
         ),
       );
 
-    return relationship;
+    // The caller is the client, so the coach's private `notes` must not
+    // ride along on the way out either. Nothing consumes this body — it
+    // is a confirmation, not a record.
+    return {
+      id: relationship.id,
+      instructorId: relationship.instructorId,
+      clientId: relationship.clientId,
+      status: relationship.status,
+      startedAt: relationship.startedAt,
+    };
   }
 
   /**

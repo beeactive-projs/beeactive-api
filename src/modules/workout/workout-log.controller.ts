@@ -17,6 +17,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ListWorkoutLogsQueryDto } from './dto/list-workout-logs.query.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request';
@@ -25,7 +26,10 @@ import { AddLogSetDto } from './dto/add-log-set.dto';
 import { CompleteWorkoutDto } from './dto/complete-workout.dto';
 import { LogSetDto } from './dto/log-set.dto';
 import { RecordOneRepMaxDto } from './dto/record-one-rep-max.dto';
+import { SkipLogExerciseDto } from './dto/skip-log-exercise.dto';
+import { SaveLogAsRoutineDto } from './dto/save-log-as-routine.dto';
 import { StartWorkoutDto } from './dto/start-workout.dto';
+import { SwapLogExerciseDto } from './dto/swap-log-exercise.dto';
 import { WorkoutLogService } from './workout-log.service';
 
 /**
@@ -91,6 +95,36 @@ export class WorkoutLogController {
     );
   }
 
+  @Patch('workout-logs/:id/exercises/:exerciseId/skip')
+  async setExerciseSkipped(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('exerciseId', ParseUUIDPipe) exerciseId: string,
+    @Body() dto: SkipLogExerciseDto,
+  ) {
+    return this.workoutLogService.setExerciseSkipped(
+      id,
+      exerciseId,
+      req.user.id,
+      dto.skipped ?? true,
+    );
+  }
+
+  @Patch('workout-logs/:id/exercises/:exerciseId/swap')
+  async swapExercise(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('exerciseId', ParseUUIDPipe) exerciseId: string,
+    @Body() dto: SwapLogExerciseDto,
+  ) {
+    return this.workoutLogService.swapLoggedExercise(
+      id,
+      exerciseId,
+      req.user.id,
+      dto.exerciseId,
+    );
+  }
+
   @Post('workout-logs/:id/exercises/:exerciseId/sets')
   async addSet(
     @Request() req: AuthenticatedRequest,
@@ -135,6 +169,20 @@ export class WorkoutLogController {
     return this.workoutLogService.findInProgressForUser(req.user.id);
   }
 
+  /**
+   * Cancel a workout in progress and delete it outright. For the
+   * "changed my mind" case, where marking it SKIPPED would wrongly
+   * record a decision not to train.
+   */
+  @Delete('workout-logs/:id')
+  @HttpCode(204)
+  async discard(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.workoutLogService.discard(id, req.user.id);
+  }
+
   @Post('workout-logs/:id/complete')
   async complete(
     @Request() req: AuthenticatedRequest,
@@ -149,9 +197,23 @@ export class WorkoutLogController {
   @Get('workout-logs')
   async list(
     @Request() req: AuthenticatedRequest,
-    @Query() query: PaginationDto,
+    @Query() query: ListWorkoutLogsQueryDto,
   ) {
     return this.workoutLogService.listForUser(req.user.id, query);
+  }
+
+  /**
+   * Turn a finished workout into a repeatable routine. The conversion
+   * moment for anyone training without a coach.
+   */
+  @Post('workout-logs/:id/save-as-routine')
+  @Throttle({ default: { limit: 30, ttl: 3_600_000 } })
+  async saveAsRoutine(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveLogAsRoutineDto,
+  ) {
+    return this.workoutLogService.saveLogAsRoutine(id, req.user.id, dto);
   }
 
   @Get('workout-logs/:id')

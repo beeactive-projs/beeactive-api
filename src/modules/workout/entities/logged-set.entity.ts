@@ -9,6 +9,7 @@ import {
   UpdatedAt,
 } from 'sequelize-typescript';
 import { AssignedSet } from './assigned-set.entity';
+import { PrescribedSet } from './prescribed-set.entity';
 import { LoggedExercise } from './logged-exercise.entity';
 import { ExerciseSetType } from './workout.enums';
 
@@ -38,6 +39,11 @@ export class LoggedSet extends Model {
   @ForeignKey(() => AssignedSet)
   @Column({ type: DataType.CHAR(36), allowNull: true })
   declare assignedSetId: string | null;
+
+  /** Parity with `assignedSetId`, for routine-started sessions. */
+  @ForeignKey(() => PrescribedSet)
+  @Column({ type: DataType.CHAR(36), allowNull: true })
+  declare prescribedSetId: string | null;
 
   @Column({ type: DataType.SMALLINT, allowNull: false })
   declare orderIndex: number;

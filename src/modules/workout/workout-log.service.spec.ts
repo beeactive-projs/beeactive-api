@@ -12,8 +12,16 @@ import { AssignedWorkout } from './entities/assigned-workout.entity';
 import { LoggedExercise } from './entities/logged-exercise.entity';
 import { LoggedSet } from './entities/logged-set.entity';
 import { OneRepMax } from './entities/one-rep-max.entity';
+import { PrescribedExercise } from './entities/prescribed-exercise.entity';
+import { PrescribedSet } from './entities/prescribed-set.entity';
+import { ProgramWorkout } from './entities/program-workout.entity';
+import { ProgramAssignment } from './entities/program-assignment.entity';
+import { User } from '../user/entities/user.entity';
+import { NotificationService } from '../notification/notification.service';
+import { Program } from './entities/program.entity';
 import { WorkoutLog } from './entities/workout-log.entity';
-import { WorkoutLogStatus } from './entities/workout.enums';
+import { ProgramSource, WorkoutLogStatus } from './entities/workout.enums';
+import { SaveRoutineMode } from './dto/save-log-as-routine.dto';
 import { WorkoutLogService } from './workout-log.service';
 import {
   fakeTx,
@@ -66,7 +74,18 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
     create: jest.fn(),
   };
   const exerciseModel = { findByPk: jest.fn() };
+  const programModel = {
+    findByPk: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+  };
+  const prescribedExerciseModel = { findAll: jest.fn(), create: jest.fn() };
+  const prescribedSetModel = { bulkCreate: jest.fn() };
+  const programWorkoutModel = { create: jest.fn() };
   const instructorClientModel = { findOne: jest.fn() };
+  const assignmentModel = { findByPk: jest.fn(), findAll: jest.fn() };
+  const userModel = { findByPk: jest.fn() };
+  const notificationService = { notify: jest.fn().mockResolvedValue({}) };
   const sequelize = {
     transaction: jest.fn((cb: (tx: unknown) => unknown) =>
       Promise.resolve(cb(fakeTx)),
@@ -96,10 +115,26 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
         { provide: getModelToken(AssignedSet), useValue: assignedSetModel },
         { provide: getModelToken(OneRepMax), useValue: oneRepMaxModel },
         { provide: getModelToken(Exercise), useValue: exerciseModel },
+        { provide: getModelToken(Program), useValue: programModel },
+        {
+          provide: getModelToken(PrescribedExercise),
+          useValue: prescribedExerciseModel,
+        },
+        { provide: getModelToken(PrescribedSet), useValue: prescribedSetModel },
+        {
+          provide: getModelToken(ProgramWorkout),
+          useValue: programWorkoutModel,
+        },
         {
           provide: getModelToken(InstructorClient),
           useValue: instructorClientModel,
         },
+        {
+          provide: getModelToken(ProgramAssignment),
+          useValue: assignmentModel,
+        },
+        { provide: getModelToken(User), useValue: userModel },
+        { provide: NotificationService, useValue: notificationService },
         { provide: Sequelize, useValue: sequelize },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: makeSilentLogger() },
       ],
@@ -126,6 +161,300 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
       await expect(
         service.start('me', { assignedWorkoutId: 'aw-1' }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects passing both an assigned workout and a program', async () => {
+      await expect(
+        service.start('me', { assignedWorkoutId: 'aw-1', programId: 'p-1' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── start({programId}) — the ad-hoc path (was RoutineService) ────
+
+  describe('start — from a program, with no assignment', () => {
+    const makeProgram = (over: Record<string, unknown> = {}) => ({
+      id: 'p-1',
+      ownerId: 'me',
+      source: ProgramSource.User,
+      isSingleWorkout: true,
+      name: 'Push day A',
+      workouts: [{ id: 'pw-1', name: 'Push day A' }],
+      update: jest.fn().mockResolvedValue(undefined),
+      ...over,
+    });
+
+    it('seeds the log tree from the prescription and names it after the routine', async () => {
+      programModel.findByPk.mockResolvedValueOnce(makeProgram());
+      prescribedExerciseModel.findAll.mockResolvedValueOnce([
+        {
+          exerciseId: 'ex-1',
+          orderIndex: 0,
+          supersetGroupId: null,
+          notes: null,
+          exercise: { id: 'ex-1', name: 'Bench press', thumbnailUrl: null },
+          sets: [{ setType: 'WARMUP' }, { setType: 'NORMAL' }],
+        },
+      ]);
+      logModel.create.mockResolvedValueOnce({ id: 'log-1' });
+      loggedExerciseModel.create.mockResolvedValueOnce({ id: 'le-1' });
+
+      const log = await service.start('me', { programId: 'p-1' });
+
+      expect(log).toEqual({ id: 'log-1' });
+      // No assignment indirection on the ad-hoc path.
+      expect(logModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Push day A',
+          programAssignmentId: null,
+          assignedWorkoutId: null,
+        }),
+        expect.anything(),
+      );
+      // One empty set row per prescribed set, carrying its type.
+      expect(loggedSetModel.bulkCreate).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({ orderIndex: 0, setType: 'WARMUP' }),
+          expect.objectContaining({ orderIndex: 1, setType: 'NORMAL' }),
+        ],
+        expect.anything(),
+      );
+    });
+
+    it('lets anyone start a SYSTEM starter program', async () => {
+      programModel.findByPk.mockResolvedValueOnce(
+        makeProgram({ ownerId: null, source: ProgramSource.System }),
+      );
+      prescribedExerciseModel.findAll.mockResolvedValueOnce([]);
+      logModel.create.mockResolvedValueOnce({ id: 'log-2' });
+
+      await expect(
+        service.start('someone-else', { programId: 'p-1' }),
+      ).resolves.toEqual({ id: 'log-2' });
+    });
+
+    it("hides another user's program", async () => {
+      programModel.findByPk.mockResolvedValueOnce(
+        makeProgram({ ownerId: 'not-me', source: ProgramSource.User }),
+      );
+
+      await expect(service.start('me', { programId: 'p-1' })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('refuses a program that has no workouts yet', async () => {
+      programModel.findByPk.mockResolvedValueOnce(
+        makeProgram({ workouts: [] }),
+      );
+
+      await expect(service.start('me', { programId: 'p-1' })).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('still returns the log when stamping lastPerformedAt fails', async () => {
+      const program = makeProgram({
+        update: jest.fn().mockRejectedValue(new Error('db blip')),
+      });
+      programModel.findByPk.mockResolvedValueOnce(program);
+      prescribedExerciseModel.findAll.mockResolvedValueOnce([]);
+      logModel.create.mockResolvedValueOnce({ id: 'log-3' });
+
+      // The workout has already started; a bookkeeping failure must not
+      // roll it back.
+      await expect(service.start('me', { programId: 'p-1' })).resolves.toEqual({
+        id: 'log-3',
+      });
+    });
+  });
+
+  // ─── save-as-routine — the conversion moment ─────────────────────
+
+  describe('saveLogAsRoutine', () => {
+    const done = { id: 'log-1', userId: 'me', name: 'Saturday session' };
+
+    const seed = () => {
+      logModel.findByPk.mockResolvedValueOnce(done);
+      programModel.create.mockResolvedValueOnce({ id: 'p-new' });
+      programWorkoutModel.create.mockResolvedValueOnce({ id: 'pw-new' });
+      prescribedExerciseModel.create.mockResolvedValueOnce({ id: 'pe-new' });
+    };
+
+    it("bakes what you actually lifted into next time's targets", async () => {
+      seed();
+      loggedExerciseModel.findAll.mockResolvedValueOnce([
+        {
+          exerciseId: 'ex-1',
+          orderIndex: 0,
+          supersetGroupId: null,
+          notes: null,
+          sets: [
+            { setType: 'NORMAL', reps: 8, weightKg: 60, restAfterSeconds: 90 },
+          ],
+        },
+      ]);
+
+      await service.saveLogAsRoutine('log-1', 'me', { name: 'Push day A' });
+
+      const [rows] = prescribedSetModel.bulkCreate.mock.calls[0] as [
+        Array<Record<string, unknown>>,
+      ];
+      // Reps land on both ends so the target reads as a number, not a
+      // range the person never asked for.
+      expect(rows[0]).toEqual(
+        expect.objectContaining({
+          targetRepsMin: 8,
+          targetRepsMax: 8,
+          targetWeightKg: 60,
+          restAfterSeconds: 90,
+        }),
+      );
+      expect(programModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ isSingleWorkout: true, source: 'USER' }),
+        expect.anything(),
+      );
+    });
+
+    it('keeps the shape but drops the loads in STRUCTURE mode', async () => {
+      seed();
+      loggedExerciseModel.findAll.mockResolvedValueOnce([
+        {
+          exerciseId: 'ex-1',
+          orderIndex: 0,
+          supersetGroupId: null,
+          notes: null,
+          sets: [{ setType: 'NORMAL', reps: 8, weightKg: 60 }],
+        },
+      ]);
+
+      await service.saveLogAsRoutine('log-1', 'me', {
+        name: 'Push day A',
+        mode: SaveRoutineMode.Structure,
+      });
+
+      const [rows] = prescribedSetModel.bulkCreate.mock.calls[0] as [
+        Array<Record<string, unknown>>,
+      ];
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual(
+        expect.objectContaining({
+          targetRepsMin: null,
+          targetWeightKg: null,
+        }),
+      );
+    });
+
+    it('leaves skipped exercises out of the routine', async () => {
+      logModel.findByPk.mockResolvedValueOnce(done);
+      loggedExerciseModel.findAll.mockResolvedValueOnce([]);
+
+      await expect(
+        service.saveLogAsRoutine('log-1', 'me', { name: 'Nothing' }),
+      ).rejects.toThrow(BadRequestException);
+      // The query itself excludes them, so an all-skipped workout has
+      // nothing worth repeating.
+      expect(loggedExerciseModel.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ isSkipped: false }),
+        }),
+      );
+    });
+  });
+
+  // ─── skip / swap — migration 056 columns ─────────────────────────
+
+  describe('skip and swap', () => {
+    const live = {
+      id: 'log-1',
+      userId: 'me',
+      status: WorkoutLogStatus.InProgress,
+    };
+
+    it('marks an exercise skipped instead of deleting it', async () => {
+      logModel.findByPk.mockResolvedValueOnce(live);
+      const ex = {
+        id: 'le-1',
+        workoutLogId: 'log-1',
+        update: jest.fn().mockResolvedValue(undefined),
+        destroy: jest.fn(),
+      };
+      loggedExerciseModel.findByPk.mockResolvedValueOnce(ex);
+
+      await service.setExerciseSkipped('log-1', 'le-1', 'me', true);
+
+      expect(ex.update).toHaveBeenCalledWith({ isSkipped: true });
+      // The row has to survive — a deleted one is indistinguishable
+      // from an exercise that was never in the workout.
+      expect(ex.destroy).not.toHaveBeenCalled();
+    });
+
+    it('records the original exercise across repeated swaps', async () => {
+      logModel.findByPk.mockResolvedValueOnce(live);
+      const ex = {
+        id: 'le-1',
+        workoutLogId: 'log-1',
+        exerciseId: 'first-substitute',
+        // Already swapped once, from the coach's original.
+        swappedFromExerciseId: 'coach-original',
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      loggedExerciseModel.findByPk.mockResolvedValueOnce(ex);
+      exerciseModel.findByPk.mockResolvedValueOnce({
+        id: 'second-substitute',
+        name: 'Hack squat',
+        thumbnailUrl: null,
+        visibility: 'PUBLIC',
+        ownerId: null,
+      });
+
+      await service.swapLoggedExercise(
+        'log-1',
+        'le-1',
+        'me',
+        'second-substitute',
+      );
+
+      expect(ex.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exerciseId: 'second-substitute',
+          // NOT 'first-substitute' — the anchor stays the prescription.
+          swappedFromExerciseId: 'coach-original',
+          exerciseNameSnapshot: 'Hack squat',
+        }),
+      );
+    });
+
+    it("refuses to swap in someone else's private exercise", async () => {
+      logModel.findByPk.mockResolvedValueOnce(live);
+      loggedExerciseModel.findByPk.mockResolvedValueOnce({
+        id: 'le-1',
+        workoutLogId: 'log-1',
+        exerciseId: 'ex-old',
+        swappedFromExerciseId: null,
+        update: jest.fn(),
+      });
+      exerciseModel.findByPk.mockResolvedValueOnce({
+        id: 'ex-private',
+        visibility: 'PRIVATE',
+        ownerId: 'someone-else',
+      });
+
+      await expect(
+        service.swapLoggedExercise('log-1', 'le-1', 'me', 'ex-private'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('refuses edits once the workout is finished', async () => {
+      logModel.findByPk.mockResolvedValueOnce({
+        id: 'log-1',
+        userId: 'me',
+        status: WorkoutLogStatus.Completed,
+      });
+
+      await expect(
+        service.setExerciseSkipped('log-1', 'le-1', 'me', true),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -217,6 +546,76 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
 
   // ─── complete() ──────────────────────────────────────────────────
 
+  describe('discard', () => {
+    it('refuses to delete a workout that is already finished', async () => {
+      const log = {
+        id: 'wl-1',
+        userId: 'me',
+        status: WorkoutLogStatus.Completed,
+        destroy: jest.fn(),
+      };
+      logModel.findByPk.mockResolvedValueOnce(log);
+
+      await expect(service.discard('wl-1', 'me')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(log.destroy).not.toHaveBeenCalled();
+    });
+
+    // Starting mirrors IN_PROGRESS onto the assignment side. Deleting
+    // the log without clearing that leaves the day stuck showing a
+    // workout in progress that no longer exists.
+    it('clears the assigned workout status so the day is pending again', async () => {
+      const destroy = jest.fn().mockResolvedValue(undefined);
+      const log = {
+        id: 'wl-1',
+        userId: 'me',
+        status: WorkoutLogStatus.InProgress,
+        assignedWorkoutId: 'aw-1',
+        programAssignmentId: null,
+        sourceProgramId: null,
+        destroy,
+      };
+      logModel.findByPk.mockResolvedValueOnce(log);
+
+      await service.discard('wl-1', 'me');
+
+      expect(assignedWorkoutModel.update).toHaveBeenCalledWith(
+        { status: null },
+        expect.objectContaining({ where: { id: 'aw-1' } }),
+      );
+      expect(destroy).toHaveBeenCalled();
+    });
+
+    // Starting bumps the routine's lastPerformedAt. Cancelling has to
+    // walk it back or the routine claims "Last done today".
+    it('rolls lastPerformedAt back to the newest surviving log', async () => {
+      const log = {
+        id: 'wl-1',
+        userId: 'me',
+        status: WorkoutLogStatus.InProgress,
+        assignedWorkoutId: null,
+        programAssignmentId: null,
+        sourceProgramId: 'prog-1',
+        destroy: jest.fn().mockResolvedValue(undefined),
+      };
+      const previous = new Date('2026-08-01T10:00:00Z');
+      logModel.findByPk.mockResolvedValueOnce(log);
+      programModel.findByPk.mockResolvedValueOnce({
+        id: 'prog-1',
+        source: 'USER',
+      });
+      logModel.findOne.mockResolvedValueOnce({ startedAt: previous });
+
+      await service.discard('wl-1', 'me');
+
+      expect(programModel.update).toHaveBeenCalledWith(
+        { lastPerformedAt: previous },
+        { where: { id: 'prog-1' } },
+      );
+    });
+  });
+
   describe('complete', () => {
     it('is idempotent on an already-completed log', async () => {
       const log = {
@@ -228,6 +627,31 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
       logModel.findByPk.mockResolvedValueOnce(log);
       await service.complete('wl-1', {}, 'me');
       expect(log.update).not.toHaveBeenCalled();
+    });
+
+    // The feedback screen runs after the log is already COMPLETED, so
+    // this second call is the only chance the rating + note ever get
+    // written. Returning early here loses them while the UI says saved.
+    it('still applies feedback posted after the log is completed', async () => {
+      const update = jest.fn().mockResolvedValue(undefined);
+      const log = {
+        id: 'wl-1',
+        userId: 'me',
+        status: WorkoutLogStatus.Completed,
+        update,
+      };
+      logModel.findByPk.mockResolvedValueOnce(log);
+
+      await service.complete(
+        'wl-1',
+        { feelingRating: 5, notes: '  felt strong  ' },
+        'me',
+      );
+
+      expect(update).toHaveBeenCalledWith({
+        feelingRating: 5,
+        notes: 'felt strong',
+      });
     });
 
     it('computes durationSeconds from startedAt → now', async () => {
@@ -583,6 +1007,9 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
 
     it('delegates to listForUser(clientId) when the link is ACTIVE', async () => {
       instructorClientModel.findOne.mockResolvedValueOnce({ id: 'link-1' });
+      assignmentModel.findAll.mockResolvedValueOnce([
+        { id: 'asg-1', shareOffPlan: true },
+      ]);
       logModel.findAndCountAll.mockResolvedValueOnce({ rows: [], count: 0 });
       const out = await service.listForClientByInstructor(
         'coach-1',
@@ -594,6 +1021,84 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
         expect.objectContaining({ userId: 'client-1' }),
       );
       expect(out).toEqual({ items: [], total: 0, page: 1, pageSize: 20 });
+    });
+  });
+
+  describe('off-plan privacy', () => {
+    it('restricts the coach to their own assignments by default', async () => {
+      instructorClientModel.findOne.mockResolvedValueOnce({ id: 'link-1' });
+      assignmentModel.findAll.mockResolvedValueOnce([
+        { id: 'asg-1', shareOffPlan: false },
+        { id: 'asg-2', shareOffPlan: false },
+      ]);
+      logModel.findAndCountAll.mockResolvedValueOnce({ rows: [], count: 0 });
+
+      await service.listForClientByInstructor('coach-1', 'client-1', {
+        page: 1,
+        limit: 20,
+      });
+
+      const args = logModel.findAndCountAll.mock.calls[0][0] as {
+        where: Record<string, unknown>;
+      };
+      // Freestyle logs have a null programAssignmentId, so an IN over
+      // the coach's own assignment ids excludes them.
+      const clause = args.where['programAssignmentId'] as Record<
+        symbol,
+        unknown
+      >;
+      expect(clause).toBeDefined();
+      const ids = Object.getOwnPropertySymbols(clause).map((x) => clause[x])[0];
+      expect(ids).toEqual(['asg-1', 'asg-2']);
+    });
+
+    it('lifts the restriction when the client shared off-plan work', async () => {
+      instructorClientModel.findOne.mockResolvedValueOnce({ id: 'link-1' });
+      assignmentModel.findAll.mockResolvedValueOnce([
+        { id: 'asg-1', shareOffPlan: false },
+        { id: 'asg-2', shareOffPlan: true },
+      ]);
+      logModel.findAndCountAll.mockResolvedValueOnce({ rows: [], count: 0 });
+
+      await service.listForClientByInstructor('coach-1', 'client-1', {
+        page: 1,
+        limit: 20,
+      });
+
+      const args = logModel.findAndCountAll.mock.calls[0][0] as {
+        where: Record<string, unknown>;
+      };
+      expect(args.where['programAssignmentId']).toBeUndefined();
+    });
+
+    it('404s on a freestyle log the coach was not given', async () => {
+      logModel.findByPk.mockResolvedValueOnce({
+        userId: 'client-1',
+        programAssignmentId: null,
+      });
+      instructorClientModel.findOne.mockResolvedValueOnce({ id: 'link-1' });
+      assignmentModel.findAll.mockResolvedValueOnce([
+        { id: 'asg-1', shareOffPlan: false },
+      ]);
+
+      await expect(
+        service.findByIdForInstructor('log-solo', 'coach-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("404s on a log from another coach's assignment", async () => {
+      logModel.findByPk.mockResolvedValueOnce({
+        userId: 'client-1',
+        programAssignmentId: 'asg-other',
+      });
+      instructorClientModel.findOne.mockResolvedValueOnce({ id: 'link-1' });
+      assignmentModel.findAll.mockResolvedValueOnce([
+        { id: 'asg-1', shareOffPlan: false },
+      ]);
+
+      await expect(
+        service.findByIdForInstructor('log-x', 'coach-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -615,9 +1120,17 @@ describe('WorkoutLogService (smoke — not exhaustive)', () => {
     });
 
     it('returns the full plain log on the happy path', async () => {
-      // First call: lightweight stub (userId only)
-      logModel.findByPk.mockResolvedValueOnce({ userId: 'client-1' });
+      // First call: lightweight stub. It carries the assignment now —
+      // the coach may only read work they prescribed, so a log with no
+      // assignment is off-plan and hidden.
+      logModel.findByPk.mockResolvedValueOnce({
+        userId: 'client-1',
+        programAssignmentId: 'asg-1',
+      });
       instructorClientModel.findOne.mockResolvedValueOnce({ id: 'link-1' });
+      assignmentModel.findAll.mockResolvedValueOnce([
+        { id: 'asg-1', shareOffPlan: false },
+      ]);
       // Second call: the full-tree findByPk inside findById()
       const plainProjection = {
         id: 'wl-1',

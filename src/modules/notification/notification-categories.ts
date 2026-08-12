@@ -149,6 +149,8 @@ export const TYPE_TO_CATEGORY: Record<NotificationType, NotificationCategory> =
     // Workouts (exercises + programs)
     [NotificationType.EXERCISE_FORKED]: NotificationCategory.Workouts,
     [NotificationType.PROGRAM_ASSIGNED]: NotificationCategory.Workouts,
+    [NotificationType.CLIENT_COMPLETED_WORKOUT]: NotificationCategory.Workouts,
+    [NotificationType.CLIENT_COMPLETED_PLAN]: NotificationCategory.Workouts,
   };
 
 /**

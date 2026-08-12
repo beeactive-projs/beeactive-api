@@ -10,6 +10,7 @@
  * Keep as a frozen Set for O(1) membership checks. If Stripe adds new
  * countries, update here — this is the single source of truth across
  * the API. A country NOT in this list cannot onboard, period.
+ *
  */
 export const STRIPE_CONNECT_COUNTRY_CODES: ReadonlySet<string> = new Set([
   // EU / EEA

@@ -125,7 +125,6 @@ export class UserService {
       avatarUrl: string | null;
       language: string | null;
       timezone: string | null;
-      exerciseCatalogOptIn?: boolean;
       isActive?: boolean;
       isEmailVerified?: boolean;
       roles?: unknown;
@@ -144,7 +143,6 @@ export class UserService {
       avatarUrl: user.avatarUrl,
       language: user.language,
       timezone: user.timezone,
-      exerciseCatalogOptIn: user.exerciseCatalogOptIn ?? false,
     };
     if (options.slim) return base;
     return {

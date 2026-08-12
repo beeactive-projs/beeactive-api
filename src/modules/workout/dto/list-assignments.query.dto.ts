@@ -1,5 +1,11 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { ProgramAssignmentStatus } from '../entities/workout.enums';
 
@@ -20,4 +26,16 @@ export class ListAssignmentsQueryDto extends PaginationDto {
   @IsOptional()
   @IsUUID('4')
   clientId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Case-insensitive match on the program name as it was assigned. ' +
+      'Matches the snapshot rather than the live program, so a renamed ' +
+      'program is still found by the name the client was given.',
+    maxLength: 100,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
 }

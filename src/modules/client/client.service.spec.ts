@@ -119,6 +119,82 @@ describe('ClientService', () => {
   });
 
   // =====================================================================
+  // Coach notes stay with the coach
+  // =====================================================================
+  describe('private coaching notes', () => {
+    it('never selects notes when a client lists their instructors', async () => {
+      instructorClientModel.findAll.mockResolvedValue([]);
+
+      await service.getMyInstructors('cli-1');
+
+      const opts = instructorClientModel.findAll.mock.calls[0][0];
+      expect(opts.attributes).toBeDefined();
+      expect(opts.attributes).not.toContain('notes');
+    });
+
+    it('omits notes from the body returned when a client leaves', async () => {
+      instructorClientModel.findOne.mockResolvedValue({
+        id: 'ic-1',
+        instructorId: 'inst-1',
+        clientId: 'cli-1',
+        status: InstructorClientStatus.ACTIVE,
+        startedAt: new Date(),
+        notes: 'knee gives her trouble on squats',
+        instructor: {
+          id: 'inst-1',
+          firstName: 'A',
+          lastName: 'B',
+          email: 'a@x.com',
+        },
+        client: {
+          id: 'cli-1',
+          firstName: 'C',
+          lastName: 'D',
+          email: 'c@x.com',
+        },
+        update: jest.fn().mockResolvedValue(undefined),
+      });
+
+      const result = await service.leaveInstructor('cli-1', 'inst-1');
+
+      expect(result).not.toHaveProperty('notes');
+      expect(JSON.stringify(result)).not.toContain('knee gives her trouble');
+    });
+  });
+
+  // =====================================================================
+  // getClientForInstructor
+  // =====================================================================
+  describe('getClientForInstructor', () => {
+    it('scopes the lookup to the asking instructor', async () => {
+      instructorClientModel.findOne.mockResolvedValue({
+        id: 'ic-1',
+        instructorId: 'inst-1',
+        clientId: 'cli-1',
+        status: InstructorClientStatus.ACTIVE,
+        client: { id: 'cli-1', firstName: 'A', lastName: 'B' },
+        createdAt: new Date(),
+      });
+
+      await service.getClientForInstructor('inst-1', 'cli-1');
+
+      expect(instructorClientModel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { instructorId: 'inst-1', clientId: 'cli-1' },
+        }),
+      );
+    });
+
+    it("404s on someone else's client rather than revealing the link exists", async () => {
+      instructorClientModel.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.getClientForInstructor('inst-1', 'not-mine'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  // =====================================================================
   // requestToBeClient
   // =====================================================================
   describe('requestToBeClient', () => {
@@ -344,7 +420,12 @@ describe('ClientService', () => {
 
       const result = await service.leaveInstructor('client-1', 'instr-1');
 
-      expect(result).toBe(rel);
+      // A confirmation, not the entity — the row carries the coach's
+      // private notes and the caller here is the client.
+      expect(result).toMatchObject({
+        id: rel.id,
+        instructorId: rel.instructorId,
+      });
       expect(rel.update).toHaveBeenCalledWith(
         expect.objectContaining({
           status: InstructorClientStatus.ARCHIVED,

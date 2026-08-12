@@ -28,7 +28,7 @@ import { WorkoutLog } from '../../workout/entities/workout-log.entity';
 import { SessionParticipant } from '../../session/entities/session-participant.entity';
 import { Message } from '../../messaging/entities/message.entity';
 import { ProgramAssignment } from '../../workout/entities/program-assignment.entity';
-import { Routine } from '../../routine/entities/routine.entity';
+import { Program } from '../../workout/entities/program.entity';
 import { Post } from '../../post/entities/post.entity';
 import { ListUsersDto } from '../dto/list-users.dto';
 import { UpdateUserStatusDto } from '../dto/update-user-status.dto';
@@ -89,7 +89,7 @@ export class AdminUsersService {
     @InjectModel(Message) private readonly messageModel: typeof Message,
     @InjectModel(ProgramAssignment)
     private readonly programAssignmentModel: typeof ProgramAssignment,
-    @InjectModel(Routine) private readonly routineModel: typeof Routine,
+    @InjectModel(Program) private readonly programModel: typeof Program,
     @InjectModel(Post) private readonly postModel: typeof Post,
     private readonly roleService: RoleService,
     private readonly authService: AuthService,
@@ -265,7 +265,10 @@ export class AdminUsersService {
       this.postModel.count({ where: { authorId: id } }),
       this.messageModel.count({ where: { senderId: id } }),
       this.programAssignmentModel.count({ where: { clientId: id } }),
-      this.routineModel.count({ where: { userId: id } }),
+      // Post-056 a routine is a single-workout program this user owns.
+      this.programModel.count({
+        where: { ownerId: id, isSingleWorkout: true },
+      }),
       this.refreshTokenModel.count({ where: { userId: id } }),
       this.refreshTokenModel.count({
         where: {

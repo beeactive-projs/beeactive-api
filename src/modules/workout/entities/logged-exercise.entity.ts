@@ -10,6 +10,7 @@ import {
 } from 'sequelize-typescript';
 import { Exercise } from '../../exercise/entities/exercise.entity';
 import { AssignedExercise } from './assigned-exercise.entity';
+import { PrescribedExercise } from './prescribed-exercise.entity';
 import { LoggedSet } from './logged-set.entity';
 import { WorkoutLog } from './workout-log.entity';
 
@@ -48,6 +49,11 @@ export class LoggedExercise extends Model {
   @Column({ type: DataType.CHAR(36), allowNull: true })
   declare assignedExerciseId: string | null;
 
+  /** Parity with `assignedExerciseId`, for routine-started sessions. */
+  @ForeignKey(() => PrescribedExercise)
+  @Column({ type: DataType.CHAR(36), allowNull: true })
+  declare prescribedExerciseId: string | null;
+
   @Column({ type: DataType.STRING(200), allowNull: false })
   declare exerciseNameSnapshot: string;
 
@@ -63,6 +69,24 @@ export class LoggedExercise extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare notes: string | null;
 
+  /**
+   * Explicit skip. Distinct from untouched (present, no completed sets)
+   * and from absent (never added). Excluded from progress counts. Before
+   * migration 056 a skip deleted the row, so a coach could not tell a
+   * skipped exercise from one that was never there.
+   */
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare isSkipped: boolean;
+
+  /** Set when substituted mid-workout, so the coach sees what changed. */
+  @ForeignKey(() => Exercise)
+  @Column({ type: DataType.CHAR(36), allowNull: true })
+  declare swappedFromExerciseId: string | null;
+
   @CreatedAt declare createdAt: Date;
 
   @BelongsTo(() => WorkoutLog)
@@ -70,6 +94,10 @@ export class LoggedExercise extends Model {
 
   @BelongsTo(() => Exercise, 'exerciseId')
   declare exercise: Exercise | null;
+
+  /** The movement this replaced, so a coach sees what actually changed. */
+  @BelongsTo(() => Exercise, 'swappedFromExerciseId')
+  declare swappedFromExercise: Exercise | null;
 
   @BelongsTo(() => AssignedExercise, 'assignedExerciseId')
   declare assignedExercise: AssignedExercise | null;

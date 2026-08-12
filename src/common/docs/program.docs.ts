@@ -45,6 +45,22 @@ const setExample = {
 };
 
 export const ProgramDocs = {
+  duplicate: {
+    summary: 'Copy a routine into my library',
+    description:
+      "Deep-copies a program and its whole tree into the caller's library, " +
+      'stamped `source: USER` and `status: DRAFT`. This is how a MotionHive ' +
+      'starter routine gets customised: starters are owned by nobody, so ' +
+      'they cannot be edited in place without changing them for everyone. ' +
+      'Readable sources are your own programs and system starters; anything ' +
+      'else 404s.',
+    auth: true,
+    responses: [
+      { status: 201, description: 'Copy created' },
+      { status: 404, description: 'Not yours and not a starter' },
+    ],
+  } as ApiEndpointOptions,
+
   list: {
     summary: 'List the instructor’s programs',
     description:

@@ -39,13 +39,21 @@ import { ProgramService } from './program.service';
  * program-workout-exercise-set tree.
  *
  * Read access is owner-only too: there's no public surface for
- * programs in V1 (per locked decision §3 — per-instructor private
- * library, no marketplace).
+ * programs in V1 (per locked decision §3 — private library, no
+ * marketplace).
+ *
+ * Open to USER as well as INSTRUCTOR since migration 056, because a
+ * person training without a coach authors their own plans here (what
+ * the UI calls a routine is a single-workout program). This is not a
+ * widening of access: every method already scopes to `req.user.id`, and
+ * the service enforces ownership via `assertOwned`. The difference
+ * between the two roles is what the UI exposes, not what the API
+ * permits.
  */
 @ApiTags('Programs')
 @Controller('programs')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@Roles('INSTRUCTOR')
+@Roles('INSTRUCTOR', 'USER')
 export class ProgramController {
   constructor(private readonly programService: ProgramService) {}
 
@@ -76,7 +84,26 @@ export class ProgramController {
     @Request() req: AuthenticatedRequest,
     @Body() dto: CreateProgramDto,
   ) {
-    return this.programService.create(dto, req.user.id);
+    return this.programService.create(
+      dto,
+      req.user.id,
+      req.user.roles.includes('INSTRUCTOR'),
+    );
+  }
+
+  /**
+   * POST /programs/:id/duplicate
+   * Copy a routine into your own library. The only way to customise a
+   * MotionHive starter, which nobody owns and so nobody may edit.
+   */
+  @Post(':id/duplicate')
+  @Throttle({ default: { limit: 30, ttl: 3_600_000 } })
+  @ApiEndpoint(ProgramDocs.duplicate)
+  async duplicate(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.programService.duplicateForUser(id, req.user.id);
   }
 
   @Patch(':id')
@@ -97,8 +124,28 @@ export class ProgramController {
   async remove(
     @Request() req: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
+    @Query('cancelScheduled') cancelScheduled?: string,
   ): Promise<void> {
-    await this.programService.softDelete(id, req.user.id);
+    await this.programService.softDelete(
+      id,
+      req.user.id,
+      cancelScheduled === 'true',
+    );
+  }
+
+  /**
+   * GET /programs/:id/scheduled-count
+   * How many live schedules point at this routine. Lets the delete
+   * confirm say what else goes rather than surprising you after.
+   */
+  @Get(':id/scheduled-count')
+  async scheduledCount(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ count: number }> {
+    return {
+      count: await this.programService.countScheduledFor(id, req.user.id),
+    };
   }
 
   // ── Workout ──────────────────────────────────────────────────────

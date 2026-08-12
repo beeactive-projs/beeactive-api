@@ -40,6 +40,16 @@ export class ListInstancesQueryDto extends PaginationDto {
   templateId?: string;
 
   @ApiPropertyOptional({
+    description:
+      'Filter to instances a given person is booked into. Only meaningful ' +
+      'on your own calendar — it narrows what you can already see, so it ' +
+      'exposes nothing new. Ignored when viewing another instructor.',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  clientId?: string;
+
+  @ApiPropertyOptional({
     enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
   })
   @IsOptional()

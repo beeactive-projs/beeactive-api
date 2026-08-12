@@ -1,18 +1,27 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   IsUrl,
   Max,
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
-import { ProgramKind, ProgramStatus } from '../entities/workout.enums';
+import {
+  ExerciseSetType,
+  ProgramKind,
+  ProgramStatus,
+} from '../entities/workout.enums';
 
 /**
  * Create Program DTO — instructor authors a new program shell.
@@ -21,6 +30,118 @@ import { ProgramKind, ProgramStatus } from '../entities/workout.enums';
  * for forward-compat (locked decision §3). Workouts/exercises/sets
  * are added via nested endpoints after the program exists.
  */
+/**
+ * One prescribed set inside a routine. Sending these expresses real
+ * programming — a warm-up, a top set, backoffs — instead of N identical
+ * sets, which is what `defaultSets` alone can say.
+ */
+export class CreateProgramSetDto {
+  @ApiPropertyOptional({
+    enum: ExerciseSetType,
+    default: ExerciseSetType.Normal,
+  })
+  @IsOptional()
+  @IsEnum(ExerciseSetType)
+  setType?: ExerciseSetType;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  targetRepsMin?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  targetRepsMax?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  targetWeightKg?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  targetDurationSeconds?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  targetDistanceMeters?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  restAfterSeconds?: number;
+}
+
+export class CreateProgramExerciseDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID('4')
+  exerciseId!: string;
+
+  /**
+   * Explicit per-set rows. Takes precedence over `defaultSets` and the
+   * flat targets, which stay for callers that only need "3 × 8".
+   */
+  @ApiPropertyOptional({ type: [CreateProgramSetDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => CreateProgramSetDto)
+  sets?: CreateProgramSetDto[];
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 30, default: 3 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  defaultSets?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  supersetGroupId?: number;
+
+  @ApiPropertyOptional({ maxLength: 2000 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  notes?: string;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  targetRepsMin?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  targetRepsMax?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  targetWeightKg?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  restAfterSeconds?: number;
+}
+
 export class CreateProgramDto {
   @ApiProperty({ example: 'Strength foundations — 8 weeks', maxLength: 200 })
   @IsString()
@@ -97,4 +218,36 @@ export class CreateProgramDto {
   @ArrayMaxSize(10)
   @IsString({ each: true })
   goalTags?: string[];
+
+  /**
+   * Routine-shaped: one workout, no week/day axis. What a person
+   * training for themselves creates; the simplified editor sets this.
+   */
+  @ApiPropertyOptional({
+    description:
+      'Create as a single-workout program (a routine) rather than a multi-week program.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isSingleWorkout?: boolean;
+
+  @ApiPropertyOptional({ example: 'Push / Pull / Legs', maxLength: 100 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  folder?: string;
+
+  /**
+   * Optional nested tree, only valid with `isSingleWorkout: true`. Lets
+   * the simple routine editor save a whole workout in one call instead
+   * of chaining four requests. Multi-week programs still build up
+   * through the nested endpoints, where the week/day axis matters.
+   */
+  @ApiPropertyOptional({ type: [CreateProgramExerciseDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => CreateProgramExerciseDto)
+  exercises?: CreateProgramExerciseDto[];
 }

@@ -22,6 +22,7 @@ import { Program } from './entities/program.entity';
 import { ProgramAssignment } from './entities/program-assignment.entity';
 import { ProgramAssignmentStatus } from './entities/workout.enums';
 import { ProgramAssignmentService } from './program-assignment.service';
+import { NotificationType } from '../notification/notification.service';
 import {
   fakeTx,
   makeSilentLogger,
@@ -40,10 +41,16 @@ describe('ProgramAssignmentService (smoke — not exhaustive)', () => {
 
   const assignmentModel = {
     findByPk: jest.fn(),
+    findAll: jest.fn(),
     findAndCountAll: jest.fn(),
     create: jest.fn(),
+    update: jest.fn(),
   };
-  const assignedWorkoutModel = { create: jest.fn() };
+  const assignedWorkoutModel = {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    count: jest.fn(),
+  };
   const assignedExerciseModel = { create: jest.fn() };
   const assignedSetModel = { bulkCreate: jest.fn() };
   const programModel = { findByPk: jest.fn() };
@@ -179,6 +186,102 @@ describe('ProgramAssignmentService (smoke — not exhaustive)', () => {
   };
 
   // ─── Deep-copy happy path ────────────────────────────────────────
+
+  describe('autoCompleteAssignments — telling the coach', () => {
+    const finishedAssignment = {
+      id: 'asg-1',
+      instructorId: 'coach-1',
+      clientId: 'client-1',
+      programNameSnapshot: 'Beginner Strength',
+    };
+
+    beforeEach(() => {
+      assignmentModel.findAll.mockResolvedValue([finishedAssignment]);
+      // total workouts = 8, outstanding = 0 → the plan is finished.
+      assignedWorkoutModel.count
+        .mockResolvedValueOnce(8)
+        .mockResolvedValueOnce(0);
+      userModel.findByPk.mockResolvedValue({
+        firstName: 'Anna',
+        lastName: 'Popescu',
+      });
+    });
+
+    it('selects the fields the notification needs', async () => {
+      assignmentModel.update.mockResolvedValue([1]);
+
+      await service.autoCompleteAssignments();
+
+      // The mock hands back a fully-populated row, so a too-narrow
+      // `attributes` list passes every other assertion here while the
+      // real query returns undefined and the notification silently
+      // skips. Pin the projection itself.
+      const opts = assignmentModel.findAll.mock.calls[0][0] as {
+        attributes: string[];
+      };
+      expect(opts.attributes).toEqual(
+        expect.arrayContaining([
+          'instructorId',
+          'clientId',
+          'programNameSnapshot',
+        ]),
+      );
+    });
+
+    it('notifies the instructor when a plan finishes', async () => {
+      assignmentModel.update.mockResolvedValue([1]);
+
+      await service.autoCompleteAssignments();
+
+      expect(notificationService.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'coach-1',
+          type: NotificationType.CLIENT_COMPLETED_PLAN,
+        }),
+      );
+    });
+
+    it('stays silent on a re-run, when the row was already completed', async () => {
+      // The `status = ACTIVE` guard means a second sweep updates nothing.
+      assignmentModel.update.mockResolvedValue([0]);
+
+      await service.autoCompleteAssignments();
+
+      expect(notificationService.notify).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listForInstructor — search', () => {
+    const whereOf = () =>
+      (
+        assignmentModel.findAndCountAll.mock.calls[0][0] as {
+          where: Record<string, unknown>;
+        }
+      ).where;
+
+    beforeEach(() => {
+      assignmentModel.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
+    });
+
+    it('omits the name clause entirely when no term is given', async () => {
+      await service.listForInstructor(me, { clientId: 'c-1' });
+      expect(whereOf()).not.toHaveProperty('programNameSnapshot');
+    });
+
+    it('treats whitespace as no search', async () => {
+      await service.listForInstructor(me, { clientId: 'c-1', search: '   ' });
+      expect(whereOf()).not.toHaveProperty('programNameSnapshot');
+    });
+
+    it('escapes LIKE wildcards so % cannot match everything', async () => {
+      await service.listForInstructor(me, { clientId: 'c-1', search: '100%' });
+      const clause = whereOf()['programNameSnapshot'] as Record<symbol, string>;
+      const value = Object.getOwnPropertySymbols(clause)
+        .map((sym) => clause[sym])
+        .find((v) => typeof v === 'string');
+      expect(value).toBe('%100\\%%');
+    });
+  });
 
   describe('assignProgramToClient — happy path', () => {
     it('clones the tree atomically and fires the notification post-commit', async () => {
@@ -326,6 +429,201 @@ describe('ProgramAssignmentService (smoke — not exhaustive)', () => {
   });
 
   // ─── Status transitions ──────────────────────────────────────────
+
+  describe('scheduleRoutine — the light multi-week answer', () => {
+    const routine = (over: Record<string, unknown> = {}) => ({
+      id: 'p-1',
+      ownerId: 'me',
+      name: 'Push day A',
+      workouts: [
+        {
+          id: 'pw-1',
+          notes: null,
+          estimatedDurationMinutes: 45,
+          exercises: [],
+        },
+      ],
+      ...over,
+    });
+
+    it("hides a routine that isn't yours", async () => {
+      programModel.findByPk.mockResolvedValueOnce(
+        routine({ ownerId: 'someone-else' }),
+      );
+
+      await expect(
+        service.scheduleRoutine(
+          'me',
+          { programId: 'p-1', daysOfWeek: [1] },
+          '2026-08-06',
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('refuses a block schedule with no length', async () => {
+      programModel.findByPk.mockResolvedValueOnce(routine());
+
+      await expect(
+        service.scheduleRoutine(
+          'me',
+          { programId: 'p-1', daysOfWeek: [1], repeatMode: 'BLOCK' as never },
+          '2026-08-06',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('fans a single workout across the chosen weekdays for a block', async () => {
+      programModel.findByPk.mockResolvedValueOnce(routine());
+      assignmentModel.create.mockResolvedValueOnce({ id: 'pa-1' });
+      assignedWorkoutModel.create.mockResolvedValue({ id: 'aw-x' });
+
+      // Thursday 2026-08-06, Mon+Fri, two weeks.
+      await service.scheduleRoutine(
+        'me',
+        {
+          programId: 'p-1',
+          daysOfWeek: [1, 5],
+          repeatMode: 'BLOCK' as never,
+          repeatWeeks: 2,
+        },
+        '2026-08-06',
+      );
+
+      const dates = assignedWorkoutModel.create.mock.calls.map(
+        (c) => (c[0] as { scheduledDate: string }).scheduledDate,
+      );
+      // Monday the 3rd is before the start date, so it is not back-filled.
+      expect(dates).toEqual(['2026-08-07', '2026-08-10', '2026-08-14']);
+    });
+
+    it('marks the assignment as self-scheduled with no instructor', async () => {
+      programModel.findByPk.mockResolvedValueOnce(routine());
+      assignmentModel.create.mockResolvedValueOnce({ id: 'pa-1' });
+      assignedWorkoutModel.create.mockResolvedValue({ id: 'aw-x' });
+
+      await service.scheduleRoutine(
+        'me',
+        { programId: 'p-1', daysOfWeek: [3] },
+        '2026-08-06',
+      );
+
+      expect(assignmentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          instructorId: null,
+          assignmentKind: 'SELF',
+          clientId: 'me',
+          repeatMode: 'WEEKLY',
+          // Rolling schedules carry no fixed length.
+          repeatWeeks: null,
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('refuses to schedule an empty routine', async () => {
+      programModel.findByPk.mockResolvedValueOnce(routine({ workouts: [] }));
+
+      await expect(
+        service.scheduleRoutine(
+          'me',
+          { programId: 'p-1', daysOfWeek: [1] },
+          '2026-08-06',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getTrainingDay — the Workouts front door', () => {
+    const plan = {
+      id: 'pa-1',
+      programNameSnapshot: '12-week base',
+      status: 'ACTIVE',
+      completionPercent: 30,
+      startDate: '2026-08-03',
+      endDate: null,
+      assignmentKind: 'COACH',
+      instructor: { id: 'coach-1', firstName: 'Alex' },
+    };
+
+    it('returns empty rather than querying workouts when nothing is active', async () => {
+      assignmentModel.findAll.mockResolvedValueOnce([]);
+
+      const res = await service.getTrainingDay('me', '2026-08-06');
+
+      expect(res).toEqual({ today: null, week: [], activePlans: [] });
+      expect(assignedWorkoutModel.findAll).not.toHaveBeenCalled();
+    });
+
+    it('scopes the week Monday to Sunday around the given date', async () => {
+      assignmentModel.findAll.mockResolvedValueOnce([plan]);
+      assignedWorkoutModel.findAll.mockResolvedValueOnce([]);
+
+      // 2026-08-06 is a Thursday.
+      await service.getTrainingDay('me', '2026-08-06');
+
+      const where = assignedWorkoutModel.findAll.mock.calls[0][0].where;
+      const between =
+        where.scheduledDate[
+          Object.getOwnPropertySymbols(where.scheduledDate)[0]
+        ];
+      expect(between).toEqual(['2026-08-03', '2026-08-09']);
+    });
+
+    it('picks out today and leaves the rest of the week alongside it', async () => {
+      assignmentModel.findAll.mockResolvedValueOnce([plan]);
+      assignedWorkoutModel.findAll.mockResolvedValueOnce([
+        {
+          id: 'aw-1',
+          programAssignmentId: 'pa-1',
+          name: 'Lower',
+          scheduledDate: '2026-08-06',
+          status: null,
+          weekIndex: 0,
+          dayIndex: 3,
+          estimatedDurationMinutes: 55,
+        },
+        {
+          id: 'aw-2',
+          programAssignmentId: 'pa-1',
+          name: 'Upper',
+          scheduledDate: '2026-08-08',
+          status: null,
+          weekIndex: 0,
+          dayIndex: 5,
+          estimatedDurationMinutes: 50,
+        },
+      ]);
+
+      const res = await service.getTrainingDay('me', '2026-08-06');
+
+      expect(res.today?.assignedWorkoutId).toBe('aw-1');
+      // Plan context is denormalised onto each entry so the card can
+      // render "from Alex" without a second lookup.
+      expect(res.today?.planName).toBe('12-week base');
+      expect(res.week).toHaveLength(2);
+    });
+
+    it('reports a rest day as null, not as the next workout', async () => {
+      assignmentModel.findAll.mockResolvedValueOnce([plan]);
+      assignedWorkoutModel.findAll.mockResolvedValueOnce([
+        {
+          id: 'aw-2',
+          programAssignmentId: 'pa-1',
+          name: 'Upper',
+          scheduledDate: '2026-08-08',
+          status: null,
+          weekIndex: 0,
+          dayIndex: 5,
+          estimatedDurationMinutes: 50,
+        },
+      ]);
+
+      const res = await service.getTrainingDay('me', '2026-08-06');
+
+      expect(res.today).toBeNull();
+      expect(res.week).toHaveLength(1);
+    });
+  });
 
   describe('update — status transition gate', () => {
     it('blocks transitions out of COMPLETED', async () => {

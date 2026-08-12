@@ -15,24 +15,44 @@ import {
   getOffset,
 } from '../../common/dto/pagination.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { escapeLikeWildcards } from '../../common/utils/search.utils';
+import { ListWorkoutLogsQueryDto } from './dto/list-workout-logs.query.dto';
 import {
   InstructorClient,
   InstructorClientStatus,
 } from '../client/entities/instructor-client.entity';
 import { Exercise } from '../exercise/entities/exercise.entity';
+import { ExerciseVisibility } from '../exercise/entities/exercise.enums';
 import { AssignedExercise } from './entities/assigned-exercise.entity';
 import { AssignedSet } from './entities/assigned-set.entity';
 import { AssignedWorkout } from './entities/assigned-workout.entity';
 import { LoggedExercise } from './entities/logged-exercise.entity';
 import { LoggedSet } from './entities/logged-set.entity';
 import { OneRepMax } from './entities/one-rep-max.entity';
+import { PrescribedExercise } from './entities/prescribed-exercise.entity';
+import { PrescribedSet } from './entities/prescribed-set.entity';
+import { Program } from './entities/program.entity';
 import { ProgramAssignment } from './entities/program-assignment.entity';
+import { ProgramWorkout } from './entities/program-workout.entity';
 import { WorkoutLog } from './entities/workout-log.entity';
-import { OneRepMaxSource, WorkoutLogStatus } from './entities/workout.enums';
+import {
+  ExerciseSetType,
+  OneRepMaxSource,
+  ProgramSource,
+  ProgramStatus,
+  WorkoutLogStatus,
+} from './entities/workout.enums';
 import { CompleteWorkoutDto } from './dto/complete-workout.dto';
 import { LogSetDto } from './dto/log-set.dto';
 import { RecordOneRepMaxDto } from './dto/record-one-rep-max.dto';
 import { StartWorkoutDto } from './dto/start-workout.dto';
+import {
+  SaveLogAsRoutineDto,
+  SaveRoutineMode,
+} from './dto/save-log-as-routine.dto';
+import { NotificationService } from '../notification/notification.service';
+import { User } from '../user/entities/user.entity';
+import { clientCompletedWorkoutForInstructor } from './notifications';
 
 /**
  * WorkoutLogService — the client-side surface. Three core flows:
@@ -66,8 +86,19 @@ export class WorkoutLogService {
     private readonly assignedSetModel: typeof AssignedSet,
     @InjectModel(OneRepMax) private readonly oneRepMaxModel: typeof OneRepMax,
     @InjectModel(Exercise) private readonly exerciseModel: typeof Exercise,
+    @InjectModel(Program) private readonly programModel: typeof Program,
+    @InjectModel(PrescribedExercise)
+    private readonly prescribedExerciseModel: typeof PrescribedExercise,
+    @InjectModel(PrescribedSet)
+    private readonly prescribedSetModel: typeof PrescribedSet,
+    @InjectModel(ProgramWorkout)
+    private readonly programWorkoutModel: typeof ProgramWorkout,
     @InjectModel(InstructorClient)
     private readonly instructorClientModel: typeof InstructorClient,
+    @InjectModel(ProgramAssignment)
+    private readonly assignmentModel: typeof ProgramAssignment,
+    @InjectModel(User) private readonly userModel: typeof User,
+    private readonly notificationService: NotificationService,
     private readonly sequelize: Sequelize,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
@@ -78,6 +109,16 @@ export class WorkoutLogService {
   // ────────────────────────────────────────────────────────────────────
 
   async start(userId: string, dto: StartWorkoutDto): Promise<WorkoutLog> {
+    if (dto.assignedWorkoutId && dto.programId) {
+      throw new BadRequestException(
+        'Pass either assignedWorkoutId or programId, not both.',
+      );
+    }
+
+    if (dto.programId) {
+      return this._startFromProgram(userId, dto.programId);
+    }
+
     if (!dto.assignedWorkoutId && !dto.name?.trim()) {
       throw new BadRequestException(
         'Freestyle workouts require a name; assigned workouts require assignedWorkoutId.',
@@ -216,6 +257,253 @@ export class WorkoutLogService {
     });
   }
 
+  /**
+   * Start a program directly, with no assignment in between. This is the
+   * on-demand path for single-workout programs (what the UI calls a
+   * routine) and it is deliberately kept: making someone self-assign
+   * before they can train would be indirection for its own sake.
+   *
+   * Reads the prescription tree rather than an assigned copy, so targets
+   * are whatever the program says right now. Nothing is snapshotted onto
+   * logged_set — the program is mutable and the UI shows its numbers as
+   * placeholders, not commitments.
+   *
+   * Only the first workout is seeded. Running a multi-week program ad hoc
+   * means "do day one"; scheduling it properly is what self-assignment is
+   * for.
+   */
+  private async _startFromProgram(
+    userId: string,
+    programId: string,
+  ): Promise<WorkoutLog> {
+    const program = await this.programModel.findByPk(programId, {
+      include: [
+        {
+          model: ProgramWorkout,
+          as: 'workouts',
+          separate: true,
+          order: [['sequenceNumber', 'ASC']],
+          limit: 1,
+        },
+      ],
+    });
+
+    // Visible if you own it, or if it is a MotionHive starter program.
+    const readable =
+      program &&
+      (program.ownerId === userId || program.source === ProgramSource.System);
+    if (!readable) {
+      throw new NotFoundException('Program not found.');
+    }
+
+    const workout = program.workouts?.[0];
+    if (!workout) {
+      throw new BadRequestException(
+        'This program has no workouts yet, so there is nothing to start.',
+      );
+    }
+
+    const pxs = await this.prescribedExerciseModel.findAll({
+      where: { programWorkoutId: workout.id },
+      order: [['orderIndex', 'ASC']],
+      include: [
+        {
+          model: Exercise,
+          as: 'exercise',
+          attributes: ['id', 'name', 'thumbnailUrl'],
+        },
+        {
+          model: PrescribedSet,
+          as: 'sets',
+          separate: true,
+          order: [['orderIndex', 'ASC']],
+        },
+      ],
+    });
+
+    const created = await this.sequelize.transaction(async (tx) => {
+      const log = await this.logModel.create(
+        {
+          userId,
+          programAssignmentId: null,
+          assignedWorkoutId: null,
+          // What makes this a routine session rather than a freestyle
+          // one. Both used to write nothing here and were then
+          // indistinguishable in history.
+          sourceProgramId: program.id,
+          name: program.isSingleWorkout ? program.name : workout.name,
+          status: WorkoutLogStatus.InProgress,
+        },
+        { transaction: tx },
+      );
+
+      for (const px of pxs) {
+        const le = await this.loggedExerciseModel.create(
+          {
+            workoutLogId: log.id,
+            exerciseId: px.exerciseId,
+            assignedExerciseId: null,
+            prescribedExerciseId: px.id,
+            exerciseNameSnapshot: px.exercise?.name ?? 'Exercise',
+            exerciseThumbnailUrlSnapshot: px.exercise?.thumbnailUrl ?? null,
+            orderIndex: px.orderIndex,
+            supersetGroupId: px.supersetGroupId,
+            notes: px.notes,
+          },
+          { transaction: tx },
+        );
+
+        const setCount = Math.max(1, px.sets?.length ?? 1);
+        await this.loggedSetModel.bulkCreate(
+          Array.from({ length: setCount }, (_, i) => ({
+            loggedExerciseId: le.id,
+            assignedSetId: null,
+            prescribedSetId: px.sets?.[i]?.id ?? null,
+            orderIndex: i,
+            setType: px.sets?.[i]?.setType ?? ExerciseSetType.Normal,
+            isCompleted: false,
+          })),
+          { transaction: tx },
+        );
+      }
+
+      return log;
+    });
+
+    // Best-effort. The log is the source of truth, so a failure here must
+    // not roll back a workout the person has already started.
+    //
+    // Skipped for MotionHive starters: `lastPerformedAt` lives on the
+    // program row, and a starter is one shared row across every account.
+    // Bumping it made one person's session show up as "Last done today"
+    // in every other user's list — wrong, and a small leak of a
+    // stranger's activity.
+    try {
+      if (program.source !== ProgramSource.System) {
+        await program.update({ lastPerformedAt: new Date() });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to bump lastPerformedAt for program ${program.id}: ${(err as Error).message}`,
+        'WorkoutLogService',
+      );
+    }
+
+    return created;
+  }
+
+  /**
+   * Turn a finished workout into a repeatable routine.
+   *
+   * This is the moment an improvised session becomes something you can
+   * run again, and for someone training without a coach it's the main
+   * reason to keep logging here rather than in a notes app.
+   *
+   * Writes a single-workout program owned by the caller, which is the
+   * same shape a coach's program has — so it can later be scheduled,
+   * edited, or grown into a block without converting anything.
+   *
+   * Skipped exercises are left out: you didn't do them, so they don't
+   * belong in the thing you plan to repeat.
+   */
+  async saveLogAsRoutine(
+    workoutLogId: string,
+    userId: string,
+    dto: SaveLogAsRoutineDto,
+  ): Promise<Program> {
+    const log = await this._loadOwnedLog(workoutLogId, userId);
+
+    const loggedExercises = await this.loggedExerciseModel.findAll({
+      where: { workoutLogId: log.id, isSkipped: false },
+      order: [['orderIndex', 'ASC']],
+      include: [
+        {
+          model: LoggedSet,
+          as: 'sets',
+          separate: true,
+          order: [['orderIndex', 'ASC']],
+        },
+      ],
+    });
+
+    if (!loggedExercises.length) {
+      throw new BadRequestException(
+        'This workout has no exercises to save as a routine.',
+      );
+    }
+
+    const bakeTargets =
+      (dto.mode ?? SaveRoutineMode.Targets) === SaveRoutineMode.Targets;
+
+    return this.sequelize.transaction(async (tx) => {
+      const program = await this.programModel.create(
+        {
+          ownerId: userId,
+          source: ProgramSource.User,
+          isSingleWorkout: true,
+          name: dto.name.trim(),
+          folder: dto.folder?.trim() || null,
+          kind: 'WORKOUT',
+          status: ProgramStatus.Published,
+        },
+        { transaction: tx },
+      );
+
+      const workout = await this.programWorkoutModel.create(
+        {
+          programId: program.id,
+          name: dto.name.trim(),
+          weekIndex: 0,
+          dayIndex: 0,
+          sequenceNumber: 0,
+        },
+        { transaction: tx },
+      );
+
+      for (const [index, le] of loggedExercises.entries()) {
+        // An exercise whose catalog row was deleted can't be prescribed
+        // again — the log keeps its name snapshot, but there is nothing
+        // to point a routine at.
+        if (!le.exerciseId) continue;
+
+        const px = await this.prescribedExerciseModel.create(
+          {
+            programWorkoutId: workout.id,
+            exerciseId: le.exerciseId,
+            orderIndex: index,
+            supersetGroupId: le.supersetGroupId,
+            notes: le.notes,
+          },
+          { transaction: tx },
+        );
+
+        const sets = le.sets ?? [];
+        const rows = (sets.length ? sets : [null]).map((s, i) => ({
+          prescribedExerciseId: px.id,
+          orderIndex: i,
+          setType: s?.setType ?? ExerciseSetType.Normal,
+          // What you hit becomes what you aim at next time. Reps map to
+          // both ends of the range so the target reads as a number, not
+          // a span you didn't ask for.
+          targetRepsMin: bakeTargets ? (s?.reps ?? null) : null,
+          targetRepsMax: bakeTargets ? (s?.reps ?? null) : null,
+          targetWeightKg: bakeTargets ? (s?.weightKg ?? null) : null,
+          targetDurationSeconds: bakeTargets
+            ? (s?.durationSeconds ?? null)
+            : null,
+          targetDistanceMeters: bakeTargets
+            ? (s?.distanceMeters ?? null)
+            : null,
+          restAfterSeconds: s?.restAfterSeconds ?? null,
+        }));
+
+        await this.prescribedSetModel.bulkCreate(rows, { transaction: tx });
+      }
+
+      return program;
+    });
+  }
+
   // ────────────────────────────────────────────────────────────────────
   // Per-set log
   // ────────────────────────────────────────────────────────────────────
@@ -339,6 +627,93 @@ export class WorkoutLogService {
   }
 
   /**
+   * Skip an exercise, or undo the skip.
+   *
+   * Distinct from removing it. A removed exercise leaves no trace, so a
+   * coach cannot tell "she skipped my prescribed rows" from "it was
+   * never in the workout" — which is what the UI's skip button used to
+   * do. A skipped row stays, greys out, and drops out of the progress
+   * denominator.
+   */
+  async setExerciseSkipped(
+    workoutLogId: string,
+    loggedExerciseId: string,
+    userId: string,
+    skipped: boolean,
+  ): Promise<LoggedExercise> {
+    const log = await this._loadOwnedLog(workoutLogId, userId);
+    if (log.status !== WorkoutLogStatus.InProgress) {
+      throw new BadRequestException(
+        'Cannot edit a workout that is no longer in progress.',
+      );
+    }
+    const ex = await this.loggedExerciseModel.findByPk(loggedExerciseId);
+    if (!ex || ex.workoutLogId !== workoutLogId) {
+      throw new NotFoundException('Logged exercise not found.');
+    }
+    await ex.update({ isSkipped: skipped });
+    return ex;
+  }
+
+  /**
+   * Substitute one exercise for another mid-workout (machine taken,
+   * shoulder complaining). The set rows and whatever has already been
+   * logged into them stay put; only the exercise identity changes, and
+   * `swappedFromExerciseId` records what it replaced so the coach sees
+   * the substitution rather than an unexplained change.
+   *
+   * Snapshots are rewritten to the new exercise, since they exist to
+   * keep history readable and history is now the new movement.
+   */
+  async swapLoggedExercise(
+    workoutLogId: string,
+    loggedExerciseId: string,
+    userId: string,
+    newExerciseId: string,
+  ): Promise<LoggedExercise> {
+    const log = await this._loadOwnedLog(workoutLogId, userId);
+    if (log.status !== WorkoutLogStatus.InProgress) {
+      throw new BadRequestException(
+        'Cannot edit a workout that is no longer in progress.',
+      );
+    }
+
+    const ex = await this.loggedExerciseModel.findByPk(loggedExerciseId);
+    if (!ex || ex.workoutLogId !== workoutLogId) {
+      throw new NotFoundException('Logged exercise not found.');
+    }
+    if (ex.exerciseId === newExerciseId) {
+      throw new BadRequestException(
+        'That is already the exercise being logged.',
+      );
+    }
+
+    const next = await this.exerciseModel.findByPk(newExerciseId);
+    // Same usability rule as adding an exercise: someone else's private
+    // custom movement is not swappable in.
+    if (
+      !next ||
+      (next.visibility === ExerciseVisibility.Private &&
+        next.ownerId !== userId)
+    ) {
+      throw new NotFoundException('Exercise not found.');
+    }
+
+    // Keep the ORIGINAL exercise as the provenance anchor across repeated
+    // swaps. Otherwise a second swap would report the first substitute as
+    // the prescription, which is not what the coach wrote.
+    const swappedFrom = ex.swappedFromExerciseId ?? ex.exerciseId;
+
+    await ex.update({
+      exerciseId: next.id,
+      swappedFromExerciseId: swappedFrom,
+      exerciseNameSnapshot: next.name,
+      exerciseThumbnailUrlSnapshot: next.thumbnailUrl ?? null,
+    });
+    return ex;
+  }
+
+  /**
    * Append an empty set to a logged exercise. Used by:
    *   - the per-exercise "+ Add set" CTA (S14)
    *   - freestyle exercises that don't pre-seed any sets
@@ -409,6 +784,73 @@ export class WorkoutLogService {
   }
 
   // ────────────────────────────────────────────────────────────────────
+  // Discard
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * Delete a workout in progress outright. Distinct from SKIPPED, which
+   * records that you chose not to train; this leaves no trace.
+   */
+  async discard(workoutLogId: string, userId: string): Promise<void> {
+    const log = await this._loadOwnedLog(workoutLogId, userId);
+    if (log.status !== WorkoutLogStatus.InProgress) {
+      throw new BadRequestException(
+        'Only a workout in progress can be cancelled. Finished workouts stay in your history.',
+      );
+    }
+
+    const { assignedWorkoutId, programAssignmentId, sourceProgramId } = log;
+
+    await this.sequelize.transaction(async (tx) => {
+      // Starting mirrored IN_PROGRESS here; null is "not started yet".
+      if (assignedWorkoutId) {
+        await this.assignedWorkoutModel.update(
+          { status: null },
+          { where: { id: assignedWorkoutId }, transaction: tx },
+        );
+      }
+      // logged_exercise and logged_set both cascade from this row.
+      await log.destroy({ transaction: tx });
+      if (programAssignmentId) {
+        await this.recomputeAssignmentProgress(programAssignmentId, tx);
+      }
+    });
+
+    if (sourceProgramId) await this._resyncLastPerformed(sourceProgramId);
+  }
+
+  /**
+   * `lastPerformedAt` is stamped on start, so a discard has to walk it
+   * back or the routine claims "Last done today". Recomputed from the
+   * surviving logs rather than guessed.
+   */
+  private async _resyncLastPerformed(programId: string): Promise<void> {
+    try {
+      const program = await this.programModel.findByPk(programId, {
+        attributes: ['id', 'source'],
+      });
+      // Starters share one row across every account, never stamped.
+      if (!program || program.source === ProgramSource.System) return;
+
+      const latest = await this.logModel.findOne({
+        where: { sourceProgramId: programId },
+        order: [['startedAt', 'DESC']],
+        attributes: ['startedAt'],
+      });
+      await this.programModel.update(
+        { lastPerformedAt: latest?.startedAt ?? null },
+        { where: { id: programId } },
+      );
+    } catch (err) {
+      // Cosmetic field: never fail a discard the person already asked for.
+      this.logger.warn(
+        `Failed to resync lastPerformedAt for program ${programId}: ${(err as Error).message}`,
+        'WorkoutLogService',
+      );
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────
   // Complete
   // ────────────────────────────────────────────────────────────────────
 
@@ -418,7 +860,19 @@ export class WorkoutLogService {
     userId: string,
   ): Promise<WorkoutLog> {
     const log = await this._loadOwnedLog(workoutLogId, userId);
-    if (log.status === WorkoutLogStatus.Completed) return log; // idempotent
+    if (log.status === WorkoutLogStatus.Completed) {
+      // Idempotent for the status change, but not a no-op: the feedback
+      // screen runs after the workout is already complete, so its rating
+      // and note arrive on this second call.
+      const feedback = {
+        ...(dto.feelingRating !== undefined && {
+          feelingRating: dto.feelingRating,
+        }),
+        ...(dto.notes !== undefined && { notes: dto.notes?.trim() || null }),
+      };
+      if (Object.keys(feedback).length > 0) await log.update(feedback);
+      return log;
+    }
 
     const completedAt = new Date();
     const durationSeconds = Math.max(
@@ -462,7 +916,70 @@ export class WorkoutLogService {
       await this._writePrsFromLog(log.id, userId, completedAt, tx);
     });
 
+    // notify-after-commit — notify() opens its own transaction, so a
+    // rollback above would otherwise orphan the alert.
+    await this._notifyInstructorOfCompletion(log, userId);
+
     return log;
+  }
+
+  /**
+   * Tell the coach their client trained. Only for assigned work:
+   * freestyle training is the client's own business unless they opt
+   * into sharing it.
+   *
+   * Best-effort. A notification failure must never surface as a failed
+   * workout completion, since the workout genuinely did complete.
+   */
+  private async _notifyInstructorOfCompletion(
+    log: WorkoutLog,
+    userId: string,
+  ): Promise<void> {
+    if (!log.programAssignmentId) return;
+
+    try {
+      const assignment = await this.assignmentModel.findByPk(
+        log.programAssignmentId,
+      );
+      if (!assignment?.instructorId) return;
+
+      const [client, setsCompleted] = await Promise.all([
+        this.userModel.findByPk(userId, {
+          attributes: ['id', 'firstName', 'lastName'],
+        }),
+        this.loggedSetModel.count({
+          where: { isCompleted: true },
+          include: [
+            {
+              model: LoggedExercise,
+              as: 'exercise',
+              attributes: [],
+              where: { workoutLogId: log.id },
+              required: true,
+            },
+          ],
+        }),
+      ]);
+
+      const clientName =
+        [client?.firstName, client?.lastName].filter(Boolean).join(' ') ||
+        'Your client';
+
+      await this.notificationService.notify(
+        clientCompletedWorkoutForInstructor({
+          instructorId: assignment.instructorId,
+          workoutLogId: log.id,
+          clientName,
+          workoutName: log.name,
+          setsCompleted,
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to notify instructor of completed workout ${log.id}: ${(err as Error).message}`,
+        'WorkoutLogService',
+      );
+    }
   }
 
   /**
@@ -652,13 +1169,50 @@ export class WorkoutLogService {
   // List + detail
   // ────────────────────────────────────────────────────────────────────
 
-  async listForUser(userId: string, query: PaginationDto) {
+  /**
+   * `iLike` on the session name, with LIKE wildcards escaped — an
+   * unescaped `%` would match everything and `_` any character.
+   */
+  private _nameSearch(search?: string) {
+    const term = search?.trim();
+    if (!term) return {};
+    const escaped = escapeLikeWildcards(term);
+    return { name: { [Op.iLike]: `%${escaped}%` } };
+  }
+
+  /**
+   * @param onlyAssignmentIds when given, restrict to logs belonging to
+   * these assignments. Used by the coach surface; the client's own
+   * history passes nothing and sees everything.
+   */
+  async listForUser(
+    userId: string,
+    query: ListWorkoutLogsQueryDto,
+    onlyAssignmentIds?: string[],
+  ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     // History = completed sessions only. In-progress logs still surface
     // through the active log + plan detail, not here.
     const { rows, count } = await this.logModel.findAndCountAll({
-      where: { userId, status: WorkoutLogStatus.Completed },
+      where: {
+        userId,
+        status: WorkoutLogStatus.Completed,
+        ...(onlyAssignmentIds
+          ? { programAssignmentId: { [Op.in]: onlyAssignmentIds } }
+          : {}),
+        ...(query.dateFrom || query.dateTo
+          ? {
+              startedAt: {
+                ...(query.dateFrom
+                  ? { [Op.gte]: new Date(query.dateFrom) }
+                  : {}),
+                ...(query.dateTo ? { [Op.lt]: new Date(query.dateTo) } : {}),
+              },
+            }
+          : {}),
+        ...this._nameSearch(query.search),
+      },
       include: [
         // Eager-load the program name so the row subtitle ("12-week
         // hypertrophy base · W5") doesn't need a follow-up fetch.
@@ -667,6 +1221,15 @@ export class WorkoutLogService {
           model: ProgramAssignment,
           as: 'assignment',
           attributes: ['id', 'programNameSnapshot', 'masterProgramId'],
+          required: false,
+        },
+        // The routine it was started from, so a history row can say
+        // "Routine · Push day A" and link there instead of shrugging
+        // "Freestyle" at two different kinds of session.
+        {
+          model: Program,
+          as: 'sourceProgram',
+          attributes: ['id', 'name', 'isSingleWorkout'],
           required: false,
         },
         // Bring back logged_exercise → logged_set just for the count.
@@ -755,6 +1318,14 @@ export class WorkoutLogService {
   async findById(id: string, userId: string): Promise<WorkoutLog> {
     const log = await this.logModel.findByPk(id, {
       include: [
+        // Same provenance the list carries, so the replay header can
+        // name and link the routine a session came from.
+        {
+          model: Program,
+          as: 'sourceProgram',
+          attributes: ['id', 'name', 'isSingleWorkout'],
+          required: false,
+        },
         {
           model: LoggedExercise,
           as: 'exercises',
@@ -774,7 +1345,18 @@ export class WorkoutLogService {
                 'kind',
                 'level',
                 'thumbnailUrl',
+                // Drives the set row: `kind` picks which fields show at
+                // all, `isUnilateral` makes reps read as per-side.
+                'isUnilateral',
               ],
+              required: false,
+            },
+            {
+              // Named, a swap tells the coach what changed; as a bare id
+              // it tells them nothing.
+              model: Exercise,
+              as: 'swappedFromExercise',
+              attributes: ['id', 'name'],
               required: false,
             },
             {
@@ -846,7 +1428,38 @@ export class WorkoutLogService {
     query: PaginationDto,
   ) {
     await this._assertActiveCoachOf(instructorId, clientId);
-    return this.listForUser(clientId, query);
+    const assignmentIds = await this._visibleAssignmentIds(
+      instructorId,
+      clientId,
+    );
+    // `null` = the client shares everything with this coach.
+    return this.listForUser(clientId, query, assignmentIds ?? undefined);
+  }
+
+  /**
+   * Which of this client's logs this coach may read in detail.
+   *
+   * Returns the coach's own assignment ids, or `null` meaning "no
+   * restriction" when the client has opted in via `shareOffPlan`.
+   *
+   * `share_off_plan` has existed since migration 056, documented as the
+   * client-owned toggle for whether a coach may see training logged
+   * outside their plan, and defaulting to false — but nothing ever read
+   * it, so every coach could read every freestyle session their client
+   * logged, including its private note. Presence still leaks through
+   * roster adherence (the coach can tell you trained); the content no
+   * longer does.
+   */
+  private async _visibleAssignmentIds(
+    instructorId: string,
+    clientId: string,
+  ): Promise<string[] | null> {
+    const assignments = await this.assignmentModel.findAll({
+      where: { instructorId, clientId, deletedAt: null },
+      attributes: ['id', 'shareOffPlan'],
+    });
+    if (assignments.some((a) => a.shareOffPlan)) return null;
+    return assignments.map((a) => a.id);
   }
 
   /**
@@ -857,9 +1470,23 @@ export class WorkoutLogService {
     id: string,
     instructorId: string,
   ): Promise<WorkoutLog> {
-    const stub = await this.logModel.findByPk(id, { attributes: ['userId'] });
+    const stub = await this.logModel.findByPk(id, {
+      attributes: ['userId', 'programAssignmentId'],
+    });
     if (!stub) throw new NotFoundException('Workout log not found.');
     await this._assertActiveCoachOf(instructorId, stub.userId);
+
+    // Same gate as the list: an off-plan session is the client's own
+    // business unless they shared it. 404 rather than 403 — consistent
+    // with the rest of the coach surface, and it does not confirm that
+    // a private session exists.
+    const visible = await this._visibleAssignmentIds(instructorId, stub.userId);
+    if (
+      visible !== null &&
+      (!stub.programAssignmentId || !visible.includes(stub.programAssignmentId))
+    ) {
+      throw new NotFoundException('Workout log not found.');
+    }
     return this.findById(id, stub.userId);
   }
 

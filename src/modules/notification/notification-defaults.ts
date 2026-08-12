@@ -138,6 +138,14 @@ export const NOTIFICATION_DEFAULTS: Record<
   // Program assignment is a real coaching event — email so the
   // client sees it even when they're not in the app.
   [NotificationType.PROGRAM_ASSIGNED]: IN_APP_AND_EMAIL,
+  // A coach with ten clients would get ten emails a day, so this one
+  // stays in-app. It exists to make the roster feel alive, not to
+  // interrupt.
+  [NotificationType.CLIENT_COMPLETED_WORKOUT]: IN_APP_ONLY,
+  // A single workout is one of many and stays in-app; finishing an
+  // entire plan happens a handful of times a year and is the moment a
+  // coach should act on (debrief, re-assign), so it earns an email.
+  [NotificationType.CLIENT_COMPLETED_PLAN]: IN_APP_AND_EMAIL,
 };
 
 /**

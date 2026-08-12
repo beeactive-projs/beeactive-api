@@ -178,6 +178,25 @@ VALUES
      'COMPOUND'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind)
 ON CONFLICT DO NOTHING;
 
+-- Thumbnails for the seeded compound lifts (free-exercise-db CDN, the same
+-- source the imported library uses). Drives the exercise-library grid, the
+-- assigned-plan view, and — via the log-snapshot backfill near the end of this
+-- file — the workout log/replay screens.
+UPDATE exercise SET thumbnail_url = v.url
+FROM (VALUES
+  (pg_temp.seed_uuid('ex:back-squat'),        'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Full_Squat/0.jpg'),
+  (pg_temp.seed_uuid('ex:bench-press'),       'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Bench_Press_-_Medium_Grip/0.jpg'),
+  (pg_temp.seed_uuid('ex:deadlift'),          'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Deadlift/0.jpg'),
+  (pg_temp.seed_uuid('ex:overhead-press'),    'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Shoulder_Press/0.jpg'),
+  (pg_temp.seed_uuid('ex:barbell-row'),       'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Bent_Over_Barbell_Row/0.jpg'),
+  (pg_temp.seed_uuid('ex:pull-up'),           'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Pullups/0.jpg'),
+  (pg_temp.seed_uuid('ex:walking-lunge'),     'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Walking_Lunge/0.jpg'),
+  (pg_temp.seed_uuid('ex:plank'),             'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Plank/0.jpg'),
+  (pg_temp.seed_uuid('ex:dumbbell-curl'),     'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Dumbbell_Bicep_Curl/0.jpg'),
+  (pg_temp.seed_uuid('ex:romanian-deadlift'), 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Romanian_Deadlift/0.jpg')
+) AS v(id, url)
+WHERE exercise.id = v.id;
+
 -- Exercise -> primary/secondary muscles (>=1 PRIMARY required by service)
 INSERT INTO exercise_muscle (exercise_id, muscle_id, role)
 SELECT pg_temp.seed_uuid('ex:'||x.ex), m.id, x.role::muscle_role
@@ -1491,6 +1510,16 @@ UPDATE exercise e
    AND e.owner_id = (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit')
    AND e.deleted_at IS NULL
    AND (e.thumbnail_url IS NULL OR e.thumbnail_url = '');
+
+-- Backfill logged-exercise thumbnail snapshots from the (now populated)
+-- exercise thumbnails, so the workout log + replay screens show images for
+-- historical sessions too. Idempotent: only fills rows still missing a snapshot.
+UPDATE logged_exercise le
+SET exercise_thumbnail_url_snapshot = e.thumbnail_url
+FROM exercise e
+WHERE le.exercise_id = e.id
+  AND le.exercise_thumbnail_url_snapshot IS NULL
+  AND e.thumbnail_url IS NOT NULL;
 
 COMMIT;
 

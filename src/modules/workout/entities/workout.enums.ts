@@ -10,6 +10,38 @@ export const ProgramKind = {
 } as const;
 export type ProgramKind = (typeof ProgramKind)[keyof typeof ProgramKind];
 
+/**
+ * Who authored a program. SYSTEM rows are MotionHive-seeded starter
+ * routines with no owner — the first-run path for someone training
+ * without a coach. See migration 056.
+ */
+export const ProgramSource = {
+  System: 'SYSTEM',
+  User: 'USER',
+  Instructor: 'INSTRUCTOR',
+} as const;
+export type ProgramSource = (typeof ProgramSource)[keyof typeof ProgramSource];
+
+/**
+ * COACH — an instructor assigned this. SELF — the person training
+ * scheduled it themselves, which skips the ACTIVE relationship check.
+ */
+export const ProgramAssignmentKind = {
+  Coach: 'COACH',
+  Self: 'SELF',
+} as const;
+export type ProgramAssignmentKind =
+  (typeof ProgramAssignmentKind)[keyof typeof ProgramAssignmentKind];
+
+/** Scheduler mode. BLOCK repeats for `repeatWeeks` then completes. */
+export const ProgramRepeatMode = {
+  None: 'NONE',
+  Weekly: 'WEEKLY',
+  Block: 'BLOCK',
+} as const;
+export type ProgramRepeatMode =
+  (typeof ProgramRepeatMode)[keyof typeof ProgramRepeatMode];
+
 export const ProgramStatus = {
   Draft: 'DRAFT',
   Published: 'PUBLISHED',

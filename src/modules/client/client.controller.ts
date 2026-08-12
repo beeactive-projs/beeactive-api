@@ -309,6 +309,26 @@ export class ClientController {
   }
 
   /**
+   * GET /clients/:clientId
+   * One client of the authenticated instructor, in the same shape the
+   * list returns. Lets the client profile be opened by URL — from the
+   * roster, a bookmark, or a refresh — instead of only from the table.
+   *
+   * Declared after every literal `@Get` above it: a wildcard param route
+   * registered earlier would swallow `/clients/invites` and friends.
+   */
+  @Get(':clientId')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('INSTRUCTOR', 'ADMIN', 'SUPER_ADMIN')
+  @ApiEndpoint(ClientDocs.getClient)
+  async getClient(
+    @Request() req: AuthenticatedRequest,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.clientService.getClientForInstructor(req.user.id, clientId);
+  }
+
+  /**
    * PATCH /clients/:clientId
    * Update notes or status for a client relationship (INSTRUCTOR only).
    */

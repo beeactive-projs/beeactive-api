@@ -158,6 +158,27 @@ export class SessionInstanceService {
           },
         },
       });
+    } else if (query.clientId) {
+      // Own calendar, narrowed to one person's bookings — what the
+      // client profile's Sessions tab asks for. Same join shape as the
+      // cross-instructor case; a filter over rows the caller already
+      // owns, so it widens nothing. Cancelled/declined stay out so the
+      // tab reads as "their sessions", not "every booking attempt".
+      include.push({
+        model: SessionParticipant,
+        as: 'participants',
+        attributes: ['id', 'status', 'userId'],
+        required: true,
+        where: {
+          userId: query.clientId,
+          status: {
+            [Op.notIn]: [
+              SessionParticipantStatus.Cancelled,
+              SessionParticipantStatus.Declined,
+            ],
+          },
+        },
+      });
     }
 
     const { rows, count } = await this.instanceModel.findAndCountAll({

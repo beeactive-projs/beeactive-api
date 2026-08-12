@@ -51,7 +51,7 @@ src/
 │   ├── interceptors/          # CamelCaseInterceptor (APP_INTERCEPTOR)
 │   ├── middleware/            # RequestIdMiddleware (applied to all routes)
 │   ├── services/              # CloudinaryService, CryptoService, EmailService, EmailVerifierService
-│   ├── utils/                 # Pure helpers (html.utils:escapeHtml)
+│   ├── utils/                 # Pure helpers (html.utils:escapeHtml, search.utils:escapeLikeWildcards)
 │   └── validators/            # StrongPasswordValidator
 └── modules/
     ├── auth/         # Register, login, refresh, OAuth, password reset, change password, email verification (POST /auth/resend-verification)
@@ -70,6 +70,9 @@ src/
     ├── feedback/     # Public feedback (no userId from body — JWT-derived; submitter-supplied email)
     ├── waitlist/     # Landing-page email capture (NOT session overflow waitlist — that still doesn't exist)
     ├── search/       # Global search (search_doc index + GET /search) — see migration 029
+    ├── exercise/     # Movement catalog (883 SYSTEM from free-exercise-db + instructor-authored), muscle/equipment links
+    ├── workout/      # Programs, routines, assignments, logging — see "Workout Module Shape" below
+    ├── progress/     # Trainee progress overview + per-exercise history, coach roster (read-only, raw SQL)
     └── health/       # Terminus health checks, app config (controller-only, no service)
 ```
 
@@ -160,6 +163,16 @@ Rewritten by migration 046 from a legacy single-table design into a **template +
 - **Reminder schedule rows** are written into `session_reminder_schedule` on booking and dispatched by the `sessions.reminder_dispatch` cron (sweep model; idempotent via `sentAt`).
 - See `src/modules/session/SESSION-FLOWS.md` for the per-flow walkthrough.
 
+### Workout Module Shape
+One table drives both concepts users see as different things: `program`. `is_single_workout = true` is a **routine** (one repeatable session); `false` is a **multi-week program**. Do not rename either in the UI — users mean different things by them (migration 056 unified the storage, not the vocabulary).
+- **Chain**: `exercise` (catalog) → `program` / `program_workout` / `prescribed_exercise` / `prescribed_set` (prescription) → copy-on-assign into `program_assignment` / `assigned_*` → `workout_log` / `logged_*` (what happened) → `one_rep_max`.
+- **Provenance** (migration 058): `workout_log.source_program_id`, `logged_exercise.prescribed_exercise_id`, `logged_set.prescribed_set_id` — all nullable, `ON DELETE SET NULL`. A freestyle log has none; that is how "Freestyle" is detected.
+- **Starters**: `owner_id IS NULL AND source = 'SYSTEM'` — the ten MotionHive routines from migration 057, readable by everyone. `lastPerformedAt` is deliberately **not** stamped on them: the row is shared across all accounts, so bumping it leaked one user's activity into everyone's list.
+- **`program.level`** (`exercise_level` enum, nullable) carries editorial difficulty on curated content only. Filter via `GET /programs?level=BEGINNER`. A user's copy of a starter does not inherit it.
+- **Discard vs skip**: `DELETE /workout-logs/:id` deletes an in-progress log outright ("changed my mind"); SKIPPED is a deliberate record that you chose not to train. Discard reverts `assigned_workout.status` to NULL and recomputes `lastPerformedAt`. Refuses on a completed log.
+- **Coach privacy**: an instructor sees a client's off-plan logs and post-workout notes **only** when a `program_assignment.share_off_plan` flag allows it — `_visibleAssignmentIds` returns an allow-list, never an exclusion.
+- **Completion feedback** arrives on a *second* `POST /workout-logs/:id/complete` after the log is already COMPLETED (the feedback screen runs post-completion), so that path must apply the rating and note rather than returning early.
+
 ### Venue Module
 Where instructors deliver their service. One instructor has 0..N venues; sessions reference one via `session.venue_id` (nullable, ON DELETE SET NULL).
 - **Kinds** (`venue_kind` enum): `GYM`, `STUDIO`, `PARK`, `OUTDOOR`, `CLIENT_HOME`, `ONLINE`, `OTHER`
@@ -205,7 +218,7 @@ Full schema in `src/config/env.validation.ts` (Joi, `abortEarly: false`).
 - **No batch invite** endpoint.
 - **Sessions ↔ venues** — picker is live in session-form-dialog + quick-create-popover (conditional on `locationKind = IN_PERSON`). Minor polish gap: no inline "Create venue" CTA when the instructor has zero venues yet — they have to leave the dialog and use the Venues page first.
 - **Incomplete modules**: `role` (service-only, no controller, empty `constants/` dir), `notification` (Phase 1 stub for delivery; in-app + email channels live, push/SMS not yet).
-- **Test coverage**: 74 suites / 836 tests. Includes the full jobs stack (notifications/sessions/workouts/payments/maintenance workers + schedulers), payment reminder/balance/dispute services, and async webhook processing + reconciliation. Notably still thin: blog, profile, venue, analytics, feedback, waitlist, search.
+- **Test coverage**: 85 suites / 1023 tests. Includes the full jobs stack (notifications/sessions/workouts/payments/maintenance workers + schedulers), payment reminder/balance/dispute services, and async webhook processing + reconciliation. Notably still thin: blog, profile, venue, analytics, feedback, waitlist, search.
 
 ## Coding Conventions
 - File names: **kebab-case** (`create-user.dto.ts`)
@@ -216,7 +229,7 @@ Full schema in `src/config/env.validation.ts` (Joi, `abortEarly: false`).
 - Controllers are thin — business logic in services
 - Errors: NestJS built-in exceptions (`NotFoundException`, `ConflictException`, etc.)
 - **Always use transactions** for multi-table operations (pass `{ transaction }` to every ORM call)
-- **Use `Op.iLike`** (not `Op.like`) for search on PostgreSQL
+- **Use `Op.iLike`** (not `Op.like`) for search on PostgreSQL, and escape the term with `escapeLikeWildcards` (common/utils/search.utils) — an unescaped `%` matches every row
 - **Use PostgreSQL JSON operators** (`@>`, `?`, `->`) — never MySQL functions (`JSON_CONTAINS`)
 - **Pagination limits**: `@Min(1)` and `@Max(100)` on every limit param
 - **Never use `any`** — always use strict types; prefer `unknown` + narrowing, or define an explicit interface/type
