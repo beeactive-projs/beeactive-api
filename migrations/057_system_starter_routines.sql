@@ -27,10 +27,13 @@
 --      have made "Full body starter" look like it needs a kettlebell
 --      nobody owns.
 --
+-- REQUIRES the exercise catalogue. It is loaded by scripts/seed-exercises.ts,
+-- which is a script and not a migration, so it must have been run against
+-- this database first. The guard below names any slug that is missing
+-- instead of seeding a routine with holes in it.
+--
 -- Idempotent: fixed UUIDs + ON CONFLICT DO NOTHING, so a re-run is a
--- no-op and a partially applied run repairs itself. Exercises resolve
--- by slug through a lookup that ERRORS if a slug is missing, rather
--- than silently seeding a routine with holes in it.
+-- no-op and a partially applied run repairs itself.
 
 BEGIN;
 
@@ -56,6 +59,32 @@ FROM exercise e, equipment q
 WHERE e.slug = 'goblet-squat' AND e.source = 'SYSTEM' AND e.deleted_at IS NULL
   AND q.slug = 'dumbbell'
 ON CONFLICT DO NOTHING;
+
+-- ---------------------------------------------------------------------
+-- Exercises the starters need that the catalogue import does not supply.
+--
+-- Most of the 24 movements below come from the free-exercise-db import.
+-- These three do not: they existed on the author's machine only because
+-- scripts/seed-test-data.sql created them, which is a dev fixture and
+-- never runs on a real environment. Seeding them here is what makes this
+-- migration portable instead of dependent on someone's local database.
+-- ---------------------------------------------------------------------
+INSERT INTO exercise (id, name, slug, kind, level, source, visibility)
+SELECT v.id, v.name, v.slug, v.kind::exercise_kind, v.level::exercise_level,
+       'SYSTEM', 'PUBLIC'
+FROM (VALUES
+  ('5713e7a1-0003-4000-8000-000000000001', 'Plank', 'plank', 'DURATION', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000002', 'Romanian Deadlift', 'romanian-deadlift', 'STRENGTH', 'INTERMEDIATE'),
+  ('5713e7a1-0003-4000-8000-000000000003', 'Walking Lunge', 'walking-lunge', 'BODYWEIGHT', 'BEGINNER')
+) AS v(id, name, slug, kind, level)
+-- Scoped to the ownerless row on purpose. The unique index is
+-- (COALESCE(owner_id, zero-uuid), slug), so slugs are unique per owner:
+-- an instructor may already own a private "plank", and that must neither
+-- block this insert nor be adopted into a MotionHive starter.
+WHERE NOT EXISTS (
+  SELECT 1 FROM exercise e
+  WHERE e.slug = v.slug AND e.owner_id IS NULL AND e.deleted_at IS NULL
+);
 
 -- ---------------------------------------------------------------------
 -- Guard: every slug this migration references must exist.

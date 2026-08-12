@@ -94,6 +94,7 @@ UPDATE program SET source = 'INSTRUCTOR' WHERE source IS NULL;
 ALTER TABLE program ALTER COLUMN source SET NOT NULL;
 
 -- An owned program must have an owner; only SYSTEM may be ownerless.
+ALTER TABLE program DROP CONSTRAINT IF EXISTS program_owner_required_unless_system;
 ALTER TABLE program ADD CONSTRAINT program_owner_required_unless_system CHECK (
   source = 'SYSTEM' OR owner_id IS NOT NULL
 );
@@ -121,23 +122,25 @@ COMMENT ON COLUMN program.is_single_workout IS
 ALTER TABLE program_assignment ALTER COLUMN instructor_id DROP NOT NULL;
 
 ALTER TABLE program_assignment
-  ADD COLUMN assignment_kind program_assignment_kind,
-  ADD COLUMN repeat_mode     program_repeat_mode NOT NULL DEFAULT 'NONE',
-  ADD COLUMN repeat_weeks    SMALLINT,
+  ADD COLUMN IF NOT EXISTS assignment_kind program_assignment_kind,
+  ADD COLUMN IF NOT EXISTS repeat_mode     program_repeat_mode NOT NULL DEFAULT 'NONE',
+  ADD COLUMN IF NOT EXISTS repeat_weeks    SMALLINT,
   -- Client-owned visibility toggle: does the coach see training done outside
   -- the assigned plan. Schema only; the consent surface ships later.
-  ADD COLUMN share_off_plan  BOOLEAN NOT NULL DEFAULT FALSE;
+  ADD COLUMN IF NOT EXISTS share_off_plan  BOOLEAN NOT NULL DEFAULT FALSE;
 
 UPDATE program_assignment SET assignment_kind = 'COACH' WHERE assignment_kind IS NULL;
 ALTER TABLE program_assignment ALTER COLUMN assignment_kind SET NOT NULL;
 
 -- A coach assignment must name the coach. A self assignment must not.
+ALTER TABLE program_assignment DROP CONSTRAINT IF EXISTS program_assignment_kind_instructor;
 ALTER TABLE program_assignment ADD CONSTRAINT program_assignment_kind_instructor CHECK (
   (assignment_kind = 'COACH' AND instructor_id IS NOT NULL)
   OR
   (assignment_kind = 'SELF'  AND instructor_id IS NULL)
 );
 
+ALTER TABLE program_assignment DROP CONSTRAINT IF EXISTS program_assignment_repeat_weeks_range;
 ALTER TABLE program_assignment ADD CONSTRAINT program_assignment_repeat_weeks_range CHECK (
   (repeat_mode = 'BLOCK' AND repeat_weeks BETWEEN 1 AND 104)
   OR
@@ -164,32 +167,75 @@ COMMENT ON COLUMN logged_exercise.is_skipped IS
   'Explicit skip. Distinct from untouched (no completed sets) and from absent. Excluded from progress counts. See 056.';
 
 -- =============================================================================
--- DROP ROUTINE — replaced by single-workout programs
+-- CONVERT ROUTINE -> single-workout PROGRAM, then drop the old tables
 --
--- Ordered child-first. If dev routines are worth keeping, convert them BEFORE
--- this block: each routine becomes a program (source USER, is_single_workout)
--- plus one program_workout, each routine_exercise a prescribed_exercise, and
--- default_sets expands into that many prescribed_set rows carrying the flat
--- rep/weight target.
+-- Each routine becomes a program (source USER, is_single_workout) plus one
+-- program_workout; each routine_exercise becomes a prescribed_exercise, and
+-- default_sets expands into that many identical prescribed_set rows carrying
+-- the flat rep/weight target. Soft-deleted routines carry their deleted_at
+-- across rather than being resurrected.
+--
+-- Ids are derived by hash from the source row id, so a re-run maps to the same
+-- program and collides on the primary key instead of duplicating.
 -- =============================================================================
 
--- Refuses rather than deletes. On an environment where nobody used the old
--- routine builder these tables are empty and this is a no-op; anywhere they
--- are not, the deploy stops with the row count instead of quietly discarding
--- someone's saved workouts, and the conversion above happens first.
 DO $$
 DECLARE
-  remaining bigint;
+  converted bigint := 0;
 BEGIN
   IF to_regclass('public.routine') IS NULL THEN
     RETURN;
   END IF;
 
-  EXECUTE 'SELECT count(*) FROM routine' INTO remaining;
-  IF remaining > 0 THEN
-    RAISE EXCEPTION
-      'Refusing to drop % routine row(s). Convert them to single-workout programs first, then re-run.', remaining;
-  END IF;
+  -- Deterministic id from any source id, so the mapping is stable across runs.
+  CREATE OR REPLACE FUNCTION pg_temp.program_id_for(seed text)
+  RETURNS char(36) AS $f$
+    SELECT substring(md5($1),1,8) || '-' || substring(md5($1),9,4) || '-' ||
+           substring(md5($1),13,4) || '-' || substring(md5($1),17,4) || '-' ||
+           substring(md5($1),21,12);
+  $f$ LANGUAGE sql IMMUTABLE;
+
+  INSERT INTO program (id, owner_id, name, description, kind, status, source,
+                       is_single_workout, folder, last_performed_at,
+                       created_at, updated_at, deleted_at)
+  SELECT pg_temp.program_id_for('program:' || r.id), r.user_id, r.name, r.notes,
+         'WORKOUT', 'PUBLISHED', 'USER', TRUE, r.folder, r.last_performed_at,
+         r.created_at, r.updated_at, r.deleted_at
+  FROM routine r
+  ON CONFLICT (id) DO NOTHING;
+
+  GET DIAGNOSTICS converted = ROW_COUNT;
+
+  INSERT INTO program_workout (id, program_id, name, week_index, day_index, sequence_number)
+  SELECT pg_temp.program_id_for('workout:' || r.id),
+         pg_temp.program_id_for('program:' || r.id), r.name, 0, 0, 0
+  FROM routine r
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO prescribed_exercise (id, program_workout_id, exercise_id, order_index,
+                                   superset_group_id, notes)
+  SELECT pg_temp.program_id_for('pe:' || re.id),
+         pg_temp.program_id_for('workout:' || re.routine_id),
+         re.exercise_id, re.order_index, re.superset_group_id, re.notes
+  FROM routine_exercise re
+  JOIN routine r ON r.id = re.routine_id
+  ON CONFLICT (id) DO NOTHING;
+
+  -- One prescribed_set per default_sets, all carrying the same flat target,
+  -- which is the only shape the old routine builder could express.
+  INSERT INTO prescribed_set (id, prescribed_exercise_id, order_index, set_type,
+                              target_reps_min, target_reps_max, target_weight_kg,
+                              rest_after_seconds)
+  SELECT pg_temp.program_id_for('ps:' || re.id || ':' || s.i),
+         pg_temp.program_id_for('pe:' || re.id),
+         s.i, 'NORMAL', re.target_reps_min, re.target_reps_max,
+         re.target_weight_kg, re.rest_after_seconds
+  FROM routine_exercise re
+  JOIN routine r ON r.id = re.routine_id
+  CROSS JOIN LATERAL generate_series(0, GREATEST(COALESCE(re.default_sets, 3), 1) - 1) AS s(i)
+  ON CONFLICT (id) DO NOTHING;
+
+  RAISE NOTICE 'Converted % routine(s) into single-workout programs.', converted;
 
   DROP TABLE IF EXISTS routine_exercise;
   DROP TABLE IF EXISTS routine;
