@@ -78,7 +78,7 @@ FROM (VALUES
   -- The three that never came from free-exercise-db and were added in d0d210a.
   ('5713e7a1-0003-4000-8000-000000000001', 'Plank', 'plank', 'DURATION', 'BEGINNER'),
   ('5713e7a1-0003-4000-8000-000000000002', 'Romanian Deadlift', 'romanian-deadlift', 'STRENGTH', 'INTERMEDIATE'),
-  ('5713e7a1-0003-4000-8000-000000000003', 'Walking Lunge', 'walking-lunge', 'BODYWEIGHT', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000003', 'Bodyweight Walking Lunge', 'bodyweight-walking-lunge', 'BODYWEIGHT', 'BEGINNER'),
   -- The rest: normally supplied by seed-exercises.ts. Auto-created here
   -- as a safety net so this migration doesn't require the seed script
   -- to have run first. Kind + level chosen from the source data's own
@@ -141,7 +141,7 @@ BEGIN
   SELECT string_agg(s, ', ') INTO missing
   FROM unnest(ARRAY[
     'goblet-squat','incline-push-up','bent-over-two-dumbbell-row','plank',
-    'bodyweight-squat','walking-lunge','dead-bug',
+    'bodyweight-squat','bodyweight-walking-lunge','dead-bug',
     'dumbbell-bench-press','dumbbell-shoulder-press',
     'close-grip-front-lat-pulldown','romanian-deadlift',
     'single-leg-glute-bridge','dumbbell-lunges','standing-dumbbell-press',
@@ -278,7 +278,7 @@ INSERT INTO starter_prescription VALUES
   -- No equipment, no excuses
   ('5713e7a1-0002-4000-8000-000000000201', '5713e7a1-0001-4000-8000-000000000002', 'bodyweight-squat', 0, 'Slow on the way down, quick on the way up.', 3, 12, 20, NULL, 60),
   ('5713e7a1-0002-4000-8000-000000000202', '5713e7a1-0001-4000-8000-000000000002', 'incline-push-up', 1, 'A kitchen counter works. So does a wall on a bad day.', 3, 8, 15, NULL, 60),
-  ('5713e7a1-0002-4000-8000-000000000203', '5713e7a1-0001-4000-8000-000000000002', 'walking-lunge', 2, 'Count reps per leg. Short steps if your knees complain.', 3, 10, 12, NULL, 60),
+  ('5713e7a1-0002-4000-8000-000000000203', '5713e7a1-0001-4000-8000-000000000002', 'bodyweight-walking-lunge', 2, 'Count reps per leg. Short steps if your knees complain.', 3, 10, 12, NULL, 60),
   ('5713e7a1-0002-4000-8000-000000000204', '5713e7a1-0001-4000-8000-000000000002', 'dead-bug', 3, 'Press your lower back into the floor the whole time.', 2, 8, 10, NULL, 45),
   ('5713e7a1-0002-4000-8000-000000000205', '5713e7a1-0001-4000-8000-000000000002', 'plank', 4, 'Finish here. Quality over duration.', 2, NULL, NULL, 30, 45),
 
@@ -295,7 +295,7 @@ INSERT INTO starter_prescription VALUES
   -- Leg day
   ('5713e7a1-0002-4000-8000-000000000501', '5713e7a1-0001-4000-8000-000000000005', 'goblet-squat', 0, 'Work up to a weight you could still do two more with.', 4, 8, 12, NULL, 120),
   ('5713e7a1-0002-4000-8000-000000000502', '5713e7a1-0001-4000-8000-000000000005', 'romanian-deadlift', 1, 'Hinge, do not squat. The bar stays close to your legs.', 3, 8, 10, NULL, 90),
-  ('5713e7a1-0002-4000-8000-000000000503', '5713e7a1-0001-4000-8000-000000000005', 'walking-lunge', 2, 'Reps are per leg.', 3, 10, 12, NULL, 60),
+  ('5713e7a1-0002-4000-8000-000000000503', '5713e7a1-0001-4000-8000-000000000005', 'bodyweight-walking-lunge', 2, 'Reps are per leg.', 3, 10, 12, NULL, 60),
   ('5713e7a1-0002-4000-8000-000000000504', '5713e7a1-0001-4000-8000-000000000005', 'single-leg-glute-bridge', 3, 'Drive through your heel and pause at the top.', 3, 10, 15, NULL, 45),
 
   -- Full body B. Nothing here overlaps Full body starter, so alternating
