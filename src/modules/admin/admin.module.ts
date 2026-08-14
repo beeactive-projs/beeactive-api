@@ -17,7 +17,7 @@ import { WorkoutLog } from '../workout/entities/workout-log.entity';
 import { SessionParticipant } from '../session/entities/session-participant.entity';
 import { Message } from '../messaging/entities/message.entity';
 import { ProgramAssignment } from '../workout/entities/program-assignment.entity';
-import { Routine } from '../routine/entities/routine.entity';
+import { Program } from '../workout/entities/program.entity';
 import { Role } from '../role/entities/role.entity';
 import { UserRole } from '../role/entities/user-role.entity';
 import { InstructorProfile } from '../profile/entities/instructor-profile.entity';
@@ -98,7 +98,7 @@ import { AdminAuditService } from './services/admin-audit.service';
       SessionParticipant,
       Message,
       ProgramAssignment,
-      Routine,
+      Program,
     ]),
     RoleModule,
     AuthModule,

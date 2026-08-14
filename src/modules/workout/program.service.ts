@@ -8,10 +8,11 @@ import {
 import type { LoggerService } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { Op } from 'sequelize';
+import { literal, Op, type Order, type Transaction } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
 
 import { assertOwned } from '../../common/utils/ownership.utils';
+import { escapeLikeWildcards } from '../../common/utils/search.utils';
 import {
   buildPaginatedResponse,
   getOffset,
@@ -25,17 +26,40 @@ import { User } from '../user/entities/user.entity';
 import { PrescribedExercise } from './entities/prescribed-exercise.entity';
 import { PrescribedSet } from './entities/prescribed-set.entity';
 import { Program } from './entities/program.entity';
+import { ProgramAssignment } from './entities/program-assignment.entity';
 import { ProgramWorkout } from './entities/program-workout.entity';
-import { ProgramStatus } from './entities/workout.enums';
+import {
+  ExerciseSetType,
+  ProgramAssignmentStatus,
+  ProgramSource,
+  ProgramStatus,
+} from './entities/workout.enums';
 import { CreatePrescribedExerciseDto } from './dto/create-prescribed-exercise.dto';
 import { CreatePrescribedSetDto } from './dto/create-prescribed-set.dto';
-import { CreateProgramDto } from './dto/create-program.dto';
+import {
+  CreateProgramDto,
+  CreateProgramExerciseDto,
+} from './dto/create-program.dto';
 import { CreateProgramWorkoutDto } from './dto/create-program-workout.dto';
-import { ListProgramsQueryDto } from './dto/list-programs.query.dto';
+import {
+  ListProgramsQueryDto,
+  ProgramLibrary,
+} from './dto/list-programs.query.dto';
+import { ReorderProgramWorkoutsDto } from './dto/reorder-program-workouts.dto';
 import { UpdatePrescribedExerciseDto } from './dto/update-prescribed-exercise.dto';
 import { UpdatePrescribedSetDto } from './dto/update-prescribed-set.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { UpdateProgramWorkoutDto } from './dto/update-program-workout.dto';
+
+/**
+ * Temporary week namespace used while repositioning workouts. The
+ * unique (program_id, week_index, day_index) index is NOT deferrable,
+ * so swaps would collide mid-transaction if final slots were written
+ * directly. week_index has no upper CHECK (only >= 0, SMALLINT) and
+ * real weeks are DTO-capped at 103, so parking moved rows at
+ * `week + 10000` can never clash with a live slot.
+ */
+const WEEK_PARK_OFFSET = 10_000;
 
 /**
  * ProgramService — nested CRUD across the program-authoring tree
@@ -57,6 +81,8 @@ import { UpdateProgramWorkoutDto } from './dto/update-program-workout.dto';
 export class ProgramService {
   constructor(
     @InjectModel(Program) private readonly programModel: typeof Program,
+    @InjectModel(ProgramAssignment)
+    private readonly assignmentModel: typeof ProgramAssignment,
     @InjectModel(ProgramWorkout)
     private readonly workoutModel: typeof ProgramWorkout,
     @InjectModel(PrescribedExercise)
@@ -76,23 +102,103 @@ export class ProgramService {
   async list(filter: ListProgramsQueryDto, ownerId: string) {
     const page = filter.page ?? 1;
     const limit = filter.limit ?? 20;
+    // MotionHive starter routines have `ownerId = null` and are readable
+    // by everyone. The old `ownerId` equality hid them from every user,
+    // which is why the seeded starter content had nowhere to appear.
+    const library = filter.library ?? ProgramLibrary.All;
+    const ownerScope =
+      library === ProgramLibrary.Mine
+        ? { ownerId }
+        : library === ProgramLibrary.System
+          ? { source: ProgramSource.System }
+          : {
+              [Op.or]: [{ ownerId }, { source: ProgramSource.System }],
+            };
+
     const where = {
-      ownerId,
+      ...ownerScope,
       deletedAt: null,
       ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.isSingleWorkout !== undefined
+        ? { isSingleWorkout: filter.isSingleWorkout }
+        : {}),
+      ...(filter.folder ? { folder: filter.folder } : {}),
+      ...(filter.level ? { level: filter.level } : {}),
       ...(filter.search
-        ? { name: { [Op.iLike]: `%${filter.search.trim()}%` } }
+        ? {
+            name: {
+              [Op.iLike]: `%${escapeLikeWildcards(filter.search.trim())}%`,
+            },
+          }
         : {}),
     };
 
+    // Routines sort by when they were last trained, which is what the
+    // quick-start list is ordered by. Multi-week programs keep the
+    // authoring sort (most recently edited).
+    // Your own routines lead; starter content sits underneath rather
+    // than pushing a returning user's work down the list.
+    const yoursFirst: Order = [
+      [literal('CASE WHEN owner_id IS NULL THEN 1 ELSE 0 END'), 'ASC'],
+    ];
+    const order: Order = filter.isSingleWorkout
+      ? [
+          ...yoursFirst,
+          ['lastPerformedAt', 'DESC NULLS LAST'],
+          ['updatedAt', 'DESC'],
+        ]
+      : [...yoursFirst, ['updatedAt', 'DESC']];
+
     const { rows, count } = await this.programModel.findAndCountAll({
       where,
-      order: [['updatedAt', 'DESC']],
+      order,
       offset: getOffset(page, limit),
       limit,
     });
 
-    return buildPaginatedResponse(rows, count, page, limit);
+    // The list never carries the tree (too heavy), but the row still has
+    // to say how many exercises a program holds. One grouped count for
+    // the whole page beats N+1 or shipping every set.
+    const counts = await this._exerciseCountsFor(rows.map((r) => r.id));
+    const items = rows.map((r) => ({
+      ...r.toJSON(),
+      exerciseCount: counts.get(r.id) ?? 0,
+    }));
+
+    return buildPaginatedResponse(items, count, page, limit);
+  }
+
+  /** programId -> number of prescribed exercises across all its workouts. */
+  private async _exerciseCountsFor(
+    programIds: string[],
+  ): Promise<Map<string, number>> {
+    if (!programIds.length) return new Map();
+
+    const rows = await this.prescribedExerciseModel.findAll({
+      attributes: [
+        [Sequelize.col('workout.program_id'), 'programId'],
+        [
+          Sequelize.fn('COUNT', Sequelize.col('PrescribedExercise.id')),
+          'total',
+        ],
+      ],
+      include: [
+        {
+          model: ProgramWorkout,
+          as: 'workout',
+          attributes: [],
+          where: { programId: { [Op.in]: programIds } },
+        },
+      ],
+      group: [Sequelize.col('workout.program_id')],
+      raw: true,
+    });
+
+    return new Map(
+      (rows as unknown as Array<{ programId: string; total: string }>).map(
+        (r) => [r.programId, Number(r.total)],
+      ),
+    );
   }
 
   /**
@@ -144,6 +250,12 @@ export class ProgramService {
       ],
     });
 
+    // MotionHive starters belong to nobody and are readable by everyone.
+    // Without this the list showed them and starting one worked, but
+    // opening the detail 404'd — the same routine visible, runnable and
+    // unopenable at once.
+    if (program?.source === ProgramSource.System) return program;
+
     assertOwned(program, ownerId, (p) => p.ownerId, {
       notFoundMessage: 'Program not found.',
       onMismatch: 'hide',
@@ -151,8 +263,135 @@ export class ProgramService {
     return program;
   }
 
-  async create(dto: CreateProgramDto, ownerId: string): Promise<Program> {
-    return this.programModel.create({
+  /**
+   * `isInstructor` only decides the `source` stamp, which is provenance
+   * for reporting. It grants nothing: ownership is the authorization
+   * boundary, and both roles author into the same table.
+   */
+  /**
+   * Copy a routine into the caller's own library.
+   *
+   * The way a starter routine becomes editable. MotionHive's are owned
+   * by nobody (`ownerId = null`) so they cannot be edited in place —
+   * one person's tweak would change them for everybody. Taking a copy
+   * gives you a routine that is yours, stamped `USER`, with the
+   * original left alone.
+   *
+   * Also works on your own routines, which is the cheap way to make a
+   * variant of something you already have.
+   */
+  async duplicateForUser(programId: string, userId: string): Promise<Program> {
+    const source = await this.programModel.findOne({
+      where: { id: programId, deletedAt: null },
+      include: [
+        {
+          model: ProgramWorkout,
+          as: 'workouts',
+          required: false,
+          include: [
+            {
+              model: PrescribedExercise,
+              as: 'exercises',
+              required: false,
+              include: [{ model: PrescribedSet, as: 'sets', required: false }],
+            },
+          ],
+        },
+      ],
+    });
+
+    // Readable if it is yours or it is ours. 404 rather than 403 so a
+    // probe cannot enumerate other people's libraries.
+    const readable =
+      source &&
+      (source.ownerId === userId || source.source === ProgramSource.System);
+    if (!readable) throw new NotFoundException('Program not found.');
+
+    return this.sequelize.transaction(async (tx) => {
+      const copy = await this.programModel.create(
+        {
+          ownerId: userId,
+          name: `${source.name} (my copy)`,
+          description: source.description,
+          kind: source.kind,
+          status: ProgramStatus.Draft,
+          source: ProgramSource.User,
+          isSingleWorkout: source.isSingleWorkout,
+          folder: source.folder,
+          goalTags: source.goalTags,
+          durationDays: source.durationDays,
+        },
+        { transaction: tx },
+      );
+
+      for (const w of source.workouts ?? []) {
+        const newWorkout = await this.workoutModel.create(
+          {
+            programId: copy.id,
+            name: w.name,
+            notes: w.notes,
+            weekIndex: w.weekIndex,
+            dayIndex: w.dayIndex,
+            sequenceNumber: w.sequenceNumber,
+            phase: w.phase,
+            estimatedDurationMinutes: w.estimatedDurationMinutes,
+          },
+          { transaction: tx },
+        );
+
+        for (const ex of w.exercises ?? []) {
+          const newExercise = await this.prescribedExerciseModel.create(
+            {
+              programWorkoutId: newWorkout.id,
+              exerciseId: ex.exerciseId,
+              blockId: ex.blockId,
+              supersetGroupId: ex.supersetGroupId,
+              orderIndex: ex.orderIndex,
+              notes: ex.notes,
+              alternateExerciseId: ex.alternateExerciseId,
+            },
+            { transaction: tx },
+          );
+
+          const sets = (ex.sets ?? []).map((st) => ({
+            prescribedExerciseId: newExercise.id,
+            orderIndex: st.orderIndex,
+            setType: st.setType,
+            targetRepsMin: st.targetRepsMin,
+            targetRepsMax: st.targetRepsMax,
+            targetWeightKg: st.targetWeightKg,
+            targetWeightPercent1rm: st.targetWeightPercent1rm,
+            targetDurationSeconds: st.targetDurationSeconds,
+            targetDistanceMeters: st.targetDistanceMeters,
+            targetRpe: st.targetRpe,
+            targetRir: st.targetRir,
+            restAfterSeconds: st.restAfterSeconds,
+            tempo: st.tempo,
+            notes: st.notes,
+          }));
+          if (sets.length) {
+            await this.prescribedSetModel.bulkCreate(sets, { transaction: tx });
+          }
+        }
+      }
+
+      return copy;
+    });
+  }
+
+  async create(
+    dto: CreateProgramDto,
+    ownerId: string,
+    isInstructor: boolean,
+  ): Promise<Program> {
+    if (dto.exercises?.length && !dto.isSingleWorkout) {
+      throw new BadRequestException(
+        'Nested exercises are only supported on single-workout programs. ' +
+          'Build a multi-week program through its workout endpoints.',
+      );
+    }
+
+    const attrs = {
       name: dto.name.trim(),
       description: dto.description?.trim() || null,
       kind: dto.kind ?? 'WORKOUT',
@@ -161,8 +400,96 @@ export class ProgramService {
       periodizationModel: dto.periodizationModel?.trim() || null,
       coverImageUrl: dto.coverImageUrl ?? null,
       goalTags: dto.goalTags ?? null,
+      isSingleWorkout: dto.isSingleWorkout ?? false,
+      folder: dto.folder?.trim() || null,
+      // Authored through the API by a signed-in person. SYSTEM starter
+      // programs are seeded, never created here.
+      source: isInstructor ? ProgramSource.Instructor : ProgramSource.User,
       ownerId,
+    };
+
+    if (!dto.isSingleWorkout) {
+      return this.programModel.create(attrs);
+    }
+
+    // Single-workout programs are saved whole: program, its one workout,
+    // and the exercise tree in one transaction, so a routine is never
+    // left half-written if a later insert fails.
+    return this.sequelize.transaction(async (tx) => {
+      const program = await this.programModel.create(attrs, {
+        transaction: tx,
+      });
+
+      const workout = await this.workoutModel.create(
+        {
+          programId: program.id,
+          name: attrs.name,
+          weekIndex: 0,
+          dayIndex: 0,
+          sequenceNumber: 0,
+        },
+        { transaction: tx },
+      );
+
+      await this._writeExerciseTree(workout.id, dto.exercises ?? [], tx);
+      return program;
     });
+  }
+
+  /**
+   * Writes prescribed exercises and their sets for one workout.
+   * `defaultSets` fans out into that many rows carrying the same
+   * targets, which is what the simple editor sends.
+   */
+  private async _writeExerciseTree(
+    programWorkoutId: string,
+    exercises: CreateProgramExerciseDto[],
+    tx: Transaction,
+  ): Promise<void> {
+    for (const [index, ex] of exercises.entries()) {
+      const created = await this.prescribedExerciseModel.create(
+        {
+          programWorkoutId,
+          exerciseId: ex.exerciseId,
+          orderIndex: index,
+          supersetGroupId: ex.supersetGroupId ?? null,
+          notes: ex.notes?.trim() || null,
+        },
+        { transaction: tx },
+      );
+
+      // Explicit rows win: they can express a warm-up, a top set and
+      // backoffs. `defaultSets` is the shorthand for N identical sets,
+      // which is all the simple editor can say.
+      const rows = ex.sets?.length
+        ? ex.sets.map((s, i) => ({
+            prescribedExerciseId: created.id,
+            orderIndex: i,
+            setType: s.setType ?? ExerciseSetType.Normal,
+            targetRepsMin: s.targetRepsMin ?? null,
+            targetRepsMax: s.targetRepsMax ?? null,
+            targetWeightKg: s.targetWeightKg ?? null,
+            targetDurationSeconds: s.targetDurationSeconds ?? null,
+            targetDistanceMeters: s.targetDistanceMeters ?? null,
+            restAfterSeconds: s.restAfterSeconds ?? null,
+          }))
+        : Array.from(
+            { length: Math.min(30, Math.max(1, ex.defaultSets ?? 3)) },
+            (_, i) => ({
+              prescribedExerciseId: created.id,
+              orderIndex: i,
+              setType: ExerciseSetType.Normal,
+              targetRepsMin: ex.targetRepsMin ?? null,
+              targetRepsMax: ex.targetRepsMax ?? null,
+              targetWeightKg: ex.targetWeightKg ?? null,
+              targetDurationSeconds: null,
+              targetDistanceMeters: null,
+              restAfterSeconds: ex.restAfterSeconds ?? null,
+            }),
+          );
+
+      await this.prescribedSetModel.bulkCreate(rows, { transaction: tx });
+    }
   }
 
   async update(
@@ -171,7 +498,43 @@ export class ProgramService {
     ownerId: string,
   ): Promise<Program> {
     const program = await this._loadProgram(id, ownerId);
+
+    if (dto.exercises && !program.isSingleWorkout) {
+      throw new BadRequestException(
+        'Nested exercises are only supported on single-workout programs. ' +
+          'Edit a multi-week program through its workout endpoints.',
+      );
+    }
+
+    // A routine's exercise list is edited as a whole, so the tree is
+    // replaced rather than diffed. Safe for history: logged rows point at
+    // assigned_* copies and carry their own name snapshots, so nothing
+    // already trained is disturbed.
+    if (dto.exercises) {
+      await this.sequelize.transaction(async (tx) => {
+        const workout = await this.workoutModel.findOne({
+          where: { programId: program.id },
+          order: [['sequenceNumber', 'ASC']],
+          transaction: tx,
+        });
+        if (!workout) {
+          throw new BadRequestException(
+            'This routine has no workout to put exercises in.',
+          );
+        }
+        // Sets cascade from prescribed_exercise.
+        await this.prescribedExerciseModel.destroy({
+          where: { programWorkoutId: workout.id },
+          transaction: tx,
+        });
+        await this._writeExerciseTree(workout.id, dto.exercises!, tx);
+      });
+    }
+
     await program.update({
+      ...(dto.folder !== undefined && {
+        folder: dto.folder?.trim() || null,
+      }),
       ...(dto.name !== undefined && { name: dto.name.trim() }),
       ...(dto.description !== undefined && {
         description: dto.description?.trim() || null,
@@ -192,9 +555,64 @@ export class ProgramService {
     return program;
   }
 
-  async softDelete(id: string, ownerId: string): Promise<void> {
+  /**
+   * @param cancelScheduled also cancel sessions this routine was
+   * scheduled into. Off by default: `program_assignment.master_program_id`
+   * is ON DELETE SET NULL, so without this the assignment survives and
+   * its `assigned_workout` rows keep appearing on the calendar, pointing
+   * at a routine that no longer exists.
+   */
+  async softDelete(
+    id: string,
+    ownerId: string,
+    cancelScheduled = false,
+  ): Promise<void> {
     const program = await this._loadProgram(id, ownerId);
+
+    if (cancelScheduled) {
+      // Cancel rather than delete: a scheduled session someone already
+      // trained is history, and history does not get rewritten because
+      // the template was tidied up.
+      await this.assignmentModel.update(
+        { status: ProgramAssignmentStatus.Cancelled },
+        {
+          where: {
+            masterProgramId: id,
+            clientId: ownerId,
+            status: {
+              [Op.in]: [
+                ProgramAssignmentStatus.Pending,
+                ProgramAssignmentStatus.Active,
+                ProgramAssignmentStatus.Paused,
+              ],
+            },
+          },
+        },
+      );
+    }
+
     await program.destroy();
+  }
+
+  /**
+   * How many live schedules point at this routine, so the confirm can
+   * say what else disappears instead of surprising someone afterwards.
+   */
+  async countScheduledFor(id: string, ownerId: string): Promise<number> {
+    await this._loadProgram(id, ownerId);
+    return this.assignmentModel.count({
+      where: {
+        masterProgramId: id,
+        clientId: ownerId,
+        status: {
+          [Op.in]: [
+            ProgramAssignmentStatus.Pending,
+            ProgramAssignmentStatus.Active,
+            ProgramAssignmentStatus.Paused,
+          ],
+        },
+      },
+    });
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -237,6 +655,94 @@ export class ProgramService {
       sequenceNumber: nextSeq,
       phase: dto.phase?.trim() || null,
       estimatedDurationMinutes: dto.estimatedDurationMinutes ?? null,
+    });
+  }
+
+  /**
+   * Atomic calendar repositioning — see ReorderProgramWorkoutsDto.
+   * Validates the combined target layout up front, then applies all
+   * moves in one transaction: phase 1 parks moved rows in the
+   * out-of-range week namespace, phase 2 writes final slots, and
+   * `sequenceNumber` is recomputed to calendar order program-wide.
+   */
+  async reorderWorkouts(
+    programId: string,
+    dto: ReorderProgramWorkoutsDto,
+    ownerId: string,
+  ): Promise<ProgramWorkout[]> {
+    await this._loadProgram(programId, ownerId);
+
+    const workouts = await this.workoutModel.findAll({ where: { programId } });
+    const byId = new Map(workouts.map((w) => [w.id, w]));
+
+    const seenIds = new Set<string>();
+    for (const item of dto.items) {
+      if (!byId.has(item.id)) {
+        throw new NotFoundException('Workout not found.');
+      }
+      if (seenIds.has(item.id)) {
+        throw new BadRequestException(
+          'Each workout may appear only once in items.',
+        );
+      }
+      seenIds.add(item.id);
+    }
+
+    // Combined layout = moved targets + untouched rows' current slots.
+    const targetById = new Map(dto.items.map((i) => [i.id, i]));
+    const slots = new Set<string>();
+    for (const w of workouts) {
+      const target = targetById.get(w.id);
+      const week = target?.weekIndex ?? w.weekIndex;
+      const day = target?.dayIndex ?? w.dayIndex;
+      const key = `${week}:${day}`;
+      if (slots.has(key)) {
+        throw new ConflictException(
+          `Two workouts would occupy week ${week + 1}, day ${day + 1}.`,
+        );
+      }
+      slots.add(key);
+    }
+
+    const moved = dto.items.filter((i) => {
+      const w = byId.get(i.id)!;
+      return w.weekIndex !== i.weekIndex || w.dayIndex !== i.dayIndex;
+    });
+
+    if (moved.length > 0) {
+      await this.sequelize.transaction(async (tx) => {
+        // Phase 1 — park (see WEEK_PARK_OFFSET). Parked slots stay
+        // mutually unique because the original (week, day) pairs were.
+        for (const item of moved) {
+          const w = byId.get(item.id)!;
+          await w.update(
+            { weekIndex: w.weekIndex + WEEK_PARK_OFFSET },
+            { transaction: tx },
+          );
+        }
+        // Phase 2 — final slots (validated collision-free above).
+        for (const item of moved) {
+          const w = byId.get(item.id)!;
+          await w.update(
+            { weekIndex: item.weekIndex, dayIndex: item.dayIndex },
+            { transaction: tx },
+          );
+        }
+        // Keep the linear index in calendar order program-wide.
+        const ordered = [...workouts].sort(
+          (a, b) => a.weekIndex - b.weekIndex || a.dayIndex - b.dayIndex,
+        );
+        for (let i = 0; i < ordered.length; i++) {
+          if (ordered[i].sequenceNumber !== i) {
+            await ordered[i].update({ sequenceNumber: i }, { transaction: tx });
+          }
+        }
+      });
+    }
+
+    return this.workoutModel.findAll({
+      where: { programId },
+      order: [['sequenceNumber', 'ASC']],
     });
   }
 

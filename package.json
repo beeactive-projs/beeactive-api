@@ -133,7 +133,8 @@
     "testEnvironment": "node",
     "setupFiles": [
       "<rootDir>/test/env.setup.ts"
-    ]
+    ],
+    "maxWorkers": "50%"
   },
   "lint-staged": {
     "*.ts": [

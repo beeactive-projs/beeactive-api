@@ -62,6 +62,7 @@ export interface InvoiceResponse {
     email: string;
     firstName: string | null;
     lastName: string | null;
+    avatarUrl: string | null;
   } | null;
 }
 
@@ -153,6 +154,7 @@ export class InvoiceService {
               (guestName && guestName.includes(' ')
                 ? guestName.split(' ').slice(1).join(' ')
                 : null),
+            avatarUrl: user?.avatarUrl ?? null,
           }
         : null;
       return json;

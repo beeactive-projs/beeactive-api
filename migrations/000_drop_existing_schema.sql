@@ -5,40 +5,19 @@
 -- Only run this in development or when doing a fresh start
 -- =========================================================
 
--- Drop tables in reverse order of dependencies (child tables first)
--- CASCADE handles foreign key dependencies
+-- Nuke the entire public schema instead of maintaining a hand-written
+-- drop list. The old per-table list silently went stale as migrations
+-- were added: a fresh run against an already-migrated DB left newer
+-- tables/types in place, later migrations failed with "already exists",
+-- and everything after cascaded into "current transaction is aborted".
+--
+-- CASCADE also drops extensions whose objects live in public (pg_trgm,
+-- pgcrypto); the migrations that need them recreate them defensively
+-- (029, 043, 047) before first use.
 
-DROP TABLE IF EXISTS blog_post CASCADE;
-DROP TABLE IF EXISTS role_permission CASCADE;
-DROP TABLE IF EXISTS user_role CASCADE;
-DROP TABLE IF EXISTS session_participant CASCADE;
-DROP TABLE IF EXISTS session CASCADE;
-DROP TABLE IF EXISTS invitation CASCADE;
-DROP TABLE IF EXISTS client_request CASCADE;
-DROP TABLE IF EXISTS instructor_client CASCADE;
-DROP TABLE IF EXISTS group_member CASCADE;
-DROP TABLE IF EXISTS instructor_profile CASCADE;
-DROP TABLE IF EXISTS user_profile CASCADE;
-DROP TABLE IF EXISTS social_account CASCADE;
-DROP TABLE IF EXISTS refresh_token CASCADE;
-DROP TABLE IF EXISTS "group" CASCADE;
-DROP TABLE IF EXISTS permission CASCADE;
-DROP TABLE IF EXISTS role CASCADE;
-DROP TABLE IF EXISTS "user" CASCADE;
-DROP TABLE IF EXISTS _migrations CASCADE;
-
--- Drop custom enum types
-DROP TYPE IF EXISTS enum_social_provider CASCADE;
-DROP TYPE IF EXISTS enum_session_type CASCADE;
-DROP TYPE IF EXISTS enum_session_visibility CASCADE;
-DROP TYPE IF EXISTS enum_session_status CASCADE;
-DROP TYPE IF EXISTS enum_participant_status CASCADE;
-DROP TYPE IF EXISTS enum_gender CASCADE;
-DROP TYPE IF EXISTS enum_fitness_level CASCADE;
-DROP TYPE IF EXISTS enum_instructor_client_status CASCADE;
-DROP TYPE IF EXISTS enum_initiated_by CASCADE;
-DROP TYPE IF EXISTS enum_client_request_type CASCADE;
-DROP TYPE IF EXISTS enum_client_request_status CASCADE;
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO public;
 
 -- =========================================================
 -- Schema dropped successfully

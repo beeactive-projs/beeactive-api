@@ -15,11 +15,21 @@ export function normalizeSearchTerm(term: string): string {
 }
 
 /**
+ * Escape the characters LIKE treats as wildcards, so a term is matched
+ * literally. Without it a search for `%` matches every row and `_`
+ * matches any character, which reads as a broken search and makes an
+ * unindexed full scan trivial to trigger.
+ */
+export function escapeLikeWildcards(term: string): string {
+  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/**
  * Build a SQL LIKE wildcard term from a raw search input.
- * Returns the normalized term wrapped in `%...%`.
+ * Returns the normalized, escaped term wrapped in `%...%`.
  */
 export function buildSearchTerm(rawTerm: string): string {
-  return `%${normalizeSearchTerm(rawTerm)}%`;
+  return `%${escapeLikeWildcards(normalizeSearchTerm(rawTerm))}%`;
 }
 
 /**

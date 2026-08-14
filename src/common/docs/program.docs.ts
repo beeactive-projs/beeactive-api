@@ -45,6 +45,22 @@ const setExample = {
 };
 
 export const ProgramDocs = {
+  duplicate: {
+    summary: 'Copy a routine into my library',
+    description:
+      "Deep-copies a program and its whole tree into the caller's library, " +
+      'stamped `source: USER` and `status: DRAFT`. This is how a MotionHive ' +
+      'starter routine gets customised: starters are owned by nobody, so ' +
+      'they cannot be edited in place without changing them for everyone. ' +
+      'Readable sources are your own programs and system starters; anything ' +
+      'else 404s.',
+    auth: true,
+    responses: [
+      { status: 201, description: 'Copy created' },
+      { status: 404, description: 'Not yours and not a starter' },
+    ],
+  } as ApiEndpointOptions,
+
   list: {
     summary: 'List the instructor’s programs',
     description:
@@ -140,6 +156,30 @@ export const ProgramDocs = {
       ApiStandardResponses.BadRequest,
       ApiStandardResponses.NotFound,
       ApiStandardResponses.Conflict,
+    ],
+  } as ApiEndpointOptions,
+
+  reorderWorkouts: {
+    summary: 'Reposition workouts on the program calendar (atomic)',
+    description:
+      'INSTRUCTOR only. Applies every (weekIndex, dayIndex) move in ONE ' +
+      'transaction — unlike sequential PATCHes, intermediate collisions with ' +
+      'the unique position index cannot strand the program half-moved. ' +
+      'Workouts omitted from `items` keep their current slot. The combined ' +
+      'target layout must be collision-free (409 otherwise). ' +
+      '`sequenceNumber` is recomputed to calendar order (week, then day) ' +
+      'across the whole program. Returns all workouts in the new order.',
+    auth: true,
+    responses: [
+      {
+        status: 200,
+        description: 'Workouts repositioned',
+        example: [workoutExample],
+      },
+      ApiStandardResponses.BadRequest,
+      ApiStandardResponses.NotFound,
+      ApiStandardResponses.Conflict,
+      ApiStandardResponses.Unauthorized,
     ],
   } as ApiEndpointOptions,
 

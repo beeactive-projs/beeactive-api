@@ -14,7 +14,11 @@ import { InstructorClient } from '../../client/entities/instructor-client.entity
 import { User } from '../../user/entities/user.entity';
 import { AssignedWorkout } from './assigned-workout.entity';
 import { Program } from './program.entity';
-import { ProgramAssignmentStatus } from './workout.enums';
+import {
+  ProgramAssignmentKind,
+  ProgramAssignmentStatus,
+  ProgramRepeatMode,
+} from './workout.enums';
 
 /**
  * ProgramAssignment — a copy-on-assign deep clone of a program for
@@ -47,13 +51,43 @@ export class ProgramAssignment extends Model {
   })
   declare id: string;
 
+  /** Null for SELF assignments — nobody is coaching this one. */
   @ForeignKey(() => User)
-  @Column({ type: DataType.CHAR(36), allowNull: false })
-  declare instructorId: string;
+  @Column({ type: DataType.CHAR(36), allowNull: true })
+  declare instructorId: string | null;
+
+  @Column({
+    type: DataType.ENUM(...Object.values(ProgramAssignmentKind)),
+    allowNull: false,
+    defaultValue: ProgramAssignmentKind.Coach,
+  })
+  declare assignmentKind: ProgramAssignmentKind;
 
   @ForeignKey(() => User)
   @Column({ type: DataType.CHAR(36), allowNull: false })
   declare clientId: string;
+
+  @Column({
+    type: DataType.ENUM(...Object.values(ProgramRepeatMode)),
+    allowNull: false,
+    defaultValue: ProgramRepeatMode.None,
+  })
+  declare repeatMode: ProgramRepeatMode;
+
+  /** Only set when repeatMode is BLOCK. */
+  @Column({ type: DataType.SMALLINT, allowNull: true })
+  declare repeatWeeks: number | null;
+
+  /**
+   * Client-owned visibility toggle: may the coach see training logged
+   * outside this plan. Schema is live; the consent UI ships later.
+   */
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare shareOffPlan: boolean;
 
   /** Bound to the active instructor↔client relationship at assign time. */
   @ForeignKey(() => InstructorClient)

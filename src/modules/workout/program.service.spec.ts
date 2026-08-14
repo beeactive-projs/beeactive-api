@@ -18,6 +18,9 @@ import { PrescribedSet } from './entities/prescribed-set.entity';
 import { Program } from './entities/program.entity';
 import { ProgramWorkout } from './entities/program-workout.entity';
 import { ProgramService } from './program.service';
+import { ProgramLibrary } from './dto/list-programs.query.dto';
+import { ProgramSource } from './entities/workout.enums';
+import { ProgramAssignment } from './entities/program-assignment.entity';
 import {
   makeSequelizeMock,
   makeSilentLogger,
@@ -40,6 +43,8 @@ describe('ProgramService (smoke — not exhaustive)', () => {
     findAndCountAll: jest.fn(),
     create: jest.fn(),
   };
+
+  const assignmentModel = { count: jest.fn(), update: jest.fn() };
   const workoutModel = {
     findByPk: jest.fn(),
     findOne: jest.fn(),
@@ -50,13 +55,16 @@ describe('ProgramService (smoke — not exhaustive)', () => {
   const prescribedExerciseModel = {
     findByPk: jest.fn(),
     findOne: jest.fn(),
+    findAll: jest.fn(),
     create: jest.fn(),
+    destroy: jest.fn(),
     max: jest.fn(),
   };
   const prescribedSetModel = {
     findByPk: jest.fn(),
     findOne: jest.fn(),
     create: jest.fn(),
+    bulkCreate: jest.fn(),
     max: jest.fn(),
   };
   const exerciseModel = { findByPk: jest.fn() };
@@ -67,6 +75,10 @@ describe('ProgramService (smoke — not exhaustive)', () => {
       providers: [
         ProgramService,
         { provide: getModelToken(Program), useValue: programModel },
+        {
+          provide: getModelToken(ProgramAssignment),
+          useValue: assignmentModel,
+        },
         { provide: getModelToken(ProgramWorkout), useValue: workoutModel },
         {
           provide: getModelToken(PrescribedExercise),
@@ -99,6 +111,268 @@ describe('ProgramService (smoke — not exhaustive)', () => {
       await expect(
         service.update('missing', { name: 'X' }, 'me'),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ─── create — provenance stamping (migration 056) ─────────────────
+
+  describe('create — source stamping', () => {
+    it('stamps INSTRUCTOR when a coach authors', async () => {
+      programModel.create.mockResolvedValueOnce({ id: 'p-1' });
+      await service.create({ name: 'Hypertrophy base' }, 'coach-1', true);
+
+      expect(programModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'INSTRUCTOR',
+          ownerId: 'coach-1',
+          isSingleWorkout: false,
+        }),
+      );
+    });
+
+    it('stamps USER and honours isSingleWorkout for a self-authored routine', async () => {
+      programModel.create.mockResolvedValueOnce({ id: 'p-2' });
+      workoutModel.create.mockResolvedValueOnce({ id: 'pw-2' });
+
+      await service.create(
+        { name: 'Push day A', isSingleWorkout: true, folder: 'PPL' },
+        'me',
+        false,
+      );
+
+      expect(programModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'USER',
+          ownerId: 'me',
+          isSingleWorkout: true,
+          folder: 'PPL',
+        }),
+        expect.anything(),
+      );
+      // A routine always gets its single workout, at week 0 / day 0.
+      expect(workoutModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          programId: 'p-2',
+          weekIndex: 0,
+          dayIndex: 0,
+          sequenceNumber: 0,
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('expands defaultSets into that many prescribed sets', async () => {
+      programModel.create.mockResolvedValueOnce({ id: 'p-3' });
+      workoutModel.create.mockResolvedValueOnce({ id: 'pw-3' });
+      prescribedExerciseModel.create.mockResolvedValueOnce({ id: 'pe-3' });
+
+      await service.create(
+        {
+          name: 'Squat day',
+          isSingleWorkout: true,
+          exercises: [{ exerciseId: 'ex-1', defaultSets: 4, targetRepsMin: 8 }],
+        },
+        'me',
+        false,
+      );
+
+      const [rows] = prescribedSetModel.bulkCreate.mock.calls[0] as [
+        Array<Record<string, unknown>>,
+      ];
+      expect(rows).toHaveLength(4);
+      expect(rows[0]).toEqual(
+        expect.objectContaining({
+          prescribedExerciseId: 'pe-3',
+          orderIndex: 0,
+          targetRepsMin: 8,
+        }),
+      );
+    });
+
+    it('writes explicit per-set rows when the editor sends them', async () => {
+      programModel.create.mockResolvedValueOnce({ id: 'p-4' });
+      workoutModel.create.mockResolvedValueOnce({ id: 'pw-4' });
+      prescribedExerciseModel.create.mockResolvedValueOnce({ id: 'pe-4' });
+
+      // A warm-up, a top set, two backoffs — the shape `defaultSets`
+      // cannot express.
+      await service.create(
+        {
+          name: 'Squat day',
+          isSingleWorkout: true,
+          exercises: [
+            {
+              exerciseId: 'ex-1',
+              defaultSets: 99, // must be ignored when `sets` is present
+              sets: [
+                {
+                  setType: 'WARMUP' as never,
+                  targetRepsMin: 8,
+                  targetWeightKg: 60,
+                },
+                {
+                  setType: 'NORMAL' as never,
+                  targetRepsMin: 5,
+                  targetWeightKg: 100,
+                },
+                {
+                  setType: 'NORMAL' as never,
+                  targetRepsMin: 8,
+                  targetWeightKg: 85,
+                },
+              ],
+            },
+          ],
+        },
+        'me',
+        false,
+      );
+
+      const [rows] = prescribedSetModel.bulkCreate.mock.calls[0] as [
+        Array<Record<string, unknown>>,
+      ];
+      expect(rows).toHaveLength(3);
+      expect(rows.map((r) => [r.setType, r.targetWeightKg])).toEqual([
+        ['WARMUP', 60],
+        ['NORMAL', 100],
+        ['NORMAL', 85],
+      ]);
+    });
+
+    it('refuses nested exercises on a multi-week program', async () => {
+      await expect(
+        service.create(
+          { name: 'Block', exercises: [{ exerciseId: 'ex-1' }] },
+          'me',
+          true,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── list — server-computed exercise count ───────────────────────
+
+  describe('list — whose library', () => {
+    const whereOf = () =>
+      (
+        programModel.findAndCountAll.mock.calls[0][0] as {
+          where: Record<string, unknown>;
+        }
+      ).where;
+
+    beforeEach(() => {
+      programModel.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
+      prescribedExerciseModel.findAll.mockResolvedValue([]);
+    });
+
+    it('defaults to yours plus MotionHive starters', async () => {
+      await service.list({ isSingleWorkout: true }, 'me');
+      // A plain `ownerId: 'me'` here would hide every starter, which is
+      // what kept the seeded content invisible to everyone.
+      const w = whereOf();
+      expect(w['ownerId']).toBeUndefined();
+      const bySymbol = w as unknown as Record<symbol, unknown>;
+      const or = Object.getOwnPropertySymbols(w).map((x) => bySymbol[x])[0];
+      expect(or).toEqual([{ ownerId: 'me' }, { source: ProgramSource.System }]);
+    });
+
+    it('narrows to your own library on request', async () => {
+      await service.list(
+        { isSingleWorkout: true, library: ProgramLibrary.Mine },
+        'me',
+      );
+      expect(whereOf()).toEqual(expect.objectContaining({ ownerId: 'me' }));
+    });
+
+    it('narrows to starters on request', async () => {
+      await service.list(
+        { isSingleWorkout: true, library: ProgramLibrary.System },
+        'me',
+      );
+      const w = whereOf();
+      expect(w).toEqual(
+        expect.objectContaining({ source: ProgramSource.System }),
+      );
+      expect(w['ownerId']).toBeUndefined();
+    });
+  });
+
+  describe('list — exercise count', () => {
+    it('attaches a count per row without shipping the tree', async () => {
+      programModel.findAndCountAll.mockResolvedValueOnce({
+        rows: [
+          { id: 'p-1', toJSON: () => ({ id: 'p-1', name: 'Push day A' }) },
+          { id: 'p-2', toJSON: () => ({ id: 'p-2', name: 'Pull day B' }) },
+        ],
+        count: 2,
+      });
+      // Only p-1 has exercises; p-2 must still render as 0, not undefined.
+      prescribedExerciseModel.findAll.mockResolvedValueOnce([
+        { programId: 'p-1', total: '3' },
+      ]);
+
+      const res = await service.list({ isSingleWorkout: true }, 'me');
+
+      expect(res.items).toEqual([
+        expect.objectContaining({ id: 'p-1', exerciseCount: 3 }),
+        expect.objectContaining({ id: 'p-2', exerciseCount: 0 }),
+      ]);
+    });
+
+    it('skips the count query entirely when the page is empty', async () => {
+      programModel.findAndCountAll.mockResolvedValueOnce({
+        rows: [],
+        count: 0,
+      });
+
+      const res = await service.list({}, 'me');
+
+      expect(res.items).toEqual([]);
+      expect(prescribedExerciseModel.findAll).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── update — routine tree replacement ───────────────────────────
+
+  describe('update — replacing a routine tree', () => {
+    it('clears the old exercises before writing the new ones', async () => {
+      programModel.findByPk.mockResolvedValueOnce({
+        id: 'p-1',
+        ownerId: 'me',
+        isSingleWorkout: true,
+        update: jest.fn().mockResolvedValue(undefined),
+      });
+      workoutModel.findOne.mockResolvedValueOnce({ id: 'pw-1' });
+      prescribedExerciseModel.create.mockResolvedValueOnce({ id: 'pe-9' });
+
+      await service.update(
+        'p-1',
+        { exercises: [{ exerciseId: 'ex-9', defaultSets: 5 }] },
+        'me',
+      );
+
+      expect(prescribedExerciseModel.destroy).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { programWorkoutId: 'pw-1' } }),
+      );
+      expect(prescribedSetModel.bulkCreate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ prescribedExerciseId: 'pe-9' }),
+        ]),
+        expect.anything(),
+      );
+    });
+
+    it('refuses a nested edit on a multi-week program', async () => {
+      programModel.findByPk.mockResolvedValueOnce({
+        id: 'p-2',
+        ownerId: 'me',
+        isSingleWorkout: false,
+        update: jest.fn(),
+      });
+
+      await expect(
+        service.update('p-2', { exercises: [{ exerciseId: 'ex-1' }] }, 'me'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -193,6 +467,134 @@ describe('ProgramService (smoke — not exhaustive)', () => {
       expect(workoutModel.create).toHaveBeenCalledWith(
         expect.objectContaining({ sequenceNumber: 0 }),
       );
+    });
+  });
+
+  // ─── Workout reorder (atomic repositioning) ──────────────────────
+
+  describe('reorderWorkouts', () => {
+    /** Fake row whose update() mutates in place like a Sequelize instance. */
+    const makeWorkout = (
+      id: string,
+      weekIndex: number,
+      dayIndex: number,
+      sequenceNumber: number,
+    ) => {
+      const w = { id, weekIndex, dayIndex, sequenceNumber } as {
+        id: string;
+        weekIndex: number;
+        dayIndex: number;
+        sequenceNumber: number;
+        update: jest.Mock;
+      };
+      w.update = jest.fn((values: object) => {
+        Object.assign(w, values);
+        return Promise.resolve(w);
+      });
+      return w;
+    };
+
+    const setupProgram = () => {
+      programModel.findByPk.mockResolvedValueOnce({ id: 'p-1', ownerId: 'me' });
+    };
+
+    it('404s when an item references a workout outside the program', async () => {
+      setupProgram();
+      workoutModel.findAll.mockResolvedValueOnce([makeWorkout('w-1', 0, 0, 0)]);
+
+      await expect(
+        service.reorderWorkouts(
+          'p-1',
+          { items: [{ id: 'w-foreign', weekIndex: 0, dayIndex: 1 }] },
+          'me',
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects duplicate workout ids in items', async () => {
+      setupProgram();
+      workoutModel.findAll.mockResolvedValueOnce([makeWorkout('w-1', 0, 0, 0)]);
+
+      await expect(
+        service.reorderWorkouts(
+          'p-1',
+          {
+            items: [
+              { id: 'w-1', weekIndex: 0, dayIndex: 1 },
+              { id: 'w-1', weekIndex: 0, dayIndex: 2 },
+            ],
+          },
+          'me',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('409s when a target slot collides with an untouched workout', async () => {
+      setupProgram();
+      workoutModel.findAll.mockResolvedValueOnce([
+        makeWorkout('w-1', 0, 0, 0),
+        makeWorkout('w-2', 0, 2, 1), // stays put — occupies (0, 2)
+      ]);
+
+      await expect(
+        service.reorderWorkouts(
+          'p-1',
+          { items: [{ id: 'w-1', weekIndex: 0, dayIndex: 2 }] },
+          'me',
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('swaps two days via the parked week namespace and renumbers sequence', async () => {
+      setupProgram();
+      const w1 = makeWorkout('w-1', 0, 0, 0);
+      const w2 = makeWorkout('w-2', 0, 2, 1);
+      workoutModel.findAll
+        .mockResolvedValueOnce([w1, w2]) // load
+        .mockResolvedValueOnce([w2, w1]); // post-reorder return
+
+      await service.reorderWorkouts(
+        'p-1',
+        {
+          items: [
+            { id: 'w-1', weekIndex: 0, dayIndex: 2 },
+            { id: 'w-2', weekIndex: 0, dayIndex: 0 },
+          ],
+        },
+        'me',
+      );
+
+      // Phase 1 parks out of collision range before any final write.
+      expect(w1.update.mock.calls[0][0]).toEqual({ weekIndex: 10_000 });
+      expect(w2.update.mock.calls[0][0]).toEqual({ weekIndex: 10_000 });
+      // Phase 2 writes the validated final slots.
+      expect(w1.update.mock.calls[1][0]).toEqual({ weekIndex: 0, dayIndex: 2 });
+      expect(w2.update.mock.calls[1][0]).toEqual({ weekIndex: 0, dayIndex: 0 });
+      // sequenceNumber follows calendar order: w2 (day 0) then w1 (day 2).
+      expect(w2.update).toHaveBeenCalledWith(
+        { sequenceNumber: 0 },
+        expect.anything(),
+      );
+      expect(w1.update).toHaveBeenCalledWith(
+        { sequenceNumber: 1 },
+        expect.anything(),
+      );
+    });
+
+    it('skips the transaction entirely when nothing actually moves', async () => {
+      setupProgram();
+      const w1 = makeWorkout('w-1', 0, 0, 0);
+      workoutModel.findAll
+        .mockResolvedValueOnce([w1])
+        .mockResolvedValueOnce([w1]);
+
+      await service.reorderWorkouts(
+        'p-1',
+        { items: [{ id: 'w-1', weekIndex: 0, dayIndex: 0 }] },
+        'me',
+      );
+
+      expect(w1.update).not.toHaveBeenCalled();
     });
   });
 

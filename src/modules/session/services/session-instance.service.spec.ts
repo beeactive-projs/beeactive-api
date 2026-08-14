@@ -75,6 +75,49 @@ describe('SessionInstanceService', () => {
       expect(hasParticipantJoin).toBe(false);
     });
 
+    it('B1a: clientId narrows the own-calendar view to that person', async () => {
+      instanceMock.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
+
+      await service.list('usr-1', {
+        page: 1,
+        limit: 20,
+        clientId: 'cli-9',
+      });
+
+      const call = instanceMock.findAndCountAll.mock.calls[0][0] as {
+        where: Record<string, unknown>;
+        include: {
+          as?: string;
+          required?: boolean;
+          where?: Record<string, unknown>;
+        }[];
+      };
+      // Still the caller's own calendar — the filter narrows, never widens.
+      expect(call.where['instructorId']).toBe('usr-1');
+      const partJoin = call.include.find((i) => i.as === 'participants');
+      expect(partJoin?.required).toBe(true);
+      expect(partJoin?.where?.['userId']).toBe('cli-9');
+    });
+
+    it('B1b: clientId is ignored when viewing another instructor', async () => {
+      instanceMock.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
+
+      await service.list('usr-1', {
+        page: 1,
+        limit: 20,
+        instructorId: 'usr-other',
+        clientId: 'cli-9',
+      });
+
+      const call = instanceMock.findAndCountAll.mock.calls[0][0] as {
+        include: { as?: string; where?: Record<string, unknown> }[];
+      };
+      // Cross-instructor stays scoped to the caller — you cannot use
+      // clientId to read someone else's roster through another coach.
+      const partJoin = call.include.find((i) => i.as === 'participants');
+      expect(partJoin?.where?.['userId']).toBe('usr-1');
+    });
+
     it('B2: cross-instructor view requires participant join (scoped to caller)', async () => {
       instanceMock.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
 

@@ -114,6 +114,23 @@ export const ClientDocs = {
     ],
   } as ApiEndpointOptions,
 
+  getClient: {
+    summary: 'Get one of my clients',
+    description:
+      "One client of the authenticated instructor, keyed on the client's user id " +
+      'and returned in the same shape as a row from `GET /clients`. Lets the client ' +
+      'profile be opened by URL rather than only from the list. Returns 404 for a ' +
+      "user who is not your client — existence of someone else's coaching " +
+      'relationship is not disclosed.',
+    auth: true,
+    responses: [
+      { status: 200, description: 'Client returned' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.Forbidden,
+      { status: 404, description: 'Not your client' },
+    ],
+  } as ApiEndpointOptions,
+
   getMyClients: {
     summary: 'List my clients',
     description:

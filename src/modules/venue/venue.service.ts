@@ -54,6 +54,22 @@ export class VenueService {
     });
   }
 
+  /**
+   * Public, safe venue list for the `/@handle` profile page. Takes the
+   * `instructor_profile` id directly (the profile is already loaded by the
+   * caller) and returns only ACTIVE venues, ordered for display. No ownership
+   * check — this is a public read; the caller maps to safe fields.
+   */
+  async listPublicForProfile(instructorProfileId: string): Promise<Venue[]> {
+    return this.venueModel.findAll({
+      where: { instructorId: instructorProfileId, isActive: true },
+      order: [
+        ['displayOrder', 'ASC NULLS LAST'],
+        ['name', 'ASC'],
+      ],
+    });
+  }
+
   async get(userId: string, venueId: string): Promise<Venue> {
     const instructor = await this.getInstructorOrThrow(userId);
     const venue = await this.venueModel.findByPk(venueId);

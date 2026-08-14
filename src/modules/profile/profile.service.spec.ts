@@ -11,6 +11,7 @@ import { UserService } from '../user/user.service';
 import { SearchIndexService } from '../search/search-index.service';
 import { ReviewService } from '../review/review.service';
 import { GroupService } from '../group/group.service';
+import { VenueService } from '../venue/venue.service';
 import { User } from '../user/entities/user.entity';
 import { InstructorClient } from '../client/entities/instructor-client.entity';
 import {
@@ -21,7 +22,8 @@ import {
 /**
  * Smoke tests for ProfileService — covers the surface the FE relies on:
  *   - constructor wires up cleanly
- *   - getInstructorPublicProfile / by-handle: 404 on miss, happy path
+ *   - getInstructorPublicProfile / by-handle: 404 on miss, happy path,
+ *     public-safe venue projection
  *   - updateInstructorProfile: 404 when no row, happy path reindexes
  *   - discoverInstructors: returns the FE-shaped projection
  *   - updateHandle: 409 on collision
@@ -73,9 +75,15 @@ describe('ProfileService (smoke — not exhaustive)', () => {
     listPublicGroupsForInstructor: jest.fn(),
   };
 
+  const venueService = {
+    listPublicForProfile: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     jest.restoreAllMocks();
+    // Most tests don't care about venues; opt in per-test with mockResolvedValueOnce.
+    venueService.listPublicForProfile.mockResolvedValue([]);
     const module = await Test.createTestingModule({
       providers: [
         ProfileService,
@@ -89,6 +97,7 @@ describe('ProfileService (smoke — not exhaustive)', () => {
         { provide: SearchIndexService, useValue: searchIndexService },
         { provide: ReviewService, useValue: reviewService },
         { provide: GroupService, useValue: groupService },
+        { provide: VenueService, useValue: venueService },
         {
           provide: WINSTON_MODULE_NEST_PROVIDER,
           useValue: makeSilentLogger(),
@@ -263,6 +272,51 @@ describe('ProfileService (smoke — not exhaustive)', () => {
 
       const out = await service.getInstructorPublicProfile('u-2');
       expect(out.rating).toBeNull();
+    });
+
+    it('projects venues down to public-safe fields only', async () => {
+      instructorProfileModel.findOne.mockResolvedValueOnce({
+        id: 'ip-3',
+        userId: 'u-3',
+        specializations: [],
+        certifications: [],
+        socialLinks: {},
+        createdAt: new Date(),
+        user: { handle: 'v', privacySettings: {}, createdAt: new Date() },
+      });
+      reviewService.getSummaryForProfile.mockResolvedValueOnce({
+        total: 0,
+        average: 0,
+      });
+      venueService.listPublicForProfile.mockResolvedValueOnce([
+        {
+          id: 'v-1',
+          kind: 'GYM',
+          isOnline: false,
+          name: 'Downtown Gym',
+          city: 'Bucharest',
+          region: 'B',
+          countryCode: 'RO',
+          addressLine1: '12 Secret St',
+          meetingUrl: 'https://meet.example/private',
+          instructorId: 'ip-3',
+        },
+      ]);
+
+      const out = await service.getInstructorPublicProfile('u-3');
+
+      expect(venueService.listPublicForProfile).toHaveBeenCalledWith('ip-3');
+      expect(out.venues).toEqual([
+        {
+          id: 'v-1',
+          kind: 'GYM',
+          isOnline: false,
+          name: 'Downtown Gym',
+          city: 'Bucharest',
+          region: 'B',
+          countryCode: 'RO',
+        },
+      ]);
     });
   });
 

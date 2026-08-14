@@ -22,6 +22,8 @@ import type { AuthenticatedRequest } from '../../common/types/authenticated-requ
 
 import { AssignProgramDto } from './dto/assign-program.dto';
 import { ListAssignmentsQueryDto } from './dto/list-assignments.query.dto';
+import { ScheduleRoutineDto } from './dto/schedule-routine.dto';
+import { TrainingDayQueryDto } from './dto/training-day.query.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { ProgramAssignmentService } from './program-assignment.service';
 
@@ -89,6 +91,35 @@ export class ProgramAssignmentController {
   }
 
   // ── Client surface ───────────────────────────────────────────────
+
+  /**
+   * The Workouts front door. One read so the surface doesn't N+1 its
+   * way through every assignment looking for today.
+   */
+  @Get('my/workouts/today')
+  @Roles('USER', 'INSTRUCTOR')
+  async trainingDay(
+    @Request() req: AuthenticatedRequest,
+    @Query() query: TrainingDayQueryDto,
+  ) {
+    const today = query.date ?? new Date().toISOString().slice(0, 10);
+    return this.assignmentService.getTrainingDay(req.user.id, today);
+  }
+
+  /**
+   * Schedule one of your own routines across the week. Self-assignment:
+   * the same machinery a coach uses, with no coach involved.
+   */
+  @Post('my/scheduled-routines')
+  @Roles('USER', 'INSTRUCTOR')
+  @Throttle({ default: { limit: 30, ttl: 3_600_000 } })
+  async scheduleRoutine(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: ScheduleRoutineDto,
+  ) {
+    const today = new Date().toISOString().slice(0, 10);
+    return this.assignmentService.scheduleRoutine(req.user.id, dto, today);
+  }
 
   @Get('my/program-assignments')
   @Roles('USER')

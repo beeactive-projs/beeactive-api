@@ -64,4 +64,6 @@ export enum NotificationType {
   // ── Workouts (exercises + programs) ──────────────────────
   EXERCISE_FORKED = 'EXERCISE_FORKED',
   PROGRAM_ASSIGNED = 'PROGRAM_ASSIGNED',
+  CLIENT_COMPLETED_WORKOUT = 'CLIENT_COMPLETED_WORKOUT',
+  CLIENT_COMPLETED_PLAN = 'CLIENT_COMPLETED_PLAN',
 }

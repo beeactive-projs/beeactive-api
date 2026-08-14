@@ -114,43 +114,88 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- =====================================================================
--- 3. EXERCISE CATALOG  (table is empty — must exist before any workout)
+-- 3. EXERCISE CATALOG  (must exist before any workout)
 --    SYSTEM exercises, public, owner_id NULL.
+--    Slugs carry a 'seed-' prefix: SYSTEM exercises share ONE global slug
+--    namespace (idx_exercise_slug_per_owner) with the ~870 rows loaded by
+--    scripts/seed-exercises.ts, and an unprefixed slug that collides gets
+--    silently dropped by ON CONFLICT — breaking every FK reference to its
+--    seed_uuid('ex:…') id further down.
 -- =====================================================================
+-- Reclaim the base slugs. `scripts/seed-exercises.ts` seeds an 800+ SYSTEM
+-- library, and some of its slugs (e.g. plank, romanian-deadlift) collide with
+-- the movements below under the partial unique index
+-- idx_exercise_slug_per_owner (COALESCE(owner_id, zero), slug) WHERE deleted_at
+-- IS NULL. Without this, ON CONFLICT silently SKIPS the colliding rows, so the
+-- seed_uuid('ex:...') ids never get inserted and every workout/program/log
+-- reference below orphans into an FK violation. Soft-delete (not hard delete)
+-- is FK-safe and, because the unique index ignores deleted rows, frees the slug
+-- for our fixed-id version. Idempotent: our own rows carry the seed_uuid ids and
+-- are excluded by the NOT IN, so re-running is a no-op.
+UPDATE exercise SET deleted_at = NOW()
+ WHERE owner_id IS NULL AND deleted_at IS NULL
+   AND slug IN ('back-squat','bench-press','deadlift','overhead-press','barbell-row',
+                'pull-up','walking-lunge','plank','dumbbell-curl','romanian-deadlift')
+   AND id NOT IN (
+     pg_temp.seed_uuid('ex:back-squat'), pg_temp.seed_uuid('ex:bench-press'),
+     pg_temp.seed_uuid('ex:deadlift'), pg_temp.seed_uuid('ex:overhead-press'),
+     pg_temp.seed_uuid('ex:barbell-row'), pg_temp.seed_uuid('ex:pull-up'),
+     pg_temp.seed_uuid('ex:walking-lunge'), pg_temp.seed_uuid('ex:plank'),
+     pg_temp.seed_uuid('ex:dumbbell-curl'), pg_temp.seed_uuid('ex:romanian-deadlift'));
+
 INSERT INTO exercise (id, name, slug, kind, level, movement_pattern,
                       mechanic, force, source, owner_id, visibility, media_kind)
 VALUES
-  (pg_temp.seed_uuid('ex:back-squat'),'Back Squat','back-squat',
+  (pg_temp.seed_uuid('ex:back-squat'),'Back Squat','seed-back-squat',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'SQUAT'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PUSH'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:bench-press'),'Bench Press','bench-press',
+  (pg_temp.seed_uuid('ex:bench-press'),'Bench Press','seed-bench-press',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'PUSH_HORIZONTAL'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PUSH'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:deadlift'),'Deadlift','deadlift',
+  (pg_temp.seed_uuid('ex:deadlift'),'Deadlift','seed-deadlift',
      'STRENGTH'::exercise_kind,'ADVANCED'::exercise_level,'HINGE'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:overhead-press'),'Overhead Press','overhead-press',
+  (pg_temp.seed_uuid('ex:overhead-press'),'Overhead Press','seed-overhead-press',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'PUSH_VERTICAL'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PUSH'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:barbell-row'),'Barbell Row','barbell-row',
+  (pg_temp.seed_uuid('ex:barbell-row'),'Barbell Row','seed-barbell-row',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'PULL_HORIZONTAL'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:pull-up'),'Pull-up','pull-up',
+  (pg_temp.seed_uuid('ex:pull-up'),'Pull-up','seed-pull-up',
      'BODYWEIGHT'::exercise_kind,'INTERMEDIATE'::exercise_level,'PULL_VERTICAL'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:walking-lunge'),'Walking Lunge','walking-lunge',
+  (pg_temp.seed_uuid('ex:walking-lunge'),'Walking Lunge','seed-walking-lunge',
      'BODYWEIGHT'::exercise_kind,'BEGINNER'::exercise_level,'LUNGE'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PUSH'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:plank'),'Plank','plank',
+  (pg_temp.seed_uuid('ex:plank'),'Plank','seed-plank',
      'DURATION'::exercise_kind,'BEGINNER'::exercise_level,'ANTI_ROTATION'::movement_pattern,
      'ISOLATION'::exercise_mechanic,'STATIC'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:dumbbell-curl'),'Dumbbell Curl','dumbbell-curl',
+  (pg_temp.seed_uuid('ex:dumbbell-curl'),'Dumbbell Curl','seed-dumbbell-curl',
      'STRENGTH'::exercise_kind,'BEGINNER'::exercise_level,'ISOLATION'::movement_pattern,
      'ISOLATION'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind),
-  (pg_temp.seed_uuid('ex:romanian-deadlift'),'Romanian Deadlift','romanian-deadlift',
+  (pg_temp.seed_uuid('ex:romanian-deadlift'),'Romanian Deadlift','seed-romanian-deadlift',
      'STRENGTH'::exercise_kind,'INTERMEDIATE'::exercise_level,'HINGE'::movement_pattern,
      'COMPOUND'::exercise_mechanic,'PULL'::exercise_force,'SYSTEM'::exercise_source,NULL,'PUBLIC'::exercise_visibility,'NONE'::exercise_media_kind)
 ON CONFLICT DO NOTHING;
+
+-- Thumbnails for the seeded compound lifts (free-exercise-db CDN, the same
+-- source the imported library uses). Drives the exercise-library grid, the
+-- assigned-plan view, and — via the log-snapshot backfill near the end of this
+-- file — the workout log/replay screens.
+UPDATE exercise SET thumbnail_url = v.url
+FROM (VALUES
+  (pg_temp.seed_uuid('ex:back-squat'),        'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Full_Squat/0.jpg'),
+  (pg_temp.seed_uuid('ex:bench-press'),       'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Bench_Press_-_Medium_Grip/0.jpg'),
+  (pg_temp.seed_uuid('ex:deadlift'),          'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Deadlift/0.jpg'),
+  (pg_temp.seed_uuid('ex:overhead-press'),    'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Shoulder_Press/0.jpg'),
+  (pg_temp.seed_uuid('ex:barbell-row'),       'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Bent_Over_Barbell_Row/0.jpg'),
+  (pg_temp.seed_uuid('ex:pull-up'),           'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Pullups/0.jpg'),
+  (pg_temp.seed_uuid('ex:walking-lunge'),     'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Walking_Lunge/0.jpg'),
+  (pg_temp.seed_uuid('ex:plank'),             'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Plank/0.jpg'),
+  (pg_temp.seed_uuid('ex:dumbbell-curl'),     'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Dumbbell_Bicep_Curl/0.jpg'),
+  (pg_temp.seed_uuid('ex:romanian-deadlift'), 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Romanian_Deadlift/0.jpg')
+) AS v(id, url)
+WHERE exercise.id = v.id;
 
 -- Exercise -> primary/secondary muscles (>=1 PRIMARY required by service)
 INSERT INTO exercise_muscle (exercise_id, muscle_id, role)
@@ -1217,6 +1262,265 @@ SELECT pg_temp.seed_uuid('sp:bulk-'||n), pg_temp.seed_uuid('si:bulk-'||n),
 FROM generate_series(1,20) AS n
 ON CONFLICT DO NOTHING;
 
+-- =====================================================================
+-- 19. STOREFRONT POLISH  (public profile reads like a real coach on camera)
+--     Migration 026 seeds this profile as "Test Instructor" with a generic
+--     bio and NO handle, so the public /@handle page is broken and the
+--     storefront preview looks like placeholder data. These UPDATEs give the
+--     coach a real name, headline-grade bio, and a working handle. Local
+--     cosmetic only; safe to re-run.
+-- =====================================================================
+UPDATE "user"
+   SET first_name = 'Alex',
+       last_name  = 'Rivera',
+       handle     = 'alexrivera',
+       avatar_url = 'https://i.pravatar.cc/400?img=12'
+ WHERE email = 'instructor@motionhive.fit';
+
+-- NB: certifications MUST be an array of OBJECTS ({name, issuer, year}). The
+-- API's normalizeCertifications() drops any item that isn't an object, so the
+-- old string-array form ('["NSCA-CPT", ...]' from migration 026) rendered as
+-- nothing. These object rows actually show on the profile.
+UPDATE instructor_profile
+   SET display_name        = 'Alex Rivera',
+       bio                 = 'Eleven years on the gym floor, from first timers to competitive lifters. I coach a small roster online and in person, and I keep it simple: show up, get strong, stay consistent. Every plan is built around your week, your goals, and the kit you can actually get to. Expect clear sessions, honest feedback, and progress you can measure. Strength and conditioning, plus the confidence that comes with both.',
+       specializations     = '["Strength & Conditioning","Powerlifting","Fat Loss","HIIT","Beginner Friendly"]',
+       certifications      = '[{"name":"Certified Strength & Conditioning Specialist","issuer":"NSCA","year":2015},{"name":"Level 2 Trainer","issuer":"CrossFit","year":2017},{"name":"Nutrition Coaching Level 1","issuer":"Precision Nutrition","year":2019}]',
+       years_of_experience = 11,
+       is_accepting_clients = TRUE,
+       social_links        = '{"instagram":"@alexrivera","youtube":"@alexrivera"}',
+       show_social_links   = TRUE,
+       is_public           = TRUE
+ WHERE user_id = (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit');
+
+-- =====================================================================
+-- 20. REVIEWS — intentionally NONE.
+--     The public profile no longer surfaces reviews (the section was removed
+--     from the FE), so we don't seed any. This DELETE also clears reviews left
+--     by earlier runs of this seed, keeping re-runs consistent.
+-- =====================================================================
+DELETE FROM review
+ WHERE instructor_profile_id = (
+   SELECT id FROM instructor_profile
+    WHERE user_id = (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit'));
+
+-- =====================================================================
+-- 21. CAMERA POLISH  (kill "Test …" placeholder names, enrich the feed)
+--     Migration 026 names the client account "Test User" and the group
+--     "Test Strength Club", which read as placeholder data in a screen
+--     recording. Give them real names, upgrade the single welcome post to
+--     a real coaching update with a little engagement, add a third venue,
+--     and drop em-dashes from program names (content rule: no dashes as
+--     punctuation). All UPDATEs key off stable ids/emails; safe to re-run.
+-- =====================================================================
+-- Real client identity (also fixes the review author + DM sender + participant name)
+UPDATE "user"
+   SET first_name = 'Sarah', last_name = 'Mitchell'
+ WHERE email = 'user@motionhive.fit';
+
+-- Group -> a real community name
+UPDATE "group"
+   SET name = 'Morning Crew',
+       slug = 'morning-crew',
+       description = 'Small in-person and online strength crew. We train early, keep each other honest, and celebrate every PB.'
+ WHERE id = pg_temp.seed_uuid('grp:test-strength-club');
+
+-- Migration 026 also seeds a bare "MotionHive Demo Group" (no logo, test
+-- description) owned by the instructor. Give it a real name + picture too so
+-- the coach's Communities section reads real on camera. Matched by slug so
+-- it's independent of 026's generated id; a no-op once already renamed.
+UPDATE "group"
+   SET name        = 'Strength Club',
+       slug        = 'strength-club',
+       description = 'For the strength crowd. Weekly check ins, PB celebrations, and honest form feedback from the whole group.',
+       logo_url    = 'https://picsum.photos/seed/strengthclub/600/400'
+ WHERE slug = 'motionhive-demo'
+   AND instructor_id = (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit');
+
+-- Upgrade the welcome post into a real coaching update
+UPDATE post
+   SET content = 'Great session this morning, everyone. New PBs from Sarah and Mihai 💪 Recovery walk tomorrow at 8, meet by the entrance.'
+ WHERE id = pg_temp.seed_uuid('post:welcome');
+
+UPDATE post_comment
+   SET content = 'That last set felt unreal. See you all tomorrow!'
+ WHERE id = pg_temp.seed_uuid('cmt:welcome:user');
+
+-- A second comment + second reaction so the feed looks alive
+INSERT INTO post_comment (id, post_id, author_id, content)
+VALUES
+  (pg_temp.seed_uuid('cmt:welcome:anna'), pg_temp.seed_uuid('post:welcome'),
+   pg_temp.seed_uuid('user:anna'), 'Recovery walk sounds perfect. Bringing coffee ☕')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO post_reaction (id, post_id, author_id, reaction_type)
+VALUES
+  (pg_temp.seed_uuid('rx:welcome:anna'), pg_temp.seed_uuid('post:welcome'),
+   pg_temp.seed_uuid('user:anna'), 'LIKE'),
+  (pg_temp.seed_uuid('rx:welcome:mihai'), pg_temp.seed_uuid('post:welcome'),
+   pg_temp.seed_uuid('user:mihai'), 'LIKE')
+ON CONFLICT DO NOTHING;
+
+-- A third venue (outdoor) so the venue picker / sessions read as lived-in
+INSERT INTO venue (id, instructor_id, kind, is_online, name, line1, city, region,
+                   postal_code, country_code, meeting_url, meeting_provider, is_active, display_order)
+VALUES
+  (pg_temp.seed_uuid('ven:riverside-park'),
+   (SELECT id FROM instructor_profile
+      WHERE user_id=(SELECT id FROM "user" WHERE email='instructor@motionhive.fit')),
+   'OUTDOOR', false, 'Riverside Park', NULL, 'Bucharest', 'Bucuresti',
+   NULL, 'RO', NULL, NULL, true, 2)
+ON CONFLICT DO NOTHING;
+
+-- Tidy em-dashes in seeded program names (content rule: no dashes as punctuation)
+UPDATE program SET name = replace(name, ' — ', ', ') WHERE name LIKE '% — %';
+
+-- =====================================================================
+-- 22. STOREFRONT MEDIA + OFFERINGS  (pictures + products on the profile)
+--     Real avatars (so faces show instead of preset illustrations), a group
+--     logo, and 3 products with show_on_profile=true so the public profile's
+--     offerings section is populated. Products carry NO Stripe ids — they
+--     render in the profile/offerings list fine; only a *live* Stripe action
+--     (checkout) would need real Stripe objects (see the payments clip note).
+--     External image hosts (pravatar/picsum) load in the app; no CSP here.
+-- =====================================================================
+-- Client + demo-user avatars
+UPDATE "user" SET avatar_url = 'https://i.pravatar.cc/400?img=5'  WHERE email = 'user@motionhive.fit';        -- Sarah
+UPDATE "user" SET avatar_url = 'https://i.pravatar.cc/400?img=32' WHERE email = 'anna.client@motionhive.fit';
+UPDATE "user" SET avatar_url = 'https://i.pravatar.cc/400?img=68' WHERE email = 'mihai.client@motionhive.fit';
+UPDATE "user" SET avatar_url = 'https://i.pravatar.cc/400?img=44' WHERE email = 'elena.member@motionhive.fit';
+
+-- Group logo (Morning Crew)
+UPDATE "group"
+   SET logo_url = 'https://picsum.photos/seed/morningcrew/600/400'
+ WHERE id = pg_temp.seed_uuid('grp:test-strength-club');
+
+-- Products shown on the public profile (offerings). RON to match the coach's
+-- sessions/settlement currency. Amounts in minor units (cents/bani).
+INSERT INTO product (id, instructor_id, name, description, type, amount_cents,
+                     currency, interval, interval_count, stripe_product_id,
+                     stripe_price_id, is_active, show_on_profile)
+VALUES
+  (pg_temp.seed_uuid('prod:monthly-coaching'),
+   (SELECT id FROM "user" WHERE email='instructor@motionhive.fit'),
+   'Monthly Coaching',
+   'Ongoing one to one coaching. A plan that updates every week, unlimited messaging, and a check in call when you need one.',
+   'SUBSCRIPTION', 20000, 'RON', 'month', 1, NULL, NULL, true, true),
+  (pg_temp.seed_uuid('prod:8-session-pack'),
+   (SELECT id FROM "user" WHERE email='instructor@motionhive.fit'),
+   '8 Session Pack',
+   'Eight sessions to use in person or online. Great for building a base or prepping for an event, at your own pace.',
+   'ONE_OFF', 60000, 'RON', NULL, NULL, NULL, NULL, true, true),
+  (pg_temp.seed_uuid('prod:form-check'),
+   (SELECT id FROM "user" WHERE email='instructor@motionhive.fit'),
+   'Form Check',
+   'Send a lifting video and get a detailed breakdown within 48 hours, with the two or three cues to fix first.',
+   'ONE_OFF', 7500, 'RON', NULL, NULL, NULL, NULL, true, true)
+ON CONFLICT DO NOTHING;
+
+-- Memberships (subscriptions) so the coach's Memberships list isn't empty.
+-- FAKE stripe_* ids: they render in lists but a live Stripe action would fail
+-- (same caveat as the seeded invoices). Depends on the SUBSCRIPTION product above.
+INSERT INTO subscription (
+  id, instructor_id, client_id, stripe_customer_id, product_id,
+  stripe_subscription_id, stripe_price_id, status,
+  current_period_start, current_period_end, cancel_at_period_end,
+  trial_start, trial_end, amount_cents, currency, created_at, updated_at)
+SELECT
+  pg_temp.seed_uuid('sub:'||s.k),
+  (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit'),
+  (SELECT id FROM "user" WHERE email = s.client_email),
+  'cus_demo_'||s.k,
+  pg_temp.seed_uuid('prod:monthly-coaching'),
+  'sub_demo_'||s.k, 'price_demo_monthly', s.status,
+  s.pstart, s.pend, false, s.tstart, s.tend, 20000, 'ron',
+  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM (VALUES
+  ('sarah','user@motionhive.fit','active',       CURRENT_TIMESTAMP - INTERVAL '12 days', CURRENT_TIMESTAMP + INTERVAL '18 days', NULL::timestamp, NULL::timestamp),
+  ('anna', 'anna.client@motionhive.fit','active', CURRENT_TIMESTAMP - INTERVAL '3 days',  CURRENT_TIMESTAMP + INTERVAL '27 days', NULL, NULL),
+  ('mihai','mihai.client@motionhive.fit','trialing', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '30 days', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '7 days')
+) AS s(k, client_email, status, pstart, pend, tstart, tend)
+ON CONFLICT DO NOTHING;
+
+-- =====================================================================
+-- 23. "MY EXERCISES" MEDIA  (the coach's OWN exercises need pictures)
+--     Sections 12 + 18 create coach-owned exercises with media_kind=NONE and
+--     generic "Custom Exercise N" names, so the My Exercises grid renders
+--     nameless and imageless. Give them real names and a picture each, reusing
+--     Free Exercise DB photos (seeded by scripts/seed-exercises.ts). Correct
+--     photo where the name matches a library entry; a distinct library photo
+--     as fallback. Idempotent: only fills exercises that have no media yet.
+-- =====================================================================
+UPDATE exercise e SET name = v.newname
+FROM (VALUES
+  ('Custom Exercise 1','Incline Dumbbell Press'), ('Custom Exercise 2','Lat Pulldown'),
+  ('Custom Exercise 3','Leg Press'),             ('Custom Exercise 4','Leg Extension'),
+  ('Custom Exercise 5','Seated Leg Curl'),       ('Custom Exercise 6','Face Pull'),
+  ('Custom Exercise 7','Cable Fly'),             ('Custom Exercise 8','Hammer Curl'),
+  ('Custom Exercise 9','Triceps Pushdown'),      ('Custom Exercise 10','Seated Cable Row'),
+  ('Custom Exercise 11','Front Squat'),          ('Custom Exercise 12','Hip Thrust'),
+  ('Custom Exercise 13','Chin Up'),              ('Custom Exercise 14','Arnold Press'),
+  ('Custom Exercise 15','Lateral Raise'),        ('Custom Exercise 16','Standing Calf Raise'),
+  ('Custom Exercise 17','Russian Twist'),        ('Custom Exercise 18','Mountain Climber'),
+  ('Custom Exercise 19','Box Jump'),             ('Custom Exercise 20','Kettlebell Swing')
+) AS v(old, newname)
+WHERE e.name = v.old
+  AND e.owner_id = (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit');
+
+UPDATE exercise
+   SET media_kind = 'IMAGE'
+ WHERE owner_id = (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit')
+   AND deleted_at IS NULL;
+
+-- Correct photo where the owned name matches a Free Exercise DB entry.
+INSERT INTO exercise_media (id, exercise_id, provider, kind, url, thumbnail_url, is_primary, display_order)
+SELECT gen_random_uuid()::char(36), o.id, 'jsdelivr', 'IMAGE', m.url, m.url, true, 0
+FROM exercise o
+JOIN exercise sys ON lower(sys.name) = lower(o.name)
+  AND sys.owner_id IS NULL AND sys.deleted_at IS NULL
+JOIN exercise_media m ON m.exercise_id = sys.id AND m.is_primary AND m.kind = 'IMAGE'
+WHERE o.owner_id = (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit')
+  AND o.deleted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM exercise_media em WHERE em.exercise_id = o.id);
+
+-- Fallback: any remaining owned exercise gets a distinct library photo.
+WITH owned AS (
+  SELECT o.id, row_number() OVER (ORDER BY o.created_at) AS rn
+  FROM exercise o
+  WHERE o.owner_id = (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit')
+    AND o.deleted_at IS NULL
+    AND NOT EXISTS (SELECT 1 FROM exercise_media m WHERE m.exercise_id = o.id)
+),
+pool AS (
+  SELECT url, row_number() OVER (ORDER BY url) AS rn
+  FROM (SELECT DISTINCT url FROM exercise_media WHERE kind = 'IMAGE' AND is_primary) d
+  LIMIT (SELECT count(*) FROM owned)
+)
+INSERT INTO exercise_media (id, exercise_id, provider, kind, url, thumbnail_url, is_primary, display_order)
+SELECT gen_random_uuid()::char(36), o.id, 'jsdelivr', 'IMAGE', p.url, p.url, true, 0
+FROM owned o JOIN pool p ON p.rn = o.rn;
+
+-- The catalog LIST renders exercise.thumbnail_url (a column on the row), not
+-- the exercise_media overlay (that's the detail view). Copy each owned
+-- exercise's primary image into thumbnail_url so it shows in the grid.
+UPDATE exercise e
+   SET thumbnail_url = m.url
+  FROM exercise_media m
+ WHERE m.exercise_id = e.id AND m.is_primary AND m.kind = 'IMAGE'
+   AND e.owner_id = (SELECT id FROM "user" WHERE email = 'instructor@motionhive.fit')
+   AND e.deleted_at IS NULL
+   AND (e.thumbnail_url IS NULL OR e.thumbnail_url = '');
+
+-- Backfill logged-exercise thumbnail snapshots from the (now populated)
+-- exercise thumbnails, so the workout log + replay screens show images for
+-- historical sessions too. Idempotent: only fills rows still missing a snapshot.
+UPDATE logged_exercise le
+SET exercise_thumbnail_url_snapshot = e.thumbnail_url
+FROM exercise e
+WHERE le.exercise_id = e.id
+  AND le.exercise_thumbnail_url_snapshot IS NULL
+  AND e.thumbnail_url IS NOT NULL;
+
 COMMIT;
 
 -- ---------------------------------------------------------------------
@@ -1247,4 +1551,5 @@ UNION ALL SELECT 'session_participant', count(*) FROM session_participant
 UNION ALL SELECT 'session_reminder_schedule', count(*) FROM session_reminder_schedule
 UNION ALL SELECT 'routine', count(*) FROM routine
 UNION ALL SELECT 'routine_exercise', count(*) FROM routine_exercise
+UNION ALL SELECT 'review', count(*) FROM review
 ORDER BY 1;

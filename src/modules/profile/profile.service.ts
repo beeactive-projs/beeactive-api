@@ -33,6 +33,7 @@ import { buildSearchTerm } from '../../common/utils/search.utils';
 import { SearchIndexService } from '../search/search-index.service';
 import { ReviewService } from '../review/review.service';
 import { GroupService } from '../group/group.service';
+import { VenueService } from '../venue/venue.service';
 
 /**
  * Audience tier resolved server-side per request. Order matters: when
@@ -103,6 +104,7 @@ export class ProfileService {
     private readonly searchIndexService: SearchIndexService,
     private readonly reviewService: ReviewService,
     private readonly groupService: GroupService,
+    private readonly venueService: VenueService,
   ) {}
 
   // =====================================================
@@ -481,7 +483,10 @@ export class ProfileService {
    * Public Profile screen.
    */
   private async toPublicProfileDto(profile: InstructorProfile) {
-    const rating = await this.reviewService.getSummaryForProfile(profile.id);
+    const [rating, venues] = await Promise.all([
+      this.reviewService.getSummaryForProfile(profile.id),
+      this.venueService.listPublicForProfile(profile.id),
+    ]);
 
     const settings = profile.user?.privacySettings ?? {};
     const maskField = <T>(field: PrivacyControlledField, value: T): T | null =>
@@ -513,6 +518,17 @@ export class ProfileService {
       showPhone: profile.showPhone,
       joinedAt: profile.user?.createdAt ?? profile.createdAt,
       rating: rating.total === 0 ? null : rating,
+      // Public, safe venue fields only — where the coach delivers, shown on
+      // the profile's "Where I coach" section. No street address / meeting URL.
+      venues: venues.map((v) => ({
+        id: v.id,
+        kind: v.kind,
+        isOnline: v.isOnline,
+        name: v.name,
+        city: v.city,
+        region: v.region,
+        countryCode: v.countryCode,
+      })),
     };
   }
 

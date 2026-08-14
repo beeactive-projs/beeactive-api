@@ -11,6 +11,7 @@ import {
 } from 'sequelize-typescript';
 import { User } from '../../user/entities/user.entity';
 import { AssignedWorkout } from './assigned-workout.entity';
+import { Program } from './program.entity';
 import { LoggedExercise } from './logged-exercise.entity';
 import { ProgramAssignment } from './program-assignment.entity';
 import { WorkoutLogStatus } from './workout.enums';
@@ -45,6 +46,15 @@ export class WorkoutLog extends Model {
   @ForeignKey(() => AssignedWorkout)
   @Column({ type: DataType.CHAR(36), allowNull: true })
   declare assignedWorkoutId: string | null;
+
+  /**
+   * The routine this session was started from, when it did not come
+   * through an assignment. Without it a routine-started log was
+   * indistinguishable from a freestyle one and linked back to nothing.
+   */
+  @ForeignKey(() => Program)
+  @Column({ type: DataType.CHAR(36), allowNull: true })
+  declare sourceProgramId: string | null;
 
   @Column({ type: DataType.STRING(200), allowNull: false })
   declare name: string;
@@ -94,6 +104,10 @@ export class WorkoutLog extends Model {
 
   @BelongsTo(() => AssignedWorkout, 'assignedWorkoutId')
   declare assignedWorkout: AssignedWorkout | null;
+
+  /** The routine this came from, so history can name it and link there. */
+  @BelongsTo(() => Program, 'sourceProgramId')
+  declare sourceProgram: Program | null;
 
   @HasMany(() => LoggedExercise)
   declare exercises: LoggedExercise[];
