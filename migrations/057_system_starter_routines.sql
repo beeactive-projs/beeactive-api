@@ -27,10 +27,13 @@
 --      have made "Full body starter" look like it needs a kettlebell
 --      nobody owns.
 --
--- REQUIRES the exercise catalogue. It is loaded by scripts/seed-exercises.ts,
--- which is a script and not a migration, so it must have been run against
--- this database first. The guard below names any slug that is missing
--- instead of seeding a routine with holes in it.
+-- Portable across environments. Every slug the starters reference has a
+-- minimal fallback insert below, so this migration runs green on a
+-- database where scripts/seed-exercises.ts has never been run (that is
+-- production the first time this ships). Running the seed later
+-- enriches those bare rows in place (muscles, equipment, JPG frames).
+-- The guard at the end of the exercise block remains as a defence
+-- against a future starter referencing a slug that was not added here.
 --
 -- Idempotent: fixed UUIDs + ON CONFLICT DO NOTHING, so a re-run is a
 -- no-op and a partially applied run repairs itself.
@@ -51,31 +54,57 @@ CREATE INDEX IF NOT EXISTS idx_program_level
   ON program (level) WHERE level IS NOT NULL;
 
 -- ---------------------------------------------------------------------
--- Catalogue fix: a goblet squat takes a dumbbell just as happily.
--- ---------------------------------------------------------------------
-INSERT INTO exercise_equipment (exercise_id, equipment_id)
-SELECT e.id, q.id
-FROM exercise e, equipment q
-WHERE e.slug = 'goblet-squat' AND e.source = 'SYSTEM' AND e.deleted_at IS NULL
-  AND q.slug = 'dumbbell'
-ON CONFLICT DO NOTHING;
-
--- ---------------------------------------------------------------------
--- Exercises the starters need that the catalogue import does not supply.
+-- Exercises the starters need.
 --
--- Most of the 24 movements below come from the free-exercise-db import.
--- These three do not: they existed on the author's machine only because
--- scripts/seed-test-data.sql created them, which is a dev fixture and
--- never runs on a real environment. Seeding them here is what makes this
--- migration portable instead of dependent on someone's local database.
+-- Every slug the starters reference is listed below and inserted only
+-- if the ownerless row is missing. On a machine where seed-exercises.ts
+-- has been run against free-exercise-db, all 24 rows exist already and
+-- this block is a no-op. On a fresh environment (production is that
+-- environment right now) the rows get created with the minimum viable
+-- shape: name, kind, level, source SYSTEM, visibility PUBLIC.
+--
+-- The muscle + equipment child rows and the JPG media come from
+-- seed-exercises.ts. Running that script later against the same
+-- database enriches these rows in place (the seed upserts on
+-- source_provider + source_external_id — the WHERE-NOT-EXISTS above
+-- prevents duplicate slug rows because the ownerless one already
+-- exists). So this block unblocks the migration; the seed adds the
+-- polish.
 -- ---------------------------------------------------------------------
 INSERT INTO exercise (id, name, slug, kind, level, source, visibility)
 SELECT v.id, v.name, v.slug, v.kind::exercise_kind, v.level::exercise_level,
        'SYSTEM', 'PUBLIC'
 FROM (VALUES
+  -- The three that never came from free-exercise-db and were added in d0d210a.
   ('5713e7a1-0003-4000-8000-000000000001', 'Plank', 'plank', 'DURATION', 'BEGINNER'),
   ('5713e7a1-0003-4000-8000-000000000002', 'Romanian Deadlift', 'romanian-deadlift', 'STRENGTH', 'INTERMEDIATE'),
-  ('5713e7a1-0003-4000-8000-000000000003', 'Walking Lunge', 'walking-lunge', 'BODYWEIGHT', 'BEGINNER')
+  ('5713e7a1-0003-4000-8000-000000000003', 'Walking Lunge', 'walking-lunge', 'BODYWEIGHT', 'BEGINNER'),
+  -- The rest: normally supplied by seed-exercises.ts. Auto-created here
+  -- as a safety net so this migration doesn't require the seed script
+  -- to have run first. Kind + level chosen from the source data's own
+  -- category / level fields; ids are fixed hashes so a re-run maps to
+  -- the same row.
+  ('5713e7a1-0003-4000-8000-000000000004', 'Goblet Squat', 'goblet-squat', 'STRENGTH', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000005', 'Incline Push-Up', 'incline-push-up', 'BODYWEIGHT', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000006', 'Bent Over Two Dumbbell Row', 'bent-over-two-dumbbell-row', 'STRENGTH', 'INTERMEDIATE'),
+  ('5713e7a1-0003-4000-8000-000000000007', 'Bodyweight Squat', 'bodyweight-squat', 'BODYWEIGHT', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000008', 'Dead Bug', 'dead-bug', 'BODYWEIGHT', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000009', 'Dumbbell Bench Press', 'dumbbell-bench-press', 'STRENGTH', 'INTERMEDIATE'),
+  ('5713e7a1-0003-4000-8000-00000000000a', 'Dumbbell Shoulder Press', 'dumbbell-shoulder-press', 'STRENGTH', 'INTERMEDIATE'),
+  ('5713e7a1-0003-4000-8000-00000000000b', 'Close-Grip Front Lat Pulldown', 'close-grip-front-lat-pulldown', 'STRENGTH', 'INTERMEDIATE'),
+  ('5713e7a1-0003-4000-8000-00000000000c', 'Single-Leg Glute Bridge', 'single-leg-glute-bridge', 'BODYWEIGHT', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-00000000000d', 'Dumbbell Lunges', 'dumbbell-lunges', 'STRENGTH', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-00000000000e', 'Standing Dumbbell Press', 'standing-dumbbell-press', 'STRENGTH', 'INTERMEDIATE'),
+  ('5713e7a1-0003-4000-8000-00000000000f', 'One-Arm Dumbbell Row', 'one-arm-dumbbell-row', 'STRENGTH', 'INTERMEDIATE'),
+  ('5713e7a1-0003-4000-8000-000000000010', 'Dumbbell Squat', 'dumbbell-squat', 'STRENGTH', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000011', 'Stiff-Legged Dumbbell Deadlift', 'stiff-legged-dumbbell-deadlift', 'STRENGTH', 'INTERMEDIATE'),
+  ('5713e7a1-0003-4000-8000-000000000012', 'Dumbbell Bicep Curl', 'dumbbell-bicep-curl', 'STRENGTH', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000013', 'Triceps Pushdown', 'triceps-pushdown', 'STRENGTH', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000014', 'Leg Press', 'leg-press', 'STRENGTH', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000015', 'Barbell Hip Thrust', 'barbell-hip-thrust', 'STRENGTH', 'INTERMEDIATE'),
+  ('5713e7a1-0003-4000-8000-000000000016', 'Seated Leg Curl', 'seated-leg-curl', 'STRENGTH', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000017', 'Leg Extensions', 'leg-extensions', 'STRENGTH', 'BEGINNER'),
+  ('5713e7a1-0003-4000-8000-000000000018', 'Standing Calf Raises', 'standing-calf-raises', 'STRENGTH', 'BEGINNER')
 ) AS v(id, name, slug, kind, level)
 -- Scoped to the ownerless row on purpose. The unique index is
 -- (COALESCE(owner_id, zero-uuid), slug), so slugs are unique per owner:
@@ -85,6 +114,22 @@ WHERE NOT EXISTS (
   SELECT 1 FROM exercise e
   WHERE e.slug = v.slug AND e.owner_id IS NULL AND e.deleted_at IS NULL
 );
+
+-- ---------------------------------------------------------------------
+-- Catalogue fix: a goblet squat takes a dumbbell just as happily.
+-- Runs AFTER the exercise auto-create above so it works on a fresh DB
+-- where goblet-squat only exists because this migration just made it.
+-- The equipment row is skipped silently if the equipment table has no
+-- 'dumbbell' entry yet (fresh DB without seed-exercises.ts run) —
+-- seed-exercises.ts populates equipment when it runs, and the child
+-- rows land then.
+-- ---------------------------------------------------------------------
+INSERT INTO exercise_equipment (exercise_id, equipment_id)
+SELECT e.id, q.id
+FROM exercise e, equipment q
+WHERE e.slug = 'goblet-squat' AND e.source = 'SYSTEM' AND e.deleted_at IS NULL
+  AND q.slug = 'dumbbell'
+ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------
 -- Guard: every slug this migration references must exist.
