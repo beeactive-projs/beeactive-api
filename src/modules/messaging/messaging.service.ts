@@ -66,6 +66,8 @@ export interface ParticipantSnapshot {
   firstName: string;
   lastName: string;
   avatarUrl: string | null;
+  /** Null until the user picks one. Addresses their public profile. */
+  handle: string | null;
 }
 
 export interface MessageView {
@@ -207,7 +209,14 @@ export class MessagingService {
         attributes: ['id', 'firstName', 'lastName'],
       }),
       User.findByPk(recipientId, {
-        attributes: ['id', 'firstName', 'lastName', 'avatarUrl', 'isActive'],
+        attributes: [
+          'id',
+          'firstName',
+          'lastName',
+          'avatarUrl',
+          'handle',
+          'isActive',
+        ],
       }),
     ]);
 
@@ -231,6 +240,7 @@ export class MessagingService {
           firstName: 'Unknown',
           lastName: 'User',
           avatarUrl: null,
+          handle: null,
         },
         trimmed,
         threatFlags,
@@ -410,7 +420,10 @@ export class MessagingService {
    */
   private buildSilentDropResponse(
     senderId: string,
-    recipient: Pick<User, 'id' | 'firstName' | 'lastName' | 'avatarUrl'>,
+    recipient: Pick<
+      User,
+      'id' | 'firstName' | 'lastName' | 'avatarUrl' | 'handle'
+    >,
     plaintext: string,
     threatFlags: ThreatScanResult,
   ): SendMessageResult {
@@ -446,6 +459,7 @@ export class MessagingService {
           firstName: recipient.firstName,
           lastName: recipient.lastName,
           avatarUrl: recipient.avatarUrl ?? null,
+          handle: recipient.handle ?? null,
         },
         lastReadByOther: null,
       },
@@ -947,6 +961,7 @@ export class MessagingService {
           firstName: other.user.firstName,
           lastName: other.user.lastName,
           avatarUrl: other.user.avatarUrl ?? null,
+          handle: other.user.handle ?? null,
         };
       }
       lastReadByOther = other?.lastReadAt
