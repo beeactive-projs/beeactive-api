@@ -17,9 +17,10 @@ import { NotificationType } from '../notification/notification.service';
 /**
  * The client just had a program assigned by their instructor.
  *
- * Click target: `/my/plans/:assignmentId` — the client's plan detail
- * (ClientPlanDetail), reached the same way the "My plans" list links to
- * it. `screen` must match the live FE route, not a hypothetical one.
+ * Click target: `/user/plans/:assignmentId` — the client's plan detail
+ * (ClientPlanDetail). The route lives under /user/* after the IA
+ * refactor; the old /my/plans path was never given a redirect so
+ * navigating there does nothing.
  */
 export function programAssignedForClient(input: {
   clientId: string;
@@ -34,7 +35,7 @@ export function programAssignedForClient(input: {
     title: 'New program assigned',
     body: `${input.instructorName} assigned you "${input.programName}", starting ${input.startDate}.`,
     data: {
-      screen: 'my/plans',
+      screen: 'user/plans',
       entityId: input.assignmentId,
     },
   };

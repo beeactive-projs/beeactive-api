@@ -134,7 +134,7 @@ export function sessionCancelledForUser(
     type: NotificationType.SESSION_CANCELLED,
     title: 'Session cancelled',
     body: `"${session.title}" on ${when} has been cancelled.${tail}${note}`,
-    data: { screen: 'my/sessions', queryParams: { tab: 'cancelled' } },
+    data: { screen: 'user/sessions', queryParams: { tab: 'cancelled' } },
   };
 }
 
