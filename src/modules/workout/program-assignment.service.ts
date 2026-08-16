@@ -36,6 +36,8 @@ import {
   ProgramAssignmentKind,
   ProgramAssignmentStatus,
   ProgramRepeatMode,
+  ProgramSource,
+  ProgramStatus,
   WorkoutLogStatus,
 } from './entities/workout.enums';
 import { AssignProgramDto } from './dto/assign-program.dto';
@@ -137,7 +139,18 @@ export class ProgramAssignmentService {
       ],
     });
 
-    if (!program || program.ownerId !== instructorId) {
+    // Assignable programs are either owned by the caller, or one of
+    // MotionHive's published SYSTEM starters (ownerless). Anything else
+    // — a draft, an archived starter, another instructor's private
+    // program — 404s with the same "not found" so we don't leak the
+    // program's existence.
+    const isOwnedByCaller = !!program && program.ownerId === instructorId;
+    const isSystemStarter =
+      !!program &&
+      program.ownerId === null &&
+      program.source === ProgramSource.System &&
+      program.status === ProgramStatus.Published;
+    if (!program || (!isOwnedByCaller && !isSystemStarter)) {
       throw new NotFoundException('Program not found.');
     }
     if (program.deletedAt) {
