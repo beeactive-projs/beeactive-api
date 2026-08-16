@@ -26,34 +26,62 @@ export function clientRequestReceived(
   };
 }
 
-/** Requester — instructor accepted them as a client. */
+/** Requester — the other side accepted them.
+ *
+ *  Both directions share this builder because `acceptRequest` handles
+ *  CLIENT_TO_INSTRUCTOR and INSTRUCTOR_TO_CLIENT with the same code
+ *  path and always notifies request.fromUserId. But the click target
+ *  differs by role: a client landing on their coaches tab, an
+ *  instructor landing on their clients list.
+ */
 export function clientRequestAccepted(
   requesterId: string,
-  instructorName: string | null,
+  responderName: string | null,
+  requesterIsInstructor = false,
 ): NotifyParams {
-  const who = instructorName ?? 'Your instructor';
+  const who =
+    responderName ?? (requesterIsInstructor ? 'A user' : 'Your instructor');
   return {
     userId: requesterId,
     type: NotificationType.CLIENT_REQUEST_ACCEPTED,
-    title: 'Coaching request accepted',
-    body: `${who} accepted your coaching request.`,
-    data: { screen: 'profile', queryParams: { tab: 'coaches' } },
+    title: requesterIsInstructor
+      ? 'Invitation accepted'
+      : 'Coaching request accepted',
+    body: requesterIsInstructor
+      ? `${who} accepted your invitation and is now your client.`
+      : `${who} accepted your coaching request.`,
+    data: requesterIsInstructor
+      ? { screen: 'coaching/clients' }
+      : { screen: 'profile', queryParams: { tab: 'coaches' } },
   };
 }
 
-/** Requester — instructor declined their request. */
+/** Requester — the other side declined.
+ *
+ *  Same dual-recipient story as clientRequestAccepted — instructor
+ *  invitations that get declined route back to the invite surface;
+ *  client-side declined requests route to the coaches tab so they
+ *  can look elsewhere.
+ */
 export function clientRequestDeclined(
   requesterId: string,
-  instructorName: string | null,
+  responderName: string | null,
+  requesterIsInstructor = false,
 ): NotifyParams {
-  const who = instructorName ?? 'The instructor';
+  const who =
+    responderName ?? (requesterIsInstructor ? 'The user' : 'The instructor');
   return {
     userId: requesterId,
     type: NotificationType.CLIENT_REQUEST_DECLINED,
-    title: 'Coaching request declined',
-    body: `${who} declined your coaching request.`,
-    // Land on coaches tab so they can find another instructor.
-    data: { screen: 'profile', queryParams: { tab: 'coaches' } },
+    title: requesterIsInstructor
+      ? 'Invitation declined'
+      : 'Coaching request declined',
+    body: requesterIsInstructor
+      ? `${who} declined your coaching invitation.`
+      : `${who} declined your coaching request.`,
+    data: requesterIsInstructor
+      ? { screen: 'coaching/clients' }
+      : { screen: 'profile', queryParams: { tab: 'coaches' } },
   };
 }
 

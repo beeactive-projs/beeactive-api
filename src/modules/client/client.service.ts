@@ -1163,8 +1163,20 @@ export class ClientService {
         .trim() || null;
     // notify-after-commit: request status flip + relationship upsert
     // committed in the tx above. Do NOT hoist inside.
+    // `request.type` tells us who sent the request: an INSTRUCTOR
+    // invitation → the requester (fromUserId) is the coach and the
+    // notification should route them to /coaching/clients, not the
+    // client-side /profile?tab=coaches surface.
+    const requesterIsInstructor =
+      request.type === ClientRequestType.INSTRUCTOR_TO_CLIENT;
     await this.notificationService
-      .notify(clientRequestAccepted(request.fromUserId, responderName))
+      .notify(
+        clientRequestAccepted(
+          request.fromUserId,
+          responderName,
+          requesterIsInstructor,
+        ),
+      )
       .catch((err: Error) =>
         this.logger.error(
           `Failed to notify request sender on accept: ${err.message}`,
@@ -1256,8 +1268,17 @@ export class ClientService {
         .filter(Boolean)
         .join(' ')
         .trim() || null;
+    // Same dual-recipient story as accept — route by requester role.
+    const requesterIsInstructor =
+      request.type === ClientRequestType.INSTRUCTOR_TO_CLIENT;
     await this.notificationService
-      .notify(clientRequestDeclined(request.fromUserId, declinerName))
+      .notify(
+        clientRequestDeclined(
+          request.fromUserId,
+          declinerName,
+          requesterIsInstructor,
+        ),
+      )
       .catch((err: Error) =>
         this.logger.error(
           `Failed to notify request sender on decline: ${err.message}`,
