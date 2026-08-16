@@ -96,6 +96,28 @@ export class SessionAccessService {
 
   // ─── helpers ────────────────────────────────────────────────────────
 
+  /**
+   * Whether this user was ever on the roster, cancelled bookings included.
+   *
+   * Distinct from `hasActiveParticipation`, which answers "may they act on
+   * this" and so excludes cancelled and declined rows. This answers "were they
+   * part of this", which is what deciding whether to show them a session that
+   * has already finished or been called off comes down to — their own
+   * notification about it should still open.
+   */
+  async wasEverParticipant(
+    instanceId: string,
+    userId: string,
+    tx?: Transaction,
+  ): Promise<boolean> {
+    const row = await this.participantModel.findOne({
+      where: { instanceId, userId },
+      attributes: ['id'],
+      transaction: tx,
+    });
+    return !!row;
+  }
+
   private async hasActiveParticipation(
     instanceId: string,
     userId: string,

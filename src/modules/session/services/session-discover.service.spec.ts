@@ -26,7 +26,7 @@ describe('SessionDiscoverService', () => {
   let templateModel: { findOne: jest.Mock; build: jest.Mock };
   let clientModel: { findAll: jest.Mock };
   let groupMemberModel: { findAll: jest.Mock };
-  let accessService: { evaluate: jest.Mock };
+  let accessService: { evaluate: jest.Mock; wasEverParticipant: jest.Mock };
 
   beforeEach(async () => {
     instanceModel = {
@@ -43,7 +43,7 @@ describe('SessionDiscoverService', () => {
     };
     clientModel = { findAll: jest.fn().mockResolvedValue([]) };
     groupMemberModel = { findAll: jest.fn().mockResolvedValue([]) };
-    accessService = { evaluate: jest.fn() };
+    accessService = { evaluate: jest.fn(), wasEverParticipant: jest.fn() };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -191,7 +191,10 @@ describe('SessionDiscoverService', () => {
   });
 
   describe('getInstancePublic', () => {
-    const fakeInst = (template: Partial<SessionTemplate>) =>
+    const fakeInst = (
+      template: Partial<SessionTemplate>,
+      instance: Partial<SessionInstance> = {},
+    ) =>
       ({
         id: 'inst-1',
         templateId: 'tmpl-1',
@@ -210,6 +213,7 @@ describe('SessionDiscoverService', () => {
           ...template,
         } as SessionTemplate,
         instructor: { id: 'usr-instr', firstName: 'A', lastName: 'B' },
+        ...instance,
       }) as unknown as SessionInstance;
 
     it('E6 (OPEN): returns full public shape, no extra access check needed', async () => {
@@ -217,6 +221,76 @@ describe('SessionDiscoverService', () => {
       const result = await service.getInstancePublic('inst-1', null);
       expect(result).toBeDefined();
       expect(accessService.evaluate).not.toHaveBeenCalled();
+    });
+
+    // Every session notification a client receives points at this endpoint.
+    // Filtering the query to SCHEDULED meant those links died the moment the
+    // session ended — and the post-session follow-up alert could never work.
+    it('lets a participant open a session that has already finished', async () => {
+      instanceModel.findOne.mockResolvedValue(
+        fakeInst({}, { status: SessionInstanceStatus.Completed }),
+      );
+      accessService.wasEverParticipant.mockResolvedValue(true);
+      await expect(
+        service.getInstancePublic('inst-1', 'usr-booked'),
+      ).resolves.toBeDefined();
+    });
+
+    // Their booking was cancelled, or the coach called the session off. The
+    // confirmation notification they still have should open, not 404.
+    it('lets someone whose booking was cancelled open it', async () => {
+      instanceModel.findOne.mockResolvedValue(
+        fakeInst({}, { status: SessionInstanceStatus.Cancelled }),
+      );
+      accessService.wasEverParticipant.mockResolvedValue(true);
+      await expect(
+        service.getInstancePublic('inst-1', 'usr-booked'),
+      ).resolves.toBeDefined();
+    });
+
+    it('404s a finished session for an anonymous caller', async () => {
+      instanceModel.findOne.mockResolvedValue(
+        fakeInst({}, { status: SessionInstanceStatus.Completed }),
+      );
+      await expect(service.getInstancePublic('inst-1', null)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('lets the instructor open a session that has already finished', async () => {
+      instanceModel.findOne.mockResolvedValue(
+        fakeInst({}, { status: SessionInstanceStatus.Completed }),
+      );
+      accessService.wasEverParticipant.mockResolvedValue(false);
+      await expect(
+        service.getInstancePublic('inst-1', 'usr-instr'),
+      ).resolves.toBeDefined();
+    });
+
+    // Discovery must not start advertising finished or cancelled sessions.
+    it('still 404s a finished session for someone who was not there', async () => {
+      instanceModel.findOne.mockResolvedValue(
+        fakeInst({}, { status: SessionInstanceStatus.Completed }),
+      );
+      accessService.wasEverParticipant.mockResolvedValue(false);
+      await expect(
+        service.getInstancePublic('inst-1', 'usr-stranger'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('still 404s an ended template for a stranger, but not for a participant', async () => {
+      instanceModel.findOne.mockResolvedValue(
+        fakeInst({ status: SessionTemplateStatus.Ended }),
+      );
+      accessService.wasEverParticipant.mockResolvedValue(false);
+      await expect(
+        service.getInstancePublic('inst-1', 'usr-stranger'),
+      ).rejects.toThrow(NotFoundException);
+
+      accessService.wasEverParticipant.mockResolvedValue(true);
+      await expect(
+        service.getInstancePublic('inst-1', 'usr-booked'),
+      ).resolves.toBeDefined();
     });
 
     it('E6b (CLIENTS_ONLY non-client): 404', async () => {

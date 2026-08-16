@@ -968,6 +968,7 @@ export class WorkoutLogService {
       await this.notificationService.notify(
         clientCompletedWorkoutForInstructor({
           instructorId: assignment.instructorId,
+          clientId: userId,
           workoutLogId: log.id,
           clientName,
           workoutName: log.name,

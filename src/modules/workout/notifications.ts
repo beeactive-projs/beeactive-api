@@ -51,10 +51,18 @@ export function programAssignedForClient(input: {
  * Only fires for assigned work. Freestyle training is the client's own
  * business unless they opt into sharing it (`shareOffPlan`).
  *
- * Click target: the coach's read-only replay of that session.
+ * Click target: `/coaching/clients/:clientId` — that client's profile, which
+ * lists their recent workouts and is where the replay opens from.
+ *
+ * Not the replay itself: that route is `/user/workout-log/:id/replay?coach=1`,
+ * and a notification payload is `{screen, entityId}` joined as
+ * `/<screen>/<entityId>` — it cannot express a segment *after* the id. Sending
+ * the log id into `/coaching/clients/:id` (which is what this did) loaded the
+ * client-profile page with a workout-log id and found nothing.
  */
 export function clientCompletedWorkoutForInstructor(input: {
   instructorId: string;
+  clientId: string;
   workoutLogId: string;
   clientName: string;
   workoutName: string;
@@ -69,7 +77,7 @@ export function clientCompletedWorkoutForInstructor(input: {
     body: `${input.workoutName} is logged, ${sets} completed.`,
     data: {
       screen: 'coaching/clients',
-      entityId: input.workoutLogId,
+      entityId: input.clientId,
     },
   };
 }

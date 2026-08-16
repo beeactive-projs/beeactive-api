@@ -277,11 +277,20 @@ export function earningsSummaryForInstructor(
   };
 }
 
-/** Instructor — the 14-day refund window on a payment is about to close. */
+/**
+ * Instructor — the 14-day refund window on a payment is about to close.
+ *
+ * Click target: the invoice that payment settled, which is where the refund is
+ * issued from. A payment with no invoice behind it (a direct subscription
+ * charge) has nothing to open, so it lands on the payments page instead —
+ * `/coaching/payments/:id` is not a route, and sending the payment id there
+ * was a 404.
+ */
 export function refundWindowClosingForInstructor(
   instructorId: string,
   payment: {
     id: string;
+    invoiceId: string | null;
     amountCents: number;
     currency: string;
     daysLeft: number;
@@ -295,7 +304,9 @@ export function refundWindowClosingForInstructor(
     type: NotificationType.REFUND_WINDOW_CLOSING,
     title: 'Refund window closing',
     body: `The refund window for a ${amount} payment closes ${days}.`,
-    data: { screen: 'coaching/payments', entityId: payment.id },
+    data: payment.invoiceId
+      ? { screen: 'coaching/invoices', entityId: payment.invoiceId }
+      : { screen: 'coaching/payments' },
     fingerprint: `refund_window:${payment.id}`,
   };
 }
@@ -344,7 +355,10 @@ export function disputeOpenedForInstructor(
     body: due
       ? `A ${amount} payment was disputed${reason}. Respond with evidence by ${due}.`
       : `A ${amount} payment was disputed${reason}. Respond in Stripe as soon as possible.`,
-    data: { screen: 'coaching/payments', entityId: dispute.id },
+    // No entityId: disputes are handled in Stripe (the body says so) and the
+    // app has no dispute page, so `/coaching/payments/:id` was a 404. The
+    // payments page is the closest surface the instructor can act from.
+    data: { screen: 'coaching/payments' },
     // Once per dispute on open.
     fingerprint: `dispute_opened:${dispute.id}`,
   };
@@ -370,7 +384,7 @@ export function disputeEvidenceDueForInstructor(
     body: due
       ? `Evidence for a disputed payment is due ${due} (${when}). Submit it in Stripe.`
       : `Evidence for a disputed payment is due ${when}. Submit it in Stripe.`,
-    data: { screen: 'coaching/payments', entityId: dispute.id },
+    data: { screen: 'coaching/payments' },
     fingerprint: `dispute_deadline:${dispute.id}:${dispute.bucket}`,
   };
 }

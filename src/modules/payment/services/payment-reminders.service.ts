@@ -248,6 +248,7 @@ export class PaymentRemindersService {
         );
         return refundWindowClosingForInstructor(p.instructorId, {
           id: p.id,
+          invoiceId: p.invoiceId,
           amountCents: p.amountCents,
           currency: p.currency,
           daysLeft,
