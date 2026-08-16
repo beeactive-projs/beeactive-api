@@ -12,6 +12,12 @@ import {
   NotificationSeverity,
 } from '../entities/notification.entity';
 import { NotificationReceipt } from '../entities/notification-receipt.entity';
+import {
+  CATEGORY_TO_TYPES,
+  NotificationCategory,
+  TYPE_TO_CATEGORY,
+} from '../notification-categories';
+import { NotificationType } from '../notification-types';
 
 /**
  * Shape returned to the FE — flattens the (notification + receipt)
@@ -25,6 +31,12 @@ export interface BellNotification {
   id: string;
   notificationId: string;
   type: string;
+  /**
+   * Derived from `type` via TYPE_TO_CATEGORY. Sent because the client has no
+   * way to map 47 types onto 8 categories, and it drives both the category
+   * filter and the per-category icon on a row.
+   */
+  category: NotificationCategory;
   title: string;
   body: string;
   data: NotificationData | null;
@@ -42,6 +54,8 @@ export interface BellNotification {
 export interface ListReceiptsOptions {
   page: number;
   limit: number;
+  /** Narrow to a single category. Omit for everything. */
+  category?: NotificationCategory;
   unreadOnly?: boolean;
 }
 
@@ -87,9 +101,14 @@ export class NotificationReceiptService {
       receiptWhere.dismissedAt = { [Op.is]: null };
     }
 
+    // Category is a property of the type, not a column, so it filters as the
+    // set of types that map to it. Keeps the paging honest — filtering after
+    // the query would return short pages.
+    const typeFilter = opts.category ? CATEGORY_TO_TYPES[opts.category] : null;
+
     const { rows, count } = await this.receiptModel.findAndCountAll({
       where: receiptWhere,
-      include: [this.activeNotificationInclude()],
+      include: [this.activeNotificationInclude(typeFilter ?? undefined)],
       order: [['createdAt', 'DESC']],
       limit: opts.limit,
       offset: getOffset(opts.page, opts.limit),
@@ -139,13 +158,16 @@ export class NotificationReceiptService {
    * is fresh — Sequelize freezes literal values at expression build
    * time, not at query execution time.
    */
-  private activeNotificationInclude() {
+  private activeNotificationInclude(types?: readonly NotificationType[]) {
     const now = new Date();
     return {
       model: this.notificationModel,
       required: true,
       where: {
         [Op.and]: [
+          // A category filter is expressed as its set of types — category is
+          // a property of the type, not a column.
+          ...(types ? [{ type: { [Op.in]: types as string[] } }] : []),
           {
             [Op.or]: [
               { deliverAt: { [Op.is]: null } },
@@ -167,6 +189,20 @@ export class NotificationReceiptService {
     const receipt = await this.findOwnedOrThrow(userId, receiptId);
     if (!receipt.readAt) {
       receipt.readAt = new Date();
+      await receipt.save();
+    }
+  }
+
+  /**
+   * The undo for markAsRead — "I opened that by accident, put it back".
+   * Clears `clicked_at` too, otherwise a row can be unread and clicked at
+   * once, which reads as a bug in the analytics funnel.
+   */
+  async markAsUnread(userId: string, receiptId: string): Promise<void> {
+    const receipt = await this.findOwnedOrThrow(userId, receiptId);
+    if (receipt.readAt) {
+      receipt.readAt = null;
+      receipt.clickedAt = null;
       await receipt.save();
     }
   }
@@ -304,6 +340,12 @@ export class NotificationReceiptService {
       id: receipt.id,
       notificationId: n.id,
       type: n.type,
+      // `type` is a plain varchar in the DB, so a row written before a type
+      // was renamed (or by a migration/seed) can miss the map. Account is the
+      // catch-all rather than sending undefined at a non-optional field.
+      category:
+        TYPE_TO_CATEGORY[n.type as NotificationType] ??
+        NotificationCategory.Account,
       title: n.title,
       body: n.body,
       data: n.data,

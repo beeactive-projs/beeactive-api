@@ -42,6 +42,7 @@ export class NotificationController {
       page: query.page ?? 1,
       limit: query.limit ?? 20,
       unreadOnly: query.unreadOnly,
+      category: query.category,
     });
   }
 
@@ -72,6 +73,16 @@ export class NotificationController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
     return this.receipts.markAsRead(req.user.id, id);
+  }
+
+  @Patch(':id/unread')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiEndpoint(NotificationDocs.markUnread)
+  markUnread(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.receipts.markAsUnread(req.user.id, id);
   }
 
   @Patch(':id/clicked')

@@ -1,7 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsOptional } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
+import { NotificationCategory } from '../notification-categories';
 
 /**
  * Query params for GET /notifications.
@@ -20,4 +21,12 @@ export class ListNotificationsDto extends PaginationDto {
   @IsBoolean()
   @IsOptional()
   unreadOnly: boolean = false;
+
+  @ApiPropertyOptional({
+    enum: NotificationCategory,
+    description: 'Narrow to a single category. Omit for everything.',
+  })
+  @IsEnum(NotificationCategory)
+  @IsOptional()
+  category?: NotificationCategory;
 }

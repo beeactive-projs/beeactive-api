@@ -46,6 +46,19 @@ export const NotificationDocs = {
     ],
   } as ApiEndpointOptions,
 
+  markUnread: {
+    summary: 'Put a notification back to unread',
+    description:
+      'Clears `read_at` (and `clicked_at`, so the row is not both unread and ' +
+      "clicked). Idempotent. 404 for another user's receipt.",
+    auth: true,
+    responses: [
+      { status: 204, description: 'Marked as unread' },
+      ApiStandardResponses.Unauthorized,
+      ApiStandardResponses.NotFound,
+    ],
+  } as ApiEndpointOptions,
+
   markAllRead: {
     summary: 'Mark every unread notification as read',
     description: 'Returns `{ updated: number }`.',

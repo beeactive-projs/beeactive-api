@@ -13,6 +13,7 @@ interface ReceiptsMock {
   listForUser: jest.Mock;
   unreadCount: jest.Mock;
   markAsRead: jest.Mock;
+  markAsUnread: jest.Mock;
   markAllAsRead: jest.Mock;
   markAsViewed: jest.Mock;
   markAsClicked: jest.Mock;
@@ -29,6 +30,7 @@ describe('NotificationController', () => {
       listForUser: jest.fn(),
       unreadCount: jest.fn(),
       markAsRead: jest.fn(),
+      markAsUnread: jest.fn(),
       markAllAsRead: jest.fn(),
       markAsViewed: jest.fn(),
       markAsClicked: jest.fn(),
@@ -72,6 +74,11 @@ describe('NotificationController', () => {
   it('markRead delegates with the user id and receipt id', async () => {
     await controller.markRead(mockReq('user-1'), 'r-1');
     expect(receipts.markAsRead).toHaveBeenCalledWith('user-1', 'r-1');
+  });
+
+  it('markUnread delegates with the user id and receipt id', async () => {
+    await controller.markUnread(mockReq('user-1'), 'r-1');
+    expect(receipts.markAsUnread).toHaveBeenCalledWith('user-1', 'r-1');
   });
 
   it('markViewed unwraps the ids array from the DTO', async () => {

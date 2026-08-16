@@ -87,6 +87,36 @@ describe('NotificationReceiptService', () => {
     });
   });
 
+  describe('markAsUnread', () => {
+    it('clears read_at and clicked_at together', async () => {
+      const receipt = makeReceipt({
+        readAt: new Date('2026-01-01'),
+        clickedAt: new Date('2026-01-01'),
+      });
+      receiptModel.findOne.mockResolvedValue(receipt);
+      await service.markAsUnread('user-1', 'r-1');
+      // Leaving clicked_at set would make the row unread and clicked at once,
+      // which reads as a bug in the funnel.
+      expect(receipt.readAt).toBeNull();
+      expect(receipt.clickedAt).toBeNull();
+      expect(receipt.save).toHaveBeenCalled();
+    });
+
+    it('is a no-op when already unread', async () => {
+      const receipt = makeReceipt();
+      receiptModel.findOne.mockResolvedValue(receipt);
+      await service.markAsUnread('user-1', 'r-1');
+      expect(receipt.save).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 (not 403) when receipt is not owned by user', async () => {
+      receiptModel.findOne.mockResolvedValue(null);
+      await expect(service.markAsUnread('user-1', 'r-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('markAsClicked', () => {
     it('sets both clicked_at and read_at in one save', async () => {
       const receipt = makeReceipt();
