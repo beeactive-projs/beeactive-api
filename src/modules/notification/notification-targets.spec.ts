@@ -53,18 +53,18 @@ const MOBILE_ROUTED = [
   'coaching/sessions',
   'coaching/clients',
   'coaching/pending-requests',
+  'sessions',
+  'user/sessions',
+  'coaching/invoices',
+  'coaching/payments',
+  'profile/invoices',
+  'profile',
 ];
 const MOBILE_NAMED = [
   'groups',
-  'sessions',
-  'user/sessions',
   'user/plans',
   'coaching/exercises',
-  'profile/invoices',
-  'coaching/invoices',
-  'coaching/payments',
   'coaching/subscriptions',
-  'profile',
 ];
 
 interface Target {

@@ -22,6 +22,7 @@ import { PaymentDocs } from '../../common/docs/payment.docs';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ListPaymentsDto } from './dto/list-payments.dto';
 
 import { ConnectService } from './services/connect.service';
 import { ProductService } from './services/product.service';
@@ -420,12 +421,13 @@ export class PaymentController {
   @ApiEndpoint(PaymentDocs.listPayments)
   async listPayments(
     @Request() req: AuthenticatedRequest,
-    @Query() pagination: PaginationDto,
+    @Query() query: ListPaymentsDto,
   ) {
     return this.earningsService.listPayments(
       req.user.id,
-      pagination.page ?? 1,
-      pagination.limit ?? 20,
+      query.page ?? 1,
+      query.limit ?? 20,
+      query.invoiceId,
     );
   }
 }

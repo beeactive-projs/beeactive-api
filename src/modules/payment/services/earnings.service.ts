@@ -232,13 +232,19 @@ export class EarningsService {
     };
   }
 
+  /**
+   * `invoiceId` narrows to the payments that settled one invoice — the only
+   * way to get from an invoice to something refundable, since a refund is
+   * issued against a payment and the invoice does not carry its id.
+   */
   async listPayments(
     instructorId: string,
     page: number,
     limit: number,
+    invoiceId?: string,
   ): Promise<PaginatedResponse<Payment>> {
     const { rows, count } = await this.paymentModel.findAndCountAll({
-      where: { instructorId },
+      where: { instructorId, ...(invoiceId ? { invoiceId } : {}) },
       order: [['createdAt', 'DESC']],
       limit,
       offset: getOffset(page, limit),

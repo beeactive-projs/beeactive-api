@@ -54,16 +54,25 @@ import { CreateInvoiceDto } from '../dto/create-invoice.dto';
  *   - applicationFeeAmount=0 is OMITTED from the API call
  *     (StripeService.buildFeeParams)
  */
+/** The person on the other side of an invoice, whichever side is asking. */
+export interface InvoicePartyRef {
+  id: string | null;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  avatarUrl: string | null;
+}
+
 export interface InvoiceResponse {
   [key: string]: unknown;
   clientEmail: string | null;
-  client: {
-    id: string | null;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-    avatarUrl: string | null;
-  } | null;
+  client: (InvoicePartyRef & { email: string }) | null;
+  /**
+   * Who issued it. The coach's own list does not need this — they are the
+   * instructor — but the client's list leads with "who is asking me for
+   * money", and the row had only an `instructorId` to show.
+   */
+  instructor: InvoicePartyRef | null;
 }
 
 @Injectable()
@@ -105,8 +114,13 @@ export class InvoiceService {
   private async enrichMany(invoices: Invoice[]): Promise<InvoiceResponse[]> {
     if (invoices.length === 0) return [];
 
+    // One lookup covers both sides: clients and instructors are both users.
     const userIds = Array.from(
-      new Set(invoices.map((i) => i.clientId).filter((x): x is string => !!x)),
+      new Set(
+        invoices
+          .flatMap((i) => [i.clientId, i.instructorId])
+          .filter((x): x is string => !!x),
+      ),
     );
     const stripeCustomerIds = Array.from(
       new Set(invoices.map((i) => i.stripeCustomerId).filter((x) => !!x)),
@@ -155,6 +169,17 @@ export class InvoiceService {
                 ? guestName.split(' ').slice(1).join(' ')
                 : null),
             avatarUrl: user?.avatarUrl ?? null,
+          }
+        : null;
+
+      const instructor = userById.get(inv.instructorId);
+      json['instructor'] = instructor
+        ? {
+            id: instructor.id,
+            email: instructor.email,
+            firstName: instructor.firstName,
+            lastName: instructor.lastName,
+            avatarUrl: instructor.avatarUrl ?? null,
           }
         : null;
       return json;
