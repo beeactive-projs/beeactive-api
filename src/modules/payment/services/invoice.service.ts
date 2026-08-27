@@ -54,16 +54,24 @@ import { CreateInvoiceDto } from '../dto/create-invoice.dto';
  *   - applicationFeeAmount=0 is OMITTED from the API call
  *     (StripeService.buildFeeParams)
  */
+/** One side of an invoice, as the apps render it in a row. */
+export interface InvoiceParty {
+  id: string | null;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  avatarUrl: string | null;
+}
+
 export interface InvoiceResponse {
   [key: string]: unknown;
   clientEmail: string | null;
-  client: {
-    id: string | null;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-    avatarUrl: string | null;
-  } | null;
+  client: InvoiceParty | null;
+  /**
+   * Who issued it. The client's own list needs this — a row that names the
+   * person reading it tells them nothing about which coach to pay.
+   */
+  instructor: InvoiceParty | null;
 }
 
 @Injectable()
@@ -92,8 +100,9 @@ export class InvoiceService {
 
   /**
    * Build a response object for a single invoice with `clientEmail` and a
-   * `client` summary — works for both registered users (via User relation)
-   * and guests (via stripe_customer row).
+   * summary of both parties. The client side works for registered users (via
+   * User relation) and guests (via stripe_customer row); an instructor is
+   * always a registered user.
    */
   private async enrich(invoice: Invoice): Promise<InvoiceResponse> {
     return (await this.enrichMany([invoice]))[0];
@@ -106,7 +115,11 @@ export class InvoiceService {
     if (invoices.length === 0) return [];
 
     const userIds = Array.from(
-      new Set(invoices.map((i) => i.clientId).filter((x): x is string => !!x)),
+      new Set(
+        invoices
+          .flatMap((i) => [i.clientId, i.instructorId])
+          .filter((x): x is string => !!x),
+      ),
     );
     const stripeCustomerIds = Array.from(
       new Set(invoices.map((i) => i.stripeCustomerId).filter((x) => !!x)),
@@ -155,6 +168,17 @@ export class InvoiceService {
                 ? guestName.split(' ').slice(1).join(' ')
                 : null),
             avatarUrl: user?.avatarUrl ?? null,
+          }
+        : null;
+
+      const instructor = userById.get(inv.instructorId);
+      json['instructor'] = instructor
+        ? {
+            id: instructor.id,
+            email: instructor.email,
+            firstName: instructor.firstName ?? null,
+            lastName: instructor.lastName ?? null,
+            avatarUrl: instructor.avatarUrl ?? null,
           }
         : null;
       return json;
